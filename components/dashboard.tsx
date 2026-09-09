@@ -13,6 +13,8 @@ import {
   ChevronRight,
   ClipboardList,
   CloudUpload,
+  Copy,
+  Download,
   FileSpreadsheet,
   Flag,
   History,
@@ -21,6 +23,8 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
+  Mail,
+  MessageSquareText,
   Search,
   ShieldCheck,
   Target,
@@ -36,15 +40,19 @@ import {
   actionFor,
   MONTHS,
   CENTRALS,
+  PA_GROUP_TARGETS,
+  paTargetForGroup,
   money,
   percent,
   sum,
 } from "@/lib/analytics.mjs";
+import { buildPartialCommunication } from "@/lib/communication.mjs";
 import { supabase } from "@/lib/supabase";
 import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
 
 type View = "overview" | "cadence" | "actions" | "audit" | "imports";
 type Analysis = ReturnType<typeof analyze>;
+type SourceFiles = { base: File | null; cadence: File | null };
 const EMPTY_ACTION: ActionState = {
   owner: "",
   due: "",
@@ -61,6 +69,9 @@ const periodNames: Record<string, string> = {
 };
 const metricName = (metric: string) =>
   metric === "VN" ? "Venda Nova" : "Arrecadação";
+const centralName = (central: string) =>
+  Object.entries(CENTRALS).find(([id]) => id === central)?.[1] ??
+  `Central ${central}`;
 const shortDate = (value: string) =>
   new Date(`${value.slice(0, 10)}T12:00:00Z`).toLocaleDateString("pt-BR");
 const tone = (status: string) =>
@@ -90,16 +101,28 @@ export default function Dashboard() {
   const [uplift, setUplift] = useState(0),
     [selected, setSelected] = useState<Analysis | null>(null),
     [showImport, setShowImport] = useState(false),
-    [showLogin, setShowLogin] = useState(false);
+    [showLogin, setShowLogin] = useState(false),
+    [showCommunication, setShowCommunication] = useState(false);
   const [user, setUser] = useState<User | null>(null),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [history, setHistory] = useState<
-      { id: string; created_at: string; title: string; year: number }[]
+      {
+        id: string;
+        created_at: string;
+        title: string;
+        year: number;
+        source_count: number;
+        has_cooperative_base: boolean;
+        has_pa_cadence: boolean;
+      }[]
     >([]),
     [actions, setActions] = useState<Record<string, ActionState>>({});
-  const [files, setFiles] = useState<File[]>([]),
+  const [files, setFiles] = useState<SourceFiles>({
+      base: null,
+      cadence: null,
+    }),
     [config, setConfig] = useState<ImportConfig>({
       year: new Date().getFullYear(),
       vnCutoff: "",
@@ -125,7 +148,9 @@ export default function Dashboard() {
     }
     supabase
       .from("commercial_imports")
-      .select("id,created_at,title,year")
+      .select(
+        "id,created_at,title,year,source_count,has_cooperative_base,has_pa_cadence",
+      )
       .order("created_at", { ascending: false })
       .limit(25)
       .then(({ data, error }) => {
@@ -151,17 +176,18 @@ export default function Dashboard() {
     level,
   ]);
   useEffect(() => {
-    if (!selected && !showImport && !showLogin) return;
+    if (!selected && !showImport && !showLogin && !showCommunication) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelected(null);
         setShowImport(false);
         setShowLogin(false);
+        setShowCommunication(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selected, showImport, showLogin]);
+  }, [selected, showImport, showLogin, showCommunication]);
   const sourceRows = useMemo(
     () =>
       dataset?.rows.filter(
@@ -236,6 +262,49 @@ export default function Dashboard() {
       .includes(search.toLowerCase()),
   );
   const cutoff = sourceRows[0]?.cutoff;
+  const selectedFileCount = Number(!!files.base) + Number(!!files.cadence);
+  const scopeLabel = useMemo(() => {
+    const labels = [];
+    if (central !== "all") labels.push(centralName(central));
+    if (coop !== "all") {
+      const selectedCoop = cooperatives.find(([id]) => id === coop);
+      labels.push(
+        selectedCoop ? `${coop} · ${selectedCoop[1]}` : `Cooperativa ${coop}`,
+      );
+    }
+    if (group !== "all") labels.push(`Grupo ${group}`);
+    return labels.length ? labels.join(" · ") : "Centrais Bahia e Nordeste";
+  }, [central, coop, group, cooperatives]);
+  const communicationDraft = useMemo(() => {
+    if (
+      effectiveSource !== "cadence" ||
+      period === "daily" ||
+      !cutoff ||
+      !analyses.length
+    )
+      return null;
+    return buildPartialCommunication({
+      analyses,
+      year: dataset?.year ?? config.year,
+      month,
+      periodLabel: periodNames[period],
+      scopeLabel,
+      cutoff,
+      group,
+      uplift,
+    });
+  }, [
+    effectiveSource,
+    cutoff,
+    analyses,
+    dataset,
+    config.year,
+    month,
+    period,
+    scopeLabel,
+    group,
+    uplift,
+  ]);
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
       (central === "all" || !i.central || i.central === central) &&
@@ -264,7 +333,9 @@ export default function Dashboard() {
   async function importFiles() {
     setError("");
     setNotice("");
-    if (!files.length) {
+    const selectedFiles = (Object.entries(files) as [keyof SourceFiles, File | null][])
+      .filter((item): item is [keyof SourceFiles, File] => Boolean(item[1]));
+    if (!selectedFiles.length) {
       setError(
         "Selecione a base de cooperativas, a cadência PA ou os dois arquivos.",
       );
@@ -276,10 +347,20 @@ export default function Dashboard() {
         "@/lib/importer.mjs"
       );
       const parts = [];
-      for (const file of files)
-        parts.push(
-          await parseWorkbook(await file.arrayBuffer(), file.name, config),
+      for (const [expectedSource, file] of selectedFiles) {
+        const parsed = await parseWorkbook(
+          await file.arrayBuffer(),
+          file.name,
+          config,
         );
+        if (parsed.source !== expectedSource)
+          throw new Error(
+            expectedSource === "base"
+              ? "O arquivo selecionado em Cooperativas/Centrais tem layout de Cadência PA. Troque os arquivos de campo."
+              : "O arquivo selecionado em Cadência PA tem layout de Cooperativas/Centrais. Troque os arquivos de campo.",
+          );
+        parts.push(parsed);
+      }
       const data = combineImports(parts, config) as Dataset;
       setDataset(data);
       setDatasetId(null);
@@ -327,7 +408,7 @@ export default function Dashboard() {
     setDataset(null);
     setDatasetId(null);
     setActions({});
-    setFiles([]);
+    setFiles({ base: null, cadence: null });
     setNotice("Sessão encerrada.");
   }
   async function saveDataset() {
@@ -342,6 +423,7 @@ export default function Dashboard() {
         version: dataset.version,
         year: dataset.year,
         config: dataset.config,
+        paTargetPolicy: dataset.paTargetPolicy,
         rows: dataset.rows,
         sources: dataset.sources,
       });
@@ -433,7 +515,7 @@ export default function Dashboard() {
         .single();
       if (error) throw error;
       const d = data.dataset as Dataset;
-      if (d.version !== 1 || !Array.isArray(d.rows))
+      if (![1, 2].includes(d.version) || !Array.isArray(d.rows))
         throw new Error("Formato inválido");
       const { data: tasks, error: taskError } = await supabase
         .from("commercial_actions")
@@ -456,7 +538,7 @@ export default function Dashboard() {
       setDataset(d);
       setDatasetId(id);
       setConfig(d.config);
-      setFiles([]);
+      setFiles({ base: null, cadence: null });
       resetFilters();
       setMonth(
         Math.max(...d.rows.map((r) => new Date(r.cutoff).getUTCMonth())),
@@ -518,6 +600,9 @@ export default function Dashboard() {
         "Central",
         "Cooperativa",
         "PA",
+        "Grupo PA",
+        "Meta fixa mensal PA",
+        "Meta fixa anual PA",
         "Nome",
         "Período",
         "Mês",
@@ -537,6 +622,9 @@ export default function Dashboard() {
         r.central,
         r.cooperative,
         r.pa,
+        r.source === "cadence" ? r.group : "",
+        r.source === "cadence" ? paTargetForGroup(r.group)?.monthly : "",
+        r.source === "cadence" ? paTargetForGroup(r.group)?.annual : "",
         r.name,
         periodNames[period],
         MONTHS[month],
@@ -570,35 +658,38 @@ export default function Dashboard() {
       </div>
       <h2>Transforme a base em decisões.</h2>
       <p className="muted">
-        Envie a base de cooperativas e/ou a cadência dos PAs. As centrais 1002 e
-        2007 serão identificadas automaticamente.
+        Envie cada fonte no campo correspondente. As centrais 1002 e 2007 serão
+        identificadas e relacionadas automaticamente.
       </p>
-      <label className="dropzone">
-        <span className="upload-icon">
-          <CloudUpload size={28} />
-        </span>
-        <strong>
-          {files.length
-            ? files.map((f) => f.name).join(" + ")
-            : "Selecionar arquivos XLSX"}
-        </strong>
-        <span>Base de cooperativas · Cadência comercial PA</span>
-        <small>Até 2 arquivos, 10 MB cada</small>
-        <input
-          type="file"
-          multiple
-          accept=".xlsx"
-          aria-label="Selecionar planilhas"
-          onChange={(e) => {
-            const next = Array.from(e.target.files ?? []);
-            if (next.length > 2) setError("Selecione no máximo dois arquivos.");
-            else {
-              setFiles(next);
-              setError("");
-            }
+      <div className="source-upload-grid">
+        <FileSlot
+          id="base-file"
+          title="Cooperativas e centrais"
+          description="Metas e realizados de Venda Nova e Arrecadação"
+          file={files.base}
+          onSelect={(file) => {
+            setFiles((current) => ({ ...current, base: file }));
+            setError("");
           }}
+          onRemove={() => setFiles((current) => ({ ...current, base: null }))}
         />
-      </label>
+        <FileSlot
+          id="cadence-file"
+          title="Cadência comercial PA"
+          description="PAs, grupos P1–P5 e realizados mensais"
+          file={files.cadence}
+          onSelect={(file) => {
+            setFiles((current) => ({ ...current, cadence: file }));
+            setError("");
+          }}
+          onRemove={() =>
+            setFiles((current) => ({ ...current, cadence: null }))
+          }
+        />
+      </div>
+      <p className="upload-count">
+        {selectedFileCount}/2 fontes selecionadas · até 10 MB por arquivo
+      </p>
       <div className="import-guidance">
         <Info size={18} />
         <span>
@@ -654,7 +745,7 @@ export default function Dashboard() {
       <button
         className="button primary wide"
         onClick={importFiles}
-        disabled={!!busy || !files.length}
+        disabled={!!busy || !selectedFileCount}
       >
         {busy ? (
           <LoaderCircle className="spin" size={18} />
@@ -794,10 +885,23 @@ export default function Dashboard() {
               </p>
             </div>
             {dataset && view !== "imports" && (
-              <button className="button secondary" onClick={exportCsv}>
-                <ArrowDownToLine size={17} />
-                Exportar análise
-              </button>
+              <div className="page-heading-actions">
+                {effectiveSource === "cadence" && communicationDraft && (
+                  <button
+                    className="button primary"
+                    onClick={() => setShowCommunication(true)}
+                  >
+                    <MessageSquareText size={17} />
+                    {communicationDraft.isPartial
+                      ? "Comunicação parcial"
+                      : "Comunicação do período"}
+                  </button>
+                )}
+                <button className="button secondary" onClick={exportCsv}>
+                  <ArrowDownToLine size={17} />
+                  Exportar análise
+                </button>
+              </div>
             )}
           </div>
           {(error || notice || busy) && (
@@ -910,7 +1014,8 @@ export default function Dashboard() {
                         <span>
                           <strong>{item.title}</strong>
                           <small>
-                            {new Date(item.created_at).toLocaleString("pt-BR")}
+                            {new Date(item.created_at).toLocaleString("pt-BR")} ·{" "}
+                            {item.source_count} {item.source_count === 1 ? "fonte" : "fontes"}
                           </small>
                         </span>
                         <ArrowRight size={18} />
@@ -942,17 +1047,33 @@ export default function Dashboard() {
                     <option value="cadence">Cadência PA</option>
                   </select>
                 </label>
-                <label>
-                  Carteira
-                  <select
-                    value={effectiveMetric}
-                    disabled={effectiveSource === "cadence"}
-                    onChange={(e) => setMetric(e.target.value)}
-                  >
-                    <option value="VN">Venda Nova</option>
-                    <option value="AR">Arrecadação</option>
-                  </select>
-                </label>
+                {effectiveSource === "cadence" ? (
+                  <label>
+                    Grupo do PA
+                    <select
+                      value={group}
+                      onChange={(e) => setGroup(e.target.value)}
+                    >
+                      <option value="all">Todos os grupos</option>
+                      {groups.map((item) => (
+                        <option value={item} key={item}>
+                          {item} · {money(paTargetForGroup(item)?.monthly)}/mês
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label>
+                    Carteira
+                    <select
+                      value={effectiveMetric}
+                      onChange={(e) => setMetric(e.target.value)}
+                    >
+                      <option value="VN">Venda Nova</option>
+                      <option value="AR">Arrecadação</option>
+                    </select>
+                  </label>
+                )}
                 <label>
                   Central
                   <select
@@ -1026,6 +1147,31 @@ export default function Dashboard() {
                     : "Consolidado das cooperativas · sem dupla contagem dos PAs"}
                 </span>
               </div>
+              {effectiveSource === "cadence" && (
+                <section
+                  className="pa-target-policy"
+                  aria-label="Metas fixas mensais por grupo de PA"
+                >
+                  <div>
+                    <span className="section-label">META FIXA POR GRUPO</span>
+                    <p>Aplicada aos cenários mensal, trimestral, semestral e anual.</p>
+                  </div>
+                  <div className="pa-target-groups">
+                    {Object.entries(PA_GROUP_TARGETS).map(([name, target]) => (
+                      <button
+                        key={name}
+                        className={group === name ? "active" : ""}
+                        onClick={() => setGroup(group === name ? "all" : name)}
+                        aria-pressed={group === name}
+                      >
+                        <strong>{name}</strong>
+                        <span>{money(target.monthly)}/mês</span>
+                        <small>{money(target.annual)}/ano</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
               {view === "audit" ? (
                 <>
                   <section className="audit-top">
@@ -1049,6 +1195,11 @@ export default function Dashboard() {
                       <p>
                         <strong>Atingimento:</strong> soma do realizado ÷ soma
                         das metas do mesmo período.
+                      </p>
+                      <p>
+                        <strong>Cadência PA:</strong> P1 R$ 450, P2 R$ 600, P3
+                        R$ 750, P4 R$ 850 e P5 R$ 1.000 por mês. O anual
+                        corresponde a 12 meses.
                       </p>
                       <p>
                         <strong>Projeção:</strong> realizado + meta restante ×
@@ -1301,7 +1452,7 @@ export default function Dashboard() {
                             <p>Maior necessidade de recuperação primeiro</p>
                           </div>
                           <div className="table-controls">
-                            {effectiveSource === "base" ? (
+                            {effectiveSource === "base" && (
                               <label className="sr-only-label">
                                 <span>Agrupar por</span>
                                 <select
@@ -1312,19 +1463,6 @@ export default function Dashboard() {
                                     Cooperativas
                                   </option>
                                   <option value="central">Centrais</option>
-                                </select>
-                              </label>
-                            ) : (
-                              <label className="sr-only-label">
-                                <span>Grupo do PA</span>
-                                <select
-                                  value={group}
-                                  onChange={(e) => setGroup(e.target.value)}
-                                >
-                                  <option value="all">Todos os grupos</option>
-                                  {groups.map((g) => (
-                                    <option key={g}>{g}</option>
-                                  ))}
                                 </select>
                               </label>
                             )}
@@ -1466,6 +1604,13 @@ export default function Dashboard() {
           )}
         </Modal>
       )}
+      {showCommunication && communicationDraft && (
+        <CommunicationModal
+          key={`${communicationDraft.subject}:${communicationDraft.body.length}`}
+          draft={communicationDraft}
+          onClose={() => setShowCommunication(false)}
+        />
+      )}
       {showLogin && (
         <Modal title="Entrar na conta" onClose={() => setShowLogin(false)}>
           <div className="login-panel">
@@ -1560,6 +1705,13 @@ export default function Dashboard() {
               <p>{actionFor(selected).text}</p>
             </div>
             <div className="detail-meta">
+              {selected.source === "cadence" && (
+                <>
+                  Grupo {selected.group} · Meta fixa mensal:{" "}
+                  {money(paTargetForGroup(selected.group)?.monthly)} · Meta fixa
+                  anual: {money(paTargetForGroup(selected.group)?.annual)} ·{" "}
+                </>
+              )}
               Meta esperada até o corte: {money(selected.expected)} · Gap
               projetado: {money(selected.projectionGap)} ·{" "}
               {selected.remainingDays} dias úteis restantes
@@ -1699,6 +1851,169 @@ export default function Dashboard() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function FileSlot({
+  id,
+  title,
+  description,
+  file,
+  onSelect,
+  onRemove,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  file: File | null;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className={`file-slot ${file ? "selected" : ""}`}>
+      <label htmlFor={id}>
+        <span className="file-slot-icon">
+          {file ? <CheckCircle2 size={22} /> : <CloudUpload size={22} />}
+        </span>
+        <span>
+          <strong>{title}</strong>
+          <small>{file?.name ?? description}</small>
+        </span>
+        <span className="file-slot-action">{file ? "Trocar" : "Selecionar"}</span>
+      </label>
+      <input
+        id={id}
+        type="file"
+        accept=".xlsx"
+        aria-label={`Selecionar ${title}`}
+        onChange={(event) => {
+          const next = event.target.files?.[0];
+          if (next) onSelect(next);
+          event.target.value = "";
+        }}
+      />
+      {file && (
+        <button
+          type="button"
+          className="file-slot-remove icon-button"
+          aria-label={`Remover ${file.name}`}
+          onClick={onRemove}
+        >
+          <X size={17} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CommunicationModal({
+  draft,
+  onClose,
+}: {
+  draft: ReturnType<typeof buildPartialCommunication>;
+  onClose: () => void;
+}) {
+  const [recipient, setRecipient] = useState("");
+  const [subject, setSubject] = useState(draft.subject);
+  const [body, setBody] = useState(draft.body);
+  const [feedback, setFeedback] = useState("");
+
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(body);
+      setFeedback("Texto copiado. Cole no WhatsApp, Teams ou canal desejado.");
+    } catch {
+      setFeedback("Não foi possível copiar automaticamente. Selecione o texto abaixo.");
+    }
+  }
+
+  function downloadText() {
+    const url = URL.createObjectURL(
+      new Blob([`${subject}\r\n\r\n${body}`], {
+        type: "text/plain;charset=utf-8",
+      }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "comunicacao-cenario-parcial-pa.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+    setFeedback("Comunicação exportada em arquivo de texto.");
+  }
+
+  function openEmail() {
+    window.location.href = `mailto:${encodeURIComponent(recipient.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  return (
+    <Modal title="Comunicação do cenário" onClose={onClose} wide>
+      <div className="communication-content">
+        <div className="communication-header">
+          <div>
+            <span className="section-label">COMUNICAÇÃO COMERCIAL</span>
+            <h2>Cenário pronto para compartilhar</h2>
+            <p>
+              Revise o texto e envie por e-mail ou copie para WhatsApp e Teams.
+            </p>
+          </div>
+          <span className={`pill ${draft.isPartial ? "warning" : "neutral"}`}>
+            {draft.isPartial ? "Cenário parcial" : "Período fechado"}
+          </span>
+        </div>
+        <div className="communication-form">
+          <label>
+            Destinatário do e-mail (opcional)
+            <input
+              type="email"
+              value={recipient}
+              placeholder="cooperativa@exemplo.com.br"
+              onChange={(event) => setRecipient(event.target.value)}
+            />
+          </label>
+          <label>
+            Assunto
+            <input
+              value={subject}
+              maxLength={200}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+          </label>
+          <label>
+            Mensagem
+            <textarea
+              rows={18}
+              value={body}
+              maxLength={12000}
+              onChange={(event) => setBody(event.target.value)}
+            />
+          </label>
+        </div>
+        {feedback && (
+          <div className="message success" role="status">
+            <CheckCircle2 size={18} />
+            <span>{feedback}</span>
+          </div>
+        )}
+        <div className="communication-actions">
+          <button className="button secondary" onClick={copyText}>
+            <Copy size={17} />
+            Copiar texto
+          </button>
+          <button className="button secondary" onClick={downloadText}>
+            <Download size={17} />
+            Baixar texto
+          </button>
+          <button className="button primary" onClick={openEmail}>
+            <Mail size={17} />
+            Abrir no e-mail
+          </button>
+        </div>
+        <p className="helper communication-helper">
+          O botão abre o aplicativo de e-mail para revisão final. Nenhuma mensagem
+          é enviada automaticamente pelo sistema.
+        </p>
+      </div>
+    </Modal>
   );
 }
 
