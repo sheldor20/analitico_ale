@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Activity,
   ArrowDownToLine,
@@ -46,11 +46,14 @@ import {
   percent,
   sum,
 } from "@/lib/analytics.mjs";
-import { buildPartialCommunication } from "@/lib/communication.mjs";
+import { buildPartialCommunication, buildDecisionInsights } from "@/lib/communication.mjs";
+import RegistryManager from "@/components/registry-manager";
+import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
+import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
 import { supabase } from "@/lib/supabase";
 import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
 
-type View = "overview" | "cadence" | "actions" | "audit" | "imports";
+type View = "overview" | "cadence" | "actions" | "audit" | "imports" | "registry";
 type Analysis = ReturnType<typeof analyze>;
 type SourceFiles = { base: File | null; cadence: File | null };
 const EMPTY_ACTION: ActionState = {
@@ -98,6 +101,14 @@ export default function Dashboard() {
     [level, setLevel] = useState("cooperative"),
     [search, setSearch] = useState(""),
     [page, setPage] = useState(0);
+  const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
+  const [workspaces, setWorkspaces] = useState<{id:string;year:number;revision:number;updatedAt:string}[]>([]);
+  const [historical, setHistorical] = useState(false);
+  const [importMode, setImportMode] = useState("production");
+  const [sortBy, setSortBy] = useState("gap");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const activeOwner = useRef<string | null>(null);
+  const sessionYears = useRef(new Map<number,Dataset>());
   const [uplift, setUplift] = useState(0),
     [selected, setSelected] = useState<Analysis | null>(null),
     [showImport, setShowImport] = useState(false),
@@ -136,9 +147,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data } = supabase.auth.onAuthStateChange((_event, session) =>
-      setUser(session?.user ?? null),
-    );
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextId = session?.user.id ?? null;
+      if (event === "SIGNED_OUT" || (activeOwner.current && activeOwner.current !== nextId)) {
+        setDataset(null); setDatasetId(null); setSelected(null); setActions({});
+        setFiles({base:null,cadence:null}); setWorkspaceRevision(null); setWorkspaces([]);
+        setHistorical(false); sessionYears.current.clear();
+      }
+      activeOwner.current = nextId;
+      setUser(session?.user ?? null);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
@@ -146,20 +164,24 @@ export default function Dashboard() {
       setHistory([]);
       return;
     }
+    let cancelled = false;
     supabase
       .from("commercial_imports")
       .select(
         "id,created_at,title,year,source_count,has_cooperative_base,has_pa_cadence",
       )
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false })
       .limit(25)
       .then(({ data, error }) => {
+        if (cancelled || activeOwner.current !== user.id) return;
         if (error)
           setError(
             "Não foi possível consultar o histórico. Verifique a configuração do banco.",
           );
         else setHistory(data ?? []);
       });
+    return () => { cancelled = true; };
   }, [user, datasetId]);
   useEffect(() => {
     setPage(0);
@@ -188,11 +210,38 @@ export default function Dashboard() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selected, showImport, showLogin, showCommunication]);
+  useEffect(() => {
+    activeOwner.current = user?.id ?? null;
+    let cancelled = false;
+    if (!user) { setWorkspaces([]); return; }
+    setBusy("Recuperando seu cadastro fixo…");
+    listWorkspaces(user.id).then(async (items) => {
+      if (cancelled) return;
+      setWorkspaces(items);
+      if (!items.length || dataset) return;
+      const saved = await loadWorkspace(user.id, items[0].year);
+      if (saved && !cancelled) {
+        setDataset(initializeRegistry(saved.dataset));
+        setWorkspaceRevision(saved.revision);
+        setConfig(initializeRegistry(saved.dataset).config);
+        setHistorical(false);
+        setNotice("Cadastro fixo recuperado. As alterações serão salvas automaticamente.");
+      }
+    }).catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setBusy(""); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  const centralOptions = useMemo(() => {
+    const names = new Map<string,string>();
+    dataset?.registry?.entities.filter((e) => e.kind === "central").forEach((e) => names.set(e.central,e.name));
+    dataset?.rows.forEach((r) => { if (!names.has(r.central)) names.set(r.central,centralName(r.central)); });
+    return [...names.entries()].sort((a,b) => a[1].localeCompare(b[1]));
+  }, [dataset]);
   const sourceRows = useMemo(
     () =>
-      dataset?.rows.filter(
+      (dataset ? analysisRows(dataset) : []).filter(
         (r) => r.source === effectiveSource && r.metric === effectiveMetric,
-      ) ?? [],
+      ),
     [dataset, effectiveSource, effectiveMetric],
   );
   const cooperatives = useMemo(
@@ -201,7 +250,8 @@ export default function Dashboard() {
         ...new Map(
           sourceRows
             .filter((r) => central === "all" || r.central === central)
-            .map((r) => [r.cooperative, r.cooperativeName]),
+            .filter((r) => r.cooperative)
+            .map((r) => [`${r.central}:${r.cooperative}`, `${r.cooperative} · ${r.cooperativeName}`]),
         ).entries(),
       ].sort((a, b) => a[1].localeCompare(b[1])),
     [sourceRows, central],
@@ -212,7 +262,7 @@ export default function Dashboard() {
       sourceRows.filter(
         (r) =>
           (central === "all" || r.central === central) &&
-          (coop === "all" || r.cooperative === coop) &&
+          (coop === "all" || `${r.central}:${r.cooperative}` === coop) &&
           (group === "all" || r.group === group),
       ),
     [sourceRows, central, coop, group],
@@ -257,27 +307,29 @@ export default function Dashboard() {
     [filtered, dataset, config.year, month, period, uplift],
   );
   const displayed = analyses.filter((r) =>
-    `${r.name} ${r.cooperative} ${r.pa ?? ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
-  const cutoff = sourceRows[0]?.cutoff;
+    `${r.name} ${r.cooperative} ${r.pa ?? ""}`.toLowerCase().includes(search.toLowerCase()) &&
+    (statusFilter === "all" || (statusFilter === "attention" ? ["Atenção", "Prazo encerrado"].includes(r.status) :
+      statusFilter === "missing" ? !r.complete || r.status === "Sem meta" : ["Em rota", "Meta atingida"].includes(r.status))),
+  ).sort((a,b) => sortBy === "name" ? a.name.localeCompare(b.name) : sortBy === "attainment" ?
+    (a.attainment ?? -1) - (b.attainment ?? -1) : (b.projectionGap ?? b.gap ?? -1) - (a.projectionGap ?? a.gap ?? -1));
+  const insights = buildDecisionInsights(analyses);
+  const cutoffs = [...new Set(filtered.map((r) => r.cutoff))].sort();
+  const cutoff = cutoffs[0];
   const selectedFileCount = Number(!!files.base) + Number(!!files.cadence);
   const scopeLabel = useMemo(() => {
     const labels = [];
-    if (central !== "all") labels.push(centralName(central));
+    if (central !== "all") labels.push(centralOptions.find(([id])=>id===central)?.[1] ?? centralName(central));
     if (coop !== "all") {
       const selectedCoop = cooperatives.find(([id]) => id === coop);
       labels.push(
-        selectedCoop ? `${coop} · ${selectedCoop[1]}` : `Cooperativa ${coop}`,
+        selectedCoop ? selectedCoop[1] : `Cooperativa ${coop}`,
       );
     }
     if (group !== "all") labels.push(`Grupo ${group}`);
-    return labels.length ? labels.join(" · ") : "Centrais Bahia e Nordeste";
-  }, [central, coop, group, cooperatives]);
+    return labels.length ? labels.join(" · ") : "Todas as centrais da seleção";
+  }, [central, coop, group, cooperatives, centralOptions]);
   const communicationDraft = useMemo(() => {
     if (
-      effectiveSource !== "cadence" ||
       period === "daily" ||
       !cutoff ||
       !analyses.length
@@ -285,6 +337,8 @@ export default function Dashboard() {
       return null;
     return buildPartialCommunication({
       analyses,
+      source: effectiveSource,
+      metric: effectiveMetric,
       year: dataset?.year ?? config.year,
       month,
       periodLabel: periodNames[period],
@@ -295,6 +349,7 @@ export default function Dashboard() {
     });
   }, [
     effectiveSource,
+    effectiveMetric,
     cutoff,
     analyses,
     dataset,
@@ -308,9 +363,10 @@ export default function Dashboard() {
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
       (central === "all" || !i.central || i.central === central) &&
-      (coop === "all" || !i.cooperative || i.cooperative === coop),
+      (coop === "all" || !i.cooperative || `${i.central}:${i.cooperative}` === coop),
   );
   function navigate(next: View) {
+    if (next === "registry" && !dataset) setDataset(createEmptyDataset(config.year));
     setView(next);
     setSearch("");
     if (next === "cadence") {
@@ -329,6 +385,39 @@ export default function Dashboard() {
     setGroup("all");
     setSearch("");
     setUplift(0);
+    setStatusFilter("all");
+  }
+  function refreshWorkspaces(owner: string) {
+    void listWorkspaces(owner).then((items) => { if (activeOwner.current === owner) setWorkspaces(items); }).catch(() => {});
+  }
+  async function openWorkspace(year: number) {
+    if (!Number.isInteger(year) || year < 2020 || year > 2100) { setError("Informe um ano entre 2020 e 2100."); return; }
+    setBusy("Abrindo cadastro anual…"); setError("");
+    const owner = user?.id ?? null;
+    if (dataset && !historical) sessionYears.current.set(dataset.year, dataset);
+    try {
+      const saved = user ? await loadWorkspace(user.id, year) : null;
+      if (activeOwner.current !== owner) return;
+      const next = saved ? initializeRegistry(saved.dataset) : sessionYears.current.get(year) ?? createEmptyDataset(year);
+      setDataset(next); setWorkspaceRevision(saved?.revision ?? null); setConfig(next.config);
+      setHistorical(false); setDatasetId(null); setSelected(null); setActions({}); resetFilters();
+      setNotice(saved ? "Cadastro anual recuperado." : "Novo cadastro anual. Inclua as unidades ou importe a base fixa.");
+    } catch(e) { setError(e instanceof Error ? e.message : "Não foi possível abrir o cadastro."); }
+    finally { setBusy(""); }
+  }
+  async function changeRegistry(next: Dataset) {
+    if (historical) throw new Error("Retome o cadastro atual antes de editar uma análise histórica.");
+    setBusy("Salvando cadastro e recalculando indicadores…"); setError("");
+    try {
+      if (user) {
+        const saved = await saveWorkspace(user.id, next, workspaceRevision);
+        if (activeOwner.current !== user.id) return;
+        setWorkspaceRevision(saved.revision);
+      }
+      setDataset(next); setConfig(next.config); setDatasetId(null); setSelected(null);
+      if (user) refreshWorkspaces(user.id);
+      setNotice(user ? "Cadastro salvo. Metas, acumulados e indicadores recalculados." : "Cadastro atualizado nesta sessão. Entre e salve para retomar depois.");
+    } finally { setBusy(""); }
   }
   async function importFiles() {
     setError("");
@@ -346,12 +435,20 @@ export default function Dashboard() {
       const { parseWorkbook, combineImports } = await import(
         "@/lib/importer.mjs"
       );
+      let current = !historical && dataset?.year === config.year ? dataset : null;
+      let revision = current ? workspaceRevision : null;
+      if (user && (!current || revision === null)) {
+        const saved = await loadWorkspace(user.id, config.year);
+        if (saved) { current = initializeRegistry(saved.dataset); revision = saved.revision; }
+      }
+      const allowedCentrals = [...new Set(["1002", "2007", ...(current?.registry?.entities.filter((e) => e.kind === "central").map((e) => e.central) ?? [])])];
       const parts = [];
       for (const [expectedSource, file] of selectedFiles) {
         const parsed = await parseWorkbook(
           await file.arrayBuffer(),
           file.name,
-          config,
+          { ...config, allowedCentrals,
+            ...(importMode === "fixed" ? { vnCutoff: `${config.year}-01-01`, arCutoff: `${config.year}-01-01`, cadenceCutoff: `${config.year}-01-01` } : {}) },
         );
         if (parsed.source !== expectedSource)
           throw new Error(
@@ -361,10 +458,20 @@ export default function Dashboard() {
           );
         parts.push(parsed);
       }
-      const data = combineImports(parts, config) as Dataset;
+      let incoming = combineImports(parts, config) as Dataset;
+      if (importMode === "fixed") incoming = { ...incoming, rows: incoming.rows.map((r) => ({ ...r, actuals: Array(12).fill(null) })) };
+      const data = mergeProduction(current, incoming, { goalsOnly: importMode === "fixed" });
+      if (user) {
+        const saved = await saveWorkspace(user.id, data, revision);
+        if (activeOwner.current !== user.id) return;
+        setWorkspaceRevision(saved.revision);
+      } else setWorkspaceRevision(null);
       setDataset(data);
+      setConfig(data.config);
+      if (user) refreshWorkspaces(user.id);
+      setHistorical(false);
       setDatasetId(null);
-      setActions({});
+      setSelected(null);
       resetFilters();
       const hasBase = data.rows.some((r) => r.source === "base");
       setSource(hasBase ? "base" : "cadence");
@@ -374,7 +481,7 @@ export default function Dashboard() {
       );
       setShowImport(false);
       setNotice(
-        `${data.rows.length} registros importados. ${user ? "Salve a análise para guardar o histórico." : "Análise disponível nesta sessão. Entre para salvar e retomar depois."}`,
+        `${incoming.rows.length} registros recebidos · ${data.rows.length} no cadastro anual. Metas fixas e meses ausentes preservados. ${user ? "Atualização salva automaticamente." : "Entre para salvar e retomar depois."}`,
       );
     } catch (e) {
       setError(
@@ -404,8 +511,12 @@ export default function Dashboard() {
   }
   async function logout() {
     if (supabase) await supabase.auth.signOut();
+    activeOwner.current = null;
     setUser(null);
     setDataset(null);
+    setWorkspaceRevision(null);
+    setHistorical(false);
+    setWorkspaces([]);
     setDatasetId(null);
     setActions({});
     setFiles({ base: null, cadence: null });
@@ -419,12 +530,20 @@ export default function Dashboard() {
     setBusy("Salvando a análise…");
     setError("");
     try {
+      if (!historical) {
+        const saved = await saveWorkspace(user.id, dataset, workspaceRevision);
+        if (activeOwner.current !== user.id) return;
+        setWorkspaceRevision(saved.revision);
+        refreshWorkspaces(user.id);
+      }
+      if (!dataset.rows.length) { setNotice("Cadastro anual salvo."); return; }
       const normalized = JSON.stringify({
         version: dataset.version,
         year: dataset.year,
         config: dataset.config,
         paTargetPolicy: dataset.paTargetPolicy,
         rows: dataset.rows,
+        registry: dataset.registry,
         sources: dataset.sources,
       });
       const bytes = await crypto.subtle.digest(
@@ -476,6 +595,7 @@ export default function Dashboard() {
         .select("entity_key,owner_name,due_date,status,notes")
         .eq("import_id", savedId);
       if (taskError) throw taskError;
+      if (activeOwner.current !== user?.id) return;
       setActions(
         Object.fromEntries(
           (tasks ?? []).map((t) => [
@@ -522,6 +642,7 @@ export default function Dashboard() {
         .select("entity_key,owner_name,due_date,status,notes")
         .eq("import_id", id);
       if (taskError) throw taskError;
+      if (activeOwner.current !== user?.id) return;
       setActions(
         Object.fromEntries(
           (tasks ?? []).map((t) => [
@@ -535,9 +656,10 @@ export default function Dashboard() {
           ]),
         ),
       );
-      setDataset(d);
+      setDataset(initializeRegistry(d));
+      setHistorical(true);
       setDatasetId(id);
-      setConfig(d.config);
+      setConfig(initializeRegistry(d).config);
       setFiles({ base: null, cadence: null });
       resetFilters();
       setMonth(
@@ -546,7 +668,7 @@ export default function Dashboard() {
       navigate(
         d.rows.some((r) => r.source === "base") ? "overview" : "cadence",
       );
-      setNotice("Análise e plano de ação recuperados.");
+      setNotice("Versão histórica aberta. Retome o cadastro atual para editar ou atualizar produção.");
     } catch {
       setError("Não foi possível abrir esta análise.");
     } finally {
@@ -601,8 +723,8 @@ export default function Dashboard() {
         "Cooperativa",
         "PA",
         "Grupo PA",
-        "Meta fixa mensal PA",
-        "Meta fixa anual PA",
+        "Meta mensal PA cadastrada",
+        "Meta anual PA cadastrada",
         "Nome",
         "Período",
         "Mês",
@@ -623,8 +745,8 @@ export default function Dashboard() {
         r.cooperative,
         r.pa,
         r.source === "cadence" ? r.group : "",
-        r.source === "cadence" ? paTargetForGroup(r.group)?.monthly : "",
-        r.source === "cadence" ? paTargetForGroup(r.group)?.annual : "",
+        r.source === "cadence" ? r.targets[month] : "",
+        r.source === "cadence" ? r.annualTarget : "",
         r.name,
         periodNames[period],
         MONTHS[month],
@@ -658,9 +780,14 @@ export default function Dashboard() {
       </div>
       <h2>Transforme a base em decisões.</h2>
       <p className="muted">
-        Envie cada fonte no campo correspondente. As centrais 1002 e 2007 serão
-        identificadas e relacionadas automaticamente.
+        Cadastre as unidades e metas uma vez. Nos próximos envios, atualize a produção mantendo seu planejamento anual.
       </p>
+      <label className="import-mode">Objetivo deste envio
+        <select value={importMode} onChange={(e) => setImportMode(e.target.value)}>
+          <option value="production">Atualizar produção · preservar metas cadastradas</option>
+          <option value="fixed">Cadastrar base fixa · unidades e metas</option>
+        </select>
+      </label>
       <div className="source-upload-grid">
         <FileSlot
           id="base-file"
@@ -693,8 +820,7 @@ export default function Dashboard() {
       <div className="import-guidance">
         <Info size={18} />
         <span>
-          As planilhas não informam a data comercial. Confirme o ano e a posição
-          de cada fonte. Um mês em andamento será tratado como parcial.
+          {importMode === "fixed" ? "Este envio cadastra as unidades e metas; os realizados serão enviados depois. Cadastros já existentes são preservados." : "Confirme a posição de cada fonte. Valores enviados substituem a produção mensal correspondente; meses vazios e fontes não enviadas são preservados."}
         </span>
       </div>
       <div className="form-grid">
@@ -714,6 +840,7 @@ export default function Dashboard() {
           Venda Nova · posição em
           <input
             type="date"
+            disabled={importMode === "fixed"}
             value={config.vnCutoff}
             onChange={(e) => setConfig({ ...config, vnCutoff: e.target.value })}
           />
@@ -722,6 +849,7 @@ export default function Dashboard() {
           Arrecadação · posição em
           <input
             type="date"
+            disabled={importMode === "fixed"}
             value={config.arCutoff}
             onChange={(e) => setConfig({ ...config, arCutoff: e.target.value })}
           />
@@ -730,6 +858,7 @@ export default function Dashboard() {
           Cadência PA · posição em
           <input
             type="date"
+            disabled={importMode === "fixed"}
             value={config.cadenceCutoff}
             onChange={(e) =>
               setConfig({ ...config, cadenceCutoff: e.target.value })
@@ -739,8 +868,7 @@ export default function Dashboard() {
       </div>
       <p className="helper">
         Preencha apenas os cortes das fontes enviadas. Para mês fechado, informe
-        o último dia do mês. Uma nova importação substitui o conjunto aberto e
-        preserva as versões já salvas.
+        o último dia do mês. O sistema mantém metas fixas, unidades ausentes e demais períodos. Corrija metas e realizados em Cadastro e metas.
       </p>
       <button
         className="button primary wide"
@@ -752,20 +880,16 @@ export default function Dashboard() {
         ) : (
           <ArrowRight size={18} />
         )}
-        Analisar planilhas
+        {importMode === "fixed" ? "Cadastrar base fixa" : "Atualizar produção"}
       </button>
     </>
   );
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="Analítico — início">
-          <span className="brand-symbol">
-            <BarChart3 size={25} />
-          </span>
-          <span>
-            analítico<span className="brand-caption">GESTÃO COMERCIAL</span>
-          </span>
+        <a className="brand" href="/" aria-label="Sicoob Gestão Comercial — início">
+          <img className="brand-logo" src="/brand/sicoob-logo-light.svg" alt="Sicoob" width="152" height="36" />
+          <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
         <div className="nav-label">ACOMPANHAMENTO</div>
         <nav aria-label="Navegação principal">
@@ -776,12 +900,14 @@ export default function Dashboard() {
               { id: "actions", label: "Plano de ação", icon: ClipboardList },
               { id: "audit", label: "Conferência da base", icon: ShieldCheck },
               { id: "imports", label: "Importações", icon: History },
+              { id: "registry", label: "Cadastro e metas", icon: Building2 },
             ] as const
           ).map((item) => (
             <button
               key={item.id}
               aria-label={item.label}
               className={`nav-item ${view === item.id ? "active" : ""}`}
+              disabled={!!busy}
               onClick={() => navigate(item.id)}
             >
               <item.icon size={20} />
@@ -815,9 +941,10 @@ export default function Dashboard() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
+            <img className="mobile-brand" src="/brand/sicoob-logo.svg" alt="Sicoob" width="108" height="25" />
             Gestão comercial <span>/</span>{" "}
             <strong>
-              {view === "cadence"
+              {view === "registry" ? "Cadastro e metas" : view === "cadence"
                 ? "PAs"
                 : view === "actions"
                   ? "Plano de ação"
@@ -845,6 +972,7 @@ export default function Dashboard() {
             )}
             <button
               className="button quiet"
+              disabled={!!busy}
               onClick={() => (user ? logout() : setShowLogin(true))}
             >
               {user ? <LogOut size={17} /> : <LogIn size={17} />}
@@ -852,6 +980,7 @@ export default function Dashboard() {
             </button>
             <button
               className="button primary"
+              disabled={!!busy}
               onClick={() => setShowImport(true)}
             >
               <Upload size={17} />
@@ -864,7 +993,7 @@ export default function Dashboard() {
             <div>
               <div className="eyebrow">PERFORMANCE COMERCIAL</div>
               <h1>
-                {view === "cadence"
+                {view === "registry" ? "Sua base, sempre atualizada." : view === "cadence"
                   ? "Cada PA faz a diferença."
                   : view === "actions"
                     ? "Da análise à ação."
@@ -875,7 +1004,7 @@ export default function Dashboard() {
                         : "O caminho para os 100%."}
               </h1>
               <p>
-                {view === "audit"
+                {view === "registry" ? "Cadastre unidades, distribua metas e ajuste a produção. Os indicadores acompanham cada alteração." : view === "audit"
                   ? "Confira as fontes, as diferenças e as regras dos indicadores."
                   : view === "imports"
                     ? "Importe uma nova posição ou retome uma análise salva."
@@ -884,9 +1013,9 @@ export default function Dashboard() {
                       : "Metas, resultados e prioridades das centrais Bahia e Nordeste."}
               </p>
             </div>
-            {dataset && view !== "imports" && (
+            {dataset && view !== "imports" && view !== "registry" && (
               <div className="page-heading-actions">
-                {effectiveSource === "cadence" && communicationDraft && (
+                {communicationDraft && (
                   <button
                     className="button primary"
                     onClick={() => setShowCommunication(true)}
@@ -938,7 +1067,18 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {!dataset && view !== "imports" ? (
+          {historical && dataset && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
+          {dataset && !historical && <div className="workspace-toolbar">
+            <label>Ano do cadastro <select value={dataset.year} disabled={!!busy} onChange={(e) => openWorkspace(Number(e.target.value))}>
+              {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
+            </select></label>
+            <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
+            {user && <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
+            <span className="muted">{user && workspaceRevision ? `Salvo · revisão ${workspaceRevision}` : "Dados nesta sessão"}</span>
+          </div>}
+          {view === "registry" && dataset ? (
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
+          ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
               <section className="welcome-aside">
@@ -946,6 +1086,7 @@ export default function Dashboard() {
                   <Target size={44} />
                 </div>
                 <h2>Saiba onde atuar primeiro.</h2>
+                <button className="button secondary" disabled={!!busy} onClick={() => navigate("registry")}>Começar pelo cadastro manual</button>
                 <p>
                   Acompanhe o resultado de cada cooperativa e PA, veja o ritmo
                   necessário e organize a recuperação das metas.
@@ -1084,7 +1225,7 @@ export default function Dashboard() {
                     }}
                   >
                     <option value="all">Todas as centrais</option>
-                    {Object.entries(CENTRALS).map(([id, name]) => (
+                    {centralOptions.map(([id, name]) => (
                       <option value={id} key={id}>
                         {id} · {name.replace("Sicoob Central ", "")}
                       </option>
@@ -1100,7 +1241,7 @@ export default function Dashboard() {
                     <option value="all">Todas as cooperativas</option>
                     {cooperatives.map(([id, name]) => (
                       <option value={id} key={id}>
-                        {id} · {name.replace("SICOOB ", "")}
+                        {name.replace("SICOOB ", "")}
                       </option>
                     ))}
                   </select>
@@ -1137,7 +1278,7 @@ export default function Dashboard() {
                   <span className="position-dot" />
                   Posição da fonte:{" "}
                   <strong>
-                    {cutoff ? shortDate(cutoff) : "não importada"}
+                    {cutoff ? cutoffs.length > 1 ? `${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])} · cortes diferentes` : shortDate(cutoff) : "não importada"}
                   </strong>
                   {analyses.length > 0 && <> · {analyses[0].phase}</>}
                 </span>
@@ -1154,7 +1295,7 @@ export default function Dashboard() {
                 >
                   <div>
                     <span className="section-label">META FIXA POR GRUPO</span>
-                    <p>Aplicada aos cenários mensal, trimestral, semestral e anual.</p>
+                    <p>Referência inicial. Metas editadas no cadastro têm prioridade em todos os períodos.</p>
                   </div>
                   <div className="pa-target-groups">
                     {Object.entries(PA_GROUP_TARGETS).map(([name, target]) => (
@@ -1305,6 +1446,9 @@ export default function Dashboard() {
                       de uma unidade não elimina o saldo das demais.
                     </span>
                   </div>
+                  <section className="decision-insights" aria-label="Informações para decidir">
+                    {insights.slice(0,3).map((insight) => <article className={`panel insight ${insight.tone}`} key={insight.title}><h3>{insight.title}</h3><p>{insight.detail}</p></article>)}
+                  </section>
                   {view === "actions" ? (
                     <section className="panel">
                       <div className="panel-heading">
@@ -1449,9 +1593,15 @@ export default function Dashboard() {
                                   ? "Resultado por central"
                                   : "Resultado por cooperativa"}
                             </h2>
-                            <p>Maior necessidade de recuperação primeiro</p>
+                            <p>{displayed.length} de {analyses.length} unidades · todas na mesma página</p>
                           </div>
                           <div className="table-controls">
+                            <select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                              <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
+                            </select>
+                            <select aria-label="Ordenar análise" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                              <option value="gap">Maior gap</option><option value="attainment">Menor atingimento</option><option value="name">Nome / código</option>
+                            </select>
                             {effectiveSource === "base" && (
                               <label className="sr-only-label">
                                 <span>Agrupar por</span>
@@ -1500,9 +1650,7 @@ export default function Dashboard() {
                               </tr>
                             </thead>
                             <tbody>
-                              {displayed
-                                .slice(page * 12, page * 12 + 12)
-                                .map((r) => (
+                              {displayed.map((r) => (
                                   <tr key={r.key}>
                                     <td>
                                       <button
@@ -1518,7 +1666,7 @@ export default function Dashboard() {
                                         <small>
                                           {actualLevel === "central"
                                             ? r.central
-                                            : `${r.cooperative}${r.pa != null ? ` · PA ${r.pa} · ${r.group}` : ""} · ${r.central === "1002" ? "Bahia" : "Nordeste"}`}
+                                            : `${r.cooperative}${r.pa != null ? ` · PA ${r.pa} · ${r.group}` : ""} · ${centralOptions.find(([id])=>id===r.central)?.[1] ?? centralName(r.central)}`}
                                         </small>
                                       </button>
                                     </td>
@@ -1569,11 +1717,7 @@ export default function Dashboard() {
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
-                        <Pagination
-                          page={page}
-                          setPage={setPage}
-                          total={displayed.length}
-                        />
+                        <div className="pagination">{displayed.length} unidades exibidas · exportação inclui a seleção completa</div>
                       </section>
                     </>
                   )}
@@ -1935,7 +2079,7 @@ function CommunicationModal({
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = "comunicacao-cenario-parcial-pa.txt";
+    link.download = "comunicacao-cenario-comercial.txt";
     link.click();
     URL.revokeObjectURL(url);
     setFeedback("Comunicação exportada em arquivo de texto.");
@@ -1957,7 +2101,7 @@ function CommunicationModal({
             </p>
           </div>
           <span className={`pill ${draft.isPartial ? "warning" : "neutral"}`}>
-            {draft.isPartial ? "Cenário parcial" : "Período fechado"}
+            {draft.isIncomplete ? "Dados incompletos" : draft.isPartial ? "Cenário parcial" : "Período fechado"}
           </span>
         </div>
         <div className="communication-form">
@@ -2210,7 +2354,7 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
                   width="17"
                   height={Math.max(0, m.target * factor)}
                   rx="3"
-                  fill="#d2e6e0"
+                  fill="var(--chart-target)"
                 />
               )}
               {m.actual != null && (

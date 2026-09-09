@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { parseWorkbook, combineImports, number } from "../lib/importer.mjs";
+import { MONTHS } from "../lib/analytics.mjs";
 const config = {
   year: 2026,
   vnCutoff: "2026-09-08",
@@ -196,4 +197,26 @@ test("combined snapshot prevents two files from same source", async () => {
   assert.equal(d.rows.length, 1);
   assert.equal(d.version, 2);
   assert.equal(d.paTargetPolicy.groups.P5.monthly, 1000);
+});
+test("an explicitly registered central can be updated without importing unrelated ones by default", async () => {
+  const d = await parseWorkbook(await fixture(), "cadencia.xlsx", { ...config, allowedCentrals: ["9998"] });
+  assert.equal(d.rows.length, 2);
+  assert.equal(d.rows[1].central, "9998");
+});
+test("a fixed cooperative base can provide annual/monthly goals before any production columns exist", async () => {
+  const book = new ExcelJS.Workbook(), sheet = book.addWorksheet("Metas");
+  sheet.addRow(["Nº CENTRAL", "Nº COOP", "SIGLA COOPERATIVA", "META", "G COOP", "META ANUAL", ...MONTHS.map((month) => `META ${month}`)]);
+  sheet.addRow([1002, 9999, "Cooperativa teste", "VENDA NOVA", "P1", 1200, ...Array(12).fill(100)]);
+  const result = await parseWorkbook(await book.xlsx.writeBuffer(), "metas.xlsx", config);
+  assert.equal(result.rows[0].annualTarget, 1200);
+  assert.deepEqual(result.rows[0].actuals, Array(12).fill(null));
+});
+test("annual-only fixed registry is distributed into monthly targets with exact cents", async () => {
+  const book = new ExcelJS.Workbook(), sheet = book.addWorksheet("Metas anuais");
+  sheet.addRow(["Nº CENTRAL", "Nº COOP", "SIGLA COOPERATIVA", "META", "G COOP", "META ANUAL"]);
+  sheet.addRow([1002, 9999, "Cooperativa teste", "VENDA NOVA", "P1", 100]);
+  const result = await parseWorkbook(await book.xlsx.writeBuffer(), "metas-anuais.xlsx", config);
+  assert.equal(result.rows[0].annualTarget, 100);
+  assert.equal(result.rows[0].targets.reduce((sum, value) => sum + Math.round(value * 100), 0), 10000);
+  assert.deepEqual(result.rows[0].actuals, Array(12).fill(null));
 });

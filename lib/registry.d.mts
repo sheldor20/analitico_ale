@@ -1,0 +1,11 @@
+import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "./types";
+export function entityId(entity: Pick<RegistryEntity, "kind" | "central" | "cooperative" | "pa">): string;
+export function distributeAmount(amount: number | null, weights?: (number | null)[]): (number | null)[];
+export function createEmptyDataset(year: number): Dataset;
+export function initializeRegistry(dataset: Dataset): Dataset;
+export function mergeProduction(current: Dataset | null, incoming: Dataset, options?: { goalsOnly?: boolean }): Dataset;
+export function upsertEntity(dataset: Dataset, entity: Omit<RegistryEntity, "id"> & { id?: string }, previousId?: string): Dataset;
+export function deleteEntity(dataset: Dataset, id: string): Dataset;
+export function getPlanRow(dataset: Dataset, entityId: string, metric?: Metric): DataRow | null;
+export function analysisRows(dataset: Dataset): DataRow[];
+export function upsertPlanRow(dataset: Dataset, input: PlanRowInput): Dataset;
