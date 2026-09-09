@@ -13,6 +13,9 @@ async function fixture({
   blank = false,
   negative = false,
   code = 0,
+  group = "P1",
+  sourceMonthly = 450,
+  sourceAnnual = 5400,
 } = {}) {
   const book = new ExcelJS.Workbook(),
     s = book.addWorksheet("Cadência");
@@ -38,7 +41,7 @@ async function fixture({
     "SET",
   ]);
   const values = [
-    "P1",
+    group,
     1002,
     "CENTRAL BA",
     9999,
@@ -46,8 +49,8 @@ async function fixture({
     code,
     `9999-${code}`,
     { error: "#N/A" },
-    450,
-    5400,
+    sourceMonthly,
+    sourceAnnual,
     negative ? -100 : 123,
     0,
     0,
@@ -109,6 +112,34 @@ test("PA 97 is included", async () => {
   );
   assert.equal(d.rows[0].pa, "97");
 });
+test("cadence always applies the fixed P1-P5 target policy", async () => {
+  const d = await parseWorkbook(
+    await fixture({ group: "P4", sourceMonthly: 999, sourceAnnual: 9999 }),
+    "cadencia.xlsx",
+    config,
+  );
+  assert.deepEqual(d.rows[0].targets, Array(12).fill(850));
+  assert.equal(d.rows[0].annualTarget, 10200);
+  assert.equal(d.rows[0].sourceMonthlyTarget, 999);
+  assert.equal(d.rows[0].sourceAnnualTarget, 9999);
+  assert.equal(d.rows[0].targetRule, "group-fixed");
+  assert.equal(
+    d.issues.filter((issue) => /regra fixa foi aplicada/.test(issue.message))
+      .length,
+    2,
+  );
+});
+test("cadence rejects groups outside P1-P5", async () => {
+  await assert.rejects(
+    async () =>
+      parseWorkbook(
+        await fixture({ group: "P6" }),
+        "cadencia.xlsx",
+        config,
+      ),
+    /grupo do PA inválido/,
+  );
+});
 test("duplicate business rows fail instead of doubling production", async () => {
   await assert.rejects(() => parseWorkbook(fixture(), "x.xlsx", config));
   await assert.rejects(
@@ -163,5 +194,6 @@ test("combined snapshot prevents two files from same source", async () => {
   assert.throws(() => combineImports([p, p], config), /apenas um/);
   const d = combineImports([p], config);
   assert.equal(d.rows.length, 1);
-  assert.equal(d.version, 1);
+  assert.equal(d.version, 2);
+  assert.equal(d.paTargetPolicy.groups.P5.monthly, 1000);
 });

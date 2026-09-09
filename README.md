@@ -4,15 +4,16 @@ Aplicação Node.js / Next.js para acompanhar metas, resultados e ações das ce
 
 ## Funcionalidades
 
-- Importação XLSX da base de cooperativas e da cadência dos PAs, por cabeçalho, com leitura de todas as abas compatíveis.
-- Venda Nova e Arrecadação separadas. Cadência PA usa metas próprias e nunca é somada ao consolidado das cooperativas.
+- Importação em dois campos XLSX independentes: base de cooperativas/centrais e cadência dos PAs, por cabeçalho, com leitura de todas as abas compatíveis.
+- Venda Nova e Arrecadação separadas. Cadência PA usa metas fixas por grupo (P1–P5) e nunca é somada ao consolidado das cooperativas.
 - Filtros por central, cooperativa, grupo PA, carteira, período e mês. Agrupamento por central/cooperativa e detalhamento mensal.
 - Meta, realizado, atingimento ponderado, projeção sazonal, gap projetado, esforço diário e média mensal equivalente.
 - Períodos mensal, trimestral, semestral, anual e acumulado até o mês selecionado. Visão diária com meta estimada e esforço necessário.
 - Cenário de aumento de ritmo: altera somente a produção futura projetada, sem modificar metas ou realizados.
 - Plano de ação priorizado por gap projetado, com responsável, prazo, situação e observações.
 - Conferência por fonte/linha e reconciliação cooperativa × PAs, mantendo diferenças visíveis.
-- Exportação CSV da seleção, com proteção contra interpretação de textos como fórmulas.
+- Comunicação do cenário parcial pronta para revisar, copiar, baixar em texto e abrir no aplicativo de e-mail.
+- Exportação CSV da seleção, incluindo grupo e metas fixas dos PAs, com proteção contra interpretação de textos como fórmulas.
 - Login Supabase, histórico privado de importações e ações persistidas. Reimportar o mesmo conjunto não duplica resultados.
 
 ## Executar
@@ -44,9 +45,10 @@ O alias `NEXT_PUBLIC_SUPABASE_ANON_KEY` também é aceito para projetos legados.
 
 ## Supabase
 
-Aplicar `supabase/migrations/202609090001_commercial_analytics.sql` no projeto `psgfazlrhuctpfsbluvb`. A migração é aditiva: cria somente as tabelas, políticas, índices e função com prefixo `commercial_`; não altera tabelas de outros fluxos.
+Aplicar, em ordem, as migrations de `supabase/migrations` no projeto `psgfazlrhuctpfsbluvb`. A primeira cria somente tabelas, políticas, índices e função com prefixo `commercial_`. A segunda versiona o snapshot de duas fontes e a política de metas dos PAs, sem alterar tabelas de outros fluxos.
 
 - `commercial_imports`: snapshots imutáveis com JSON normalizado, ano, origens/linhas, cortes e fingerprint SHA-256. Índice único por usuário/fingerprint evita duplicações.
+- `commercial_imports.source_count`, `has_cooperative_base` e `has_pa_cadence`: colunas calculadas pelo banco para conferir quais fontes integram cada snapshot.
 - `commercial_actions`: acompanhamento por importação e chave da entidade, incluindo fonte e métrica. A chave estrangeira composta impede vincular ações à análise de outra pessoa.
 - RLS obrigatória: cada usuário autenticado acessa apenas seus próprios registros. Anônimos não recebem privilégios. Não há chave administrativa no aplicativo.
 
@@ -56,7 +58,7 @@ Disponibilize contas autorizadas pelo painel Authentication do Supabase. O aplic
 
 ## Importar as bases
 
-1. Selecione `base atualizada.xlsx`, `CADENCIA COMERCIAL PA.xlsx` ou ambos (até 10 MB por arquivo).
+1. No campo **Cooperativas e centrais**, selecione `base atualizada.xlsx`. No campo **Cadência comercial PA**, selecione `CADENCIA COMERCIAL PA.xlsx`. É possível analisar uma única fonte, mas o conjunto completo usa as duas (até 10 MB por arquivo).
 2. Informe o ano das metas e a data de corte de cada fonte enviada. As planilhas não contêm uma data comercial inequívoca; por isso nenhum corte é inferido da data do arquivo ou do relógio do servidor.
 3. Para mês fechado, informe o último dia do mês. Para parcial, informe a posição efetiva do resultado acumulado no mês. Meses anteriores são tratados como fechados conforme essa confirmação. O corte deve pertencer ao ano informado.
 4. Clique em **Analisar planilhas**. Revise **Conferência da base** e depois **Salvar análise** para guardar o conjunto e as ações.
@@ -68,11 +70,27 @@ Uma nova importação abre um novo conjunto de fontes. Caso envie apenas um dos 
 | Fonte        | Identificação                                                   | Metas                               | Realizado                                        |
 | ------------ | --------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------ |
 | Cooperativas | Nº CENTRAL, Nº COOP, SIGLA COOPERATIVA, META (métrica), G. COOP | META_JAN…META_DEZ, META_ANUAL       | REAL_JAN…REAL_DEZ                                |
-| Cadência PA  | Nº CENTRAL, Nº COOP, NOME COOP, Nº PA, NOME DO PA, GRUPO        | MÊS = meta mensal; ANO = meta anual | REAL JAN…REAL MAR, ABR…DEZ, conforme disponíveis |
+| Cadência PA  | Nº CENTRAL, Nº COOP, NOME COOP, Nº PA, NOME DO PA, GRUPO P1–P5  | Meta fixa do grupo; MÊS/ANO são campos opcionais de conferência | REAL JAN…REAL MAR, ABR…DEZ, conforme disponíveis |
 
 Cabeçalhos são normalizados por espaços, pontuação e acentos. Colunas mensais da cadência também aceitam o prefixo `REAL`. PAs 0 e 97 são incluídos. Ajustes negativos são preservados; nomes ausentes recebem identificação pelo código do PA. Células vazias, texto inválido ou fórmulas sem valor calculado não viram zero.
 
-Os totais auxiliares `META_PER`, `REAL_PER`, trimestrais e percentuais prontos não são usados no cálculo. A base fornecida comparava, em suas colunas de período, metas e realizados com meses diferentes. Valores originais do arquivo continuam intactos.
+Os totais auxiliares `META_PER`, `REAL_PER`, trimestrais e percentuais prontos não são usados no cálculo. A base fornecida comparava, em suas colunas de período, metas e realizados com meses diferentes. Na cadência, os valores de `MÊS` e `ANO` são preservados para auditoria, mas não substituem a regra fixa do grupo. Valores originais do arquivo continuam intactos.
+
+### Metas fixas da cadência PA
+
+| Grupo | Meta mensal | Meta trimestral | Meta semestral | Meta anual |
+| ----- | -----------: | ---------------: | --------------: | ----------: |
+| P1    | R$ 450       | R$ 1.350         | R$ 2.700        | R$ 5.400   |
+| P2    | R$ 600       | R$ 1.800         | R$ 3.600        | R$ 7.200   |
+| P3    | R$ 750       | R$ 2.250         | R$ 4.500        | R$ 9.000   |
+| P4    | R$ 850       | R$ 2.550         | R$ 5.100        | R$ 10.200  |
+| P5    | R$ 1.000     | R$ 3.000         | R$ 6.000        | R$ 12.000  |
+
+O filtro **Grupo do PA** e os cartões P1–P5 aplicam a mesma regra em todos os indicadores, projeções, gaps, plano de ação, exportação e comunicação.
+
+## Comunicação do cenário parcial
+
+Na visão **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. Clique em **Comunicação parcial** para gerar um texto com posição da fonte, meta, realizado, atingimento, projeção, saldo, esforço e até cinco prioridades. O texto pode ser editado, copiado para WhatsApp/Teams, baixado em `.txt` ou aberto no aplicativo de e-mail. O sistema somente abre o rascunho; o envio continua sob confirmação do usuário.
 
 ## Critérios dos indicadores
 

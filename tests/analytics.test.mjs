@@ -134,6 +134,29 @@ test("daily view never fabricates daily realized and reports derived goal", () =
   assert.equal(a.dailyActual, null);
   assert.equal(a.dailyTarget, 100);
 });
+test("PA group targets drive monthly, quarterly, semester and annual scenarios", () => {
+  const cadence = row({
+    source: "cadence",
+    key: "cadence:1002:9999:1:VN",
+    pa: "1",
+    group: "P3",
+    targets: Array(12).fill(1),
+    annualTarget: 12,
+    actuals: Array(12).fill(0),
+  });
+  assert.equal(analyze(cadence, options).target, 750);
+  assert.equal(
+    analyze(cadence, { ...options, period: "quarter" }).target,
+    2250,
+  );
+  assert.equal(
+    analyze(cadence, { ...options, period: "semester" }).target,
+    4500,
+  );
+  const annual = analyze(cadence, { ...options, period: "annual" });
+  assert.equal(annual.target, 9000);
+  assert.equal(annual.annualConflict, false);
+});
 test("seasonal projection uses future monthly targets and scenario changes future only", () => {
   const r = row({
     targets: Array(12).fill(100),

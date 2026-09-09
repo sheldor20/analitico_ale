@@ -12,6 +12,9 @@ export type DataRow = {
   targets: (number | null)[];
   actuals: (number | null)[];
   annualTarget: number | null;
+  targetRule?: "source" | "group-fixed";
+  sourceMonthlyTarget?: number | null;
+  sourceAnnualTarget?: number | null;
   cutoff: string;
   sourceFile: string;
   sheet: string;
@@ -36,6 +39,10 @@ export type Dataset = {
   year: number;
   importedAt: string;
   config: ImportConfig;
+  paTargetPolicy?: {
+    version: string;
+    groups: Record<string, { monthly: number; annual: number }>;
+  };
   rows: DataRow[];
   issues: Issue[];
   sources: { filename: string; type: string; rows: number; skipped: number }[];

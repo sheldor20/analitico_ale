@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 
 test("migration executes in PostgreSQL; user isolation, immutable imports, deduplication and action ownership are enforced", async () => {
@@ -14,15 +14,12 @@ test("migration executes in PostgreSQL; user isolation, immutable imports, dedup
       grant usage on schema auth to authenticated,anon;
       grant execute on function auth.uid() to authenticated,anon;
       insert into auth.users values ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');`);
-    await db.exec(
-      await readFile(
-        new URL(
-          "../supabase/migrations/202609090001_commercial_analytics.sql",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    );
+    const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
+    const migrations = (await readdir(migrationDirectory))
+      .filter((file) => file.endsWith(".sql"))
+      .sort();
+    for (const migration of migrations)
+      await db.exec(await readFile(new URL(migration, migrationDirectory), "utf8"));
     await db.exec(
       `set role authenticated; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);`,
     );
@@ -30,7 +27,7 @@ test("migration executes in PostgreSQL; user isolation, immutable imports, dedup
       version: 1,
       year: 2026,
       rows: [{ central: "1002" }],
-      sources: [],
+      sources: [{ type: "base" }],
       config: {},
     };
     const inserted = await db.query(
@@ -38,6 +35,30 @@ test("migration executes in PostgreSQL; user isolation, immutable imports, dedup
       ["a".repeat(64), JSON.stringify(data)],
     );
     const id = inserted.rows[0].id;
+    const dataV2 = {
+      ...data,
+      version: 2,
+      sources: [{ type: "base" }, { type: "cadence" }],
+      paTargetPolicy: {
+        version: "2026.1",
+        groups: {
+          P1: { monthly: 450, annual: 5400 },
+          P2: { monthly: 600, annual: 7200 },
+          P3: { monthly: 750, annual: 9000 },
+          P4: { monthly: 850, annual: 10200 },
+          P5: { monthly: 1000, annual: 12000 },
+        },
+      },
+    };
+    const versioned = await db.query(
+      `insert into public.commercial_imports(owner_id,title,year,fingerprint,dataset) values (auth.uid(),'Two sources',2026,$1,$2) returning source_count,has_cooperative_base,has_pa_cadence`,
+      ["d".repeat(64), JSON.stringify(dataV2)],
+    );
+    assert.deepEqual(versioned.rows[0], {
+      source_count: 2,
+      has_cooperative_base: true,
+      has_pa_cadence: true,
+    });
     await assert.rejects(
       () =>
         db.query(
@@ -59,6 +80,21 @@ test("migration executes in PostgreSQL; user isolation, immutable imports, dedup
         db.query(
           `insert into public.commercial_imports(owner_id,title,year,fingerprint,dataset) values (auth.uid(),'invalid',2026,$1,$2)`,
           ["c".repeat(64), JSON.stringify({ version: 1 })],
+        ),
+      /check constraint/,
+    );
+    await assert.rejects(
+      () =>
+        db.query(
+          `insert into public.commercial_imports(owner_id,title,year,fingerprint,dataset) values (auth.uid(),'invalid-v2',2026,$1,$2)`,
+          [
+            "e".repeat(64),
+            JSON.stringify({
+              ...data,
+              version: 2,
+              sources: [{ type: "cadence" }],
+            }),
+          ],
         ),
       /check constraint/,
     );
