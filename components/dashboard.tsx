@@ -2368,7 +2368,7 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
                   width="17"
                   height={Math.max(1, Math.abs(m.actual) * factor)}
                   rx="3"
-                  fill={m.actual < 0 ? "#b85d32" : "#008c73"}
+                  fill={m.actual < 0 ? "var(--chart-negative)" : "var(--chart-actual)"}
                 />
               )}
               <text

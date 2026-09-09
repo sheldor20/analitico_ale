@@ -146,8 +146,15 @@ test("central edit only redistributes changed months, preserving cooperative his
 
 test("central-only plan migrates unchanged to first cooperative and never duplicates aggregates", () => {
   let data = upsertEntity(createEmptyDataset(2026), central);
+  const synthetic = analysisRows(data).filter((row) => row.metric === "VN");
+  assert.equal(synthetic.length, 1);
+  assert.equal(aggregate(synthetic, "cooperative")[0].name, "Central Bahia");
   data = upsertPlanRow(data, { entityId: "central:1002", metric: "VN", annualTarget: 1200 });
   assert.equal(data.rows[0].cooperative, "");
+  const planned = analysisRows(data).filter((row) => row.metric === "VN");
+  assert.equal(planned.length, 1);
+  assert.equal(aggregate(planned, "cooperative")[0].name, "Central Bahia");
+  assert.equal(aggregate(planned, "cooperative")[0].annualTarget, 1200);
   data = upsertEntity(data, cooperative);
   assert.equal(data.rows.length, 1);
   assert.equal(data.rows[0].cooperative, "9999");
