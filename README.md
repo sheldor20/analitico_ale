@@ -2,6 +2,20 @@
 
 Aplicação Node.js / Next.js para acompanhar metas, resultados e ações das centrais Sicoob Bahia (`1002`) e Nordeste (`2007`). Preparada para Vercel e Supabase.
 
+## Cadastro fixo anual e atualização da produção
+
+Em **Cadastro e metas**, inclua, edite ou exclua Centrais, Cooperativas e PAs. A hierarquia é validada, inclusive PA 0 e 97. A exclusão informa os cadastros e valores vinculados e pede confirmação dentro do aplicativo. Mudanças recalculam os indicadores de todos os períodos.
+
+- **Base fixa:** em Importações, escolha “Cadastrar base fixa · unidades e metas”. O arquivo cadastra novas unidades e metas sem carregar produção nem substituir metas já cadastradas. Uma base só com meta anual recebe distribuição mensal em centavos, identificada na conferência.
+- **Atualização:** escolha “Atualizar produção”. Os valores mensais informados substituem os meses correspondentes, sem somar o mesmo acumulado novamente. Meses vazios, fontes não enviadas, unidades ausentes e metas cadastradas são preservados. Cortes anteriores ao já salvo são rejeitados. Uma correção manual de realizado prevalece em reenvio do mesmo corte; um corte posterior com valor informado atualiza a correção.
+- **Metas e realizado manuais:** abra “Metas e realizado” da unidade. Informe a meta anual e distribua nos 12 meses, ou edite os meses individualmente. O realizado aceita ajustes negativos. Campo vazio significa informação ausente. A produção de um mês posterior ao corte exige atualizar a data.
+- **Centrais:** a edição de metas/realizado consolidados é rateada entre as cooperativas, proporcionalmente às metas mensais existentes, ou igualmente sem pesos. O formulário informa a regra antes de salvar. Meses não alterados preservam o histórico individual. Uma central sem cooperativa pode receber plano próprio; ao cadastrar sua primeira cooperativa, os valores são transferidos para ela.
+- **PAs:** suas metas e realizados consolidam na fonte Cadência PA; permanecem separados da fonte Cooperativas para evitar a soma de dados sobrepostos. Metas personalizadas do PA prevalecem sobre a referência P1–P5.
+- **Persistência:** com login, cada alteração aceita e atualização por arquivo é salva automaticamente em `commercial_workspaces`, por usuário/ano. A revisão impede sobrescrita concorrente. **Salvar análise** cria uma versão histórica imutável e guarda o plano de ação; **Retomar cadastro atual** volta à base editável. Sem login, o cadastro permanece apenas na sessão.
+- **Análises:** todas as cooperativas/PAs cadastrados aparecem na mesma página, com busca, ordenação, filtro de situação e exportação da seleção. Unidades sem produção aparecem como informação pendente, sem fabricar zero. A comunicação funciona para cooperativas e PAs, distingue cortes e dados incompletos e mostra metas efetivamente utilizadas.
+
+A identidade Sicoob e as diretrizes para futuras melhorias estão em [docs/IDENTIDADE_VISUAL.md](docs/IDENTIDADE_VISUAL.md) e `AGENTS.md`.
+
 ## Funcionalidades
 
 - Importação em dois campos XLSX independentes: base de cooperativas/centrais e cadência dos PAs, por cabeçalho, com leitura de todas as abas compatíveis.
@@ -45,7 +59,7 @@ O alias `NEXT_PUBLIC_SUPABASE_ANON_KEY` também é aceito para projetos legados.
 
 ## Supabase
 
-Aplicar, em ordem, as migrations de `supabase/migrations` no projeto `psgfazlrhuctpfsbluvb`. A primeira cria somente tabelas, políticas, índices e função com prefixo `commercial_`. A segunda versiona o snapshot de duas fontes e a política de metas dos PAs, sem alterar tabelas de outros fluxos.
+Aplicar, em ordem, as migrations de `supabase/migrations` no projeto `psgfazlrhuctpfsbluvb`. A primeira cria somente tabelas, políticas, índices e função com prefixo `commercial_`. A segunda versiona o snapshot de duas fontes e a política de metas dos PAs. A migração `20260909123553_fixed_commercial_workspaces.sql` cria a base anual editável com validação, revisão e políticas de acesso; aplicada no projeto em 09/09/2026 e conferida por consulta e advisors de segurança sem alertas.
 
 - `commercial_imports`: snapshots imutáveis com JSON normalizado, ano, origens/linhas, cortes e fingerprint SHA-256. Índice único por usuário/fingerprint evita duplicações.
 - `commercial_imports.source_count`, `has_cooperative_base` e `has_pa_cadence`: colunas calculadas pelo banco para conferir quais fontes integram cada snapshot.
@@ -54,7 +68,7 @@ Aplicar, em ordem, as migrations de `supabase/migrations` no projeto `psgfazlrhu
 
 Disponibilize contas autorizadas pelo painel Authentication do Supabase. O aplicativo usa login com e-mail e senha; não oferece cadastro público. Cada conta possui seu próprio histórico. O compartilhamento entre contas não faz parte desta versão.
 
-**A migração versionada e validada localmente não equivale à aplicação no projeto remoto.** A aplicação remota exige a conexão autorizada com o projeto. Verifique a conclusão no histórico de migrations antes de usar a persistência em produção.
+As migrações aplicadas constam no histórico do Supabase. Os snapshots originais continuam imutáveis; a base operacional anual é editável e isolada por proprietário.
 
 ## Importar as bases
 
@@ -63,7 +77,7 @@ Disponibilize contas autorizadas pelo painel Authentication do Supabase. O aplic
 3. Para mês fechado, informe o último dia do mês. Para parcial, informe a posição efetiva do resultado acumulado no mês. Meses anteriores são tratados como fechados conforme essa confirmação. O corte deve pertencer ao ano informado.
 4. Clique em **Analisar planilhas**. Revise **Conferência da base** e depois **Salvar análise** para guardar o conjunto e as ações.
 
-Uma nova importação abre um novo conjunto de fontes. Caso envie apenas um dos arquivos, somente essa fonte integrará a nova análise. Para comparar cooperativas e PAs, importe os dois juntos. Versões já salvas continuam no histórico.
+Novas importações atualizam o cadastro anual aberto. Se enviar somente uma fonte, a outra permanece no cadastro. As metas fixas e meses não informados são preservados; versões históricas salvas continuam disponíveis.
 
 ### Layout reconhecido
 
@@ -86,11 +100,11 @@ Os totais auxiliares `META_PER`, `REAL_PER`, trimestrais e percentuais prontos n
 | P4    | R$ 850       | R$ 2.550         | R$ 5.100        | R$ 10.200  |
 | P5    | R$ 1.000     | R$ 3.000         | R$ 6.000        | R$ 12.000  |
 
-O filtro **Grupo do PA** e os cartões P1–P5 aplicam a mesma regra em todos os indicadores, projeções, gaps, plano de ação, exportação e comunicação.
+O filtro **Grupo do PA** e os cartões P1–P5 selecionam os grupos. Essa tabela é a referência inicial; metas personalizadas em Cadastro e metas prevalecem em todos os indicadores, projeções, gaps, exportação e comunicação.
 
 ## Comunicação do cenário parcial
 
-Na visão **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. Clique em **Comunicação parcial** para gerar um texto com posição da fonte, meta, realizado, atingimento, projeção, saldo, esforço e até cinco prioridades. O texto pode ser editado, copiado para WhatsApp/Teams, baixado em `.txt` ou aberto no aplicativo de e-mail. O sistema somente abre o rascunho; o envio continua sob confirmação do usuário.
+Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. Clique em **Comunicação parcial** para gerar um texto com posição da fonte, meta, realizado, atingimento, projeção, saldo, esforço e até cinco prioridades. O texto pode ser editado, copiado para WhatsApp/Teams, baixado em `.txt` ou aberto no aplicativo de e-mail. O sistema somente abre o rascunho; o envio continua sob confirmação do usuário.
 
 ## Critérios dos indicadores
 
@@ -112,7 +126,7 @@ As projeções representam cenários de ritmo, sem garantia de resultado. Recome
 
 ## Privacidade e operação
 
-A leitura XLSX acontece no navegador. Apenas o conjunto normalizado é enviado ao Supabase quando o usuário solicita salvar. Os arquivos originais não são publicados, enviados ao GitHub ou embutidos no deploy. O arquivo permanece sob controle do usuário; o snapshot guarda nomes de arquivos, abas e linhas para rastreabilidade.
+A leitura XLSX acontece no navegador. Com a conta conectada, o conjunto normalizado é enviado ao Supabase ao concluir uma importação ou salvar uma edição. Sem login, os dados ficam apenas em memória. Os arquivos originais não são publicados, enviados ao GitHub ou embutidos no deploy. O arquivo permanece sob controle do usuário; o snapshot guarda nomes de arquivos, abas e linhas para rastreabilidade.
 
 Não são usados localStorage/IndexedDB para dados comerciais; sem salvar, a análise é perdida ao recarregar/fechar a página. A sessão de autenticação é gerenciada pelo cliente oficial Supabase. Ao sair, dados e ações abertos são removidos da interface.
 

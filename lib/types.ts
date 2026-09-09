@@ -3,6 +3,7 @@ export type DataRow = {
   key: string;
   source: "base" | "cadence";
   central: string;
+  centralName?: string;
   cooperative: string;
   cooperativeName: string;
   pa: string | null;
@@ -12,7 +13,9 @@ export type DataRow = {
   targets: (number | null)[];
   actuals: (number | null)[];
   annualTarget: number | null;
-  targetRule?: "source" | "group-fixed";
+  targetRule?: "source" | "group-fixed" | "manual" | "registry";
+  manualActualMonths?: number[];
+  cutoffMin?: string;
   sourceMonthlyTarget?: number | null;
   sourceAnnualTarget?: number | null;
   cutoff: string;
@@ -25,6 +28,24 @@ export type ImportConfig = {
   vnCutoff: string;
   arCutoff: string;
   cadenceCutoff: string;
+  allowedCentrals?: string[];
+};
+export type RegistryEntity = {
+  id: string;
+  kind: "central" | "cooperative" | "pa";
+  central: string;
+  cooperative?: string;
+  pa?: string;
+  name: string;
+  group?: string;
+};
+export type PlanRowInput = {
+  entityId: string;
+  metric: Metric;
+  annualTarget?: number | null;
+  targets?: (number | null)[];
+  actuals?: (number | null)[];
+  cutoff?: string;
 };
 export type Issue = {
   kind: string;
@@ -39,6 +60,7 @@ export type Dataset = {
   year: number;
   importedAt: string;
   config: ImportConfig;
+  registry?: { version: 1; entities: RegistryEntity[]; updatedAt: string };
   paTargetPolicy?: {
     version: string;
     groups: Record<string, { monthly: number; annual: number }>;
