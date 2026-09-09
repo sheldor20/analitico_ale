@@ -63,6 +63,38 @@ test("fixed-only upload adds new plans but never resets current production or re
   assert.deepEqual(result.rows[1].actuals, Array(12).fill(null));
 });
 
+test("fixed goals fill a production-first unit without changing observed production or its date", () => {
+  const existing = initializeRegistry(dataset([newRow({ targets: Array(12).fill(null), annualTarget: null,
+    actuals: Array(12).fill(25), cutoff: "2026-09-09" })]));
+  const incoming = dataset([newRow({ cutoff: "2026-01-01", actuals: Array(12).fill(null) })]);
+  const result = mergeProduction(existing, incoming, { goalsOnly: true });
+  assert.deepEqual(result.rows[0].targets, Array(12).fill(100));
+  assert.equal(result.rows[0].annualTarget, 1200);
+  assert.deepEqual(result.rows[0].actuals, Array(12).fill(25));
+  assert.equal(result.rows[0].cutoff, "2026-09-09");
+  assert.equal(analyze(result.rows[0], opts).attainment, 0.25);
+  assert.deepEqual(existing.rows[0].targets, Array(12).fill(null));
+});
+
+test("fixed goals fill only missing monthly and annual fields and surface conflicting distributions", () => {
+  const targets = [0, 150, ...Array(10).fill(null)];
+  const incoming = dataset([newRow({ targets: Array(12).fill(100), annualTarget: 1200, cutoff: "2026-01-01" })]);
+  const existing = initializeRegistry(dataset([newRow({ targets, annualTarget: null, targetRule: "manual" })]));
+  const result = mergeProduction(existing, incoming, { goalsOnly: true });
+  assert.deepEqual(result.rows[0].targets, [0, 150, ...Array(10).fill(100)]);
+  assert.equal(result.rows[0].annualTarget, 1200);
+  assert.equal(result.rows[0].targetRule, "manual");
+  assert.ok(result.issues.some((issue) => issue.kind === "registry" && /diverge/.test(issue.message)));
+  assert.equal(analyze(result.rows[0], { ...opts, period: "annual" }).projected, null);
+  const knownAnnual = initializeRegistry(dataset([newRow({ targets, annualTarget: 999 })]));
+  const preserved = mergeProduction(knownAnnual, incoming, { goalsOnly: true });
+  assert.equal(preserved.rows[0].annualTarget, 999);
+  assert.ok(preserved.issues.some((issue) => issue.kind === "registry" && /diverge/.test(issue.message)));
+  const stillMissing = mergeProduction(existing, dataset([newRow({ targets: Array(12).fill(null), annualTarget: null })]), { goalsOnly: true });
+  assert.deepEqual(stillMissing.rows[0].targets, targets);
+  assert.equal(stillMissing.rows[0].annualTarget, null);
+});
+
 test("manual corrections survive an identical-date upload; newer observed values replace them", () => {
   const fixed = initializeRegistry(dataset());
   const actuals = [...fixed.rows[0].actuals]; actuals[8] = 15;
@@ -191,4 +223,17 @@ test("a source-only import supplies valid fallback cutoffs for missing source/me
   // The read helper also works for an already-registered legacy dataset before normalization.
   const legacy = { ...data, config: { ...data.config, cadenceCutoff: "" }, rows: data.rows.filter((row) => row.source !== "cadence") };
   assert.doesNotThrow(() => analysisRows(legacy).map((row) => analyze(row, opts)));
+});
+
+
+test("central export metadata never attributes totals to its first cooperative", () => {
+  let dataset = createEmptyDataset(2026);
+  dataset = upsertEntity(dataset, {kind:"central",central:"1002",name:"Central TESTE"});
+  dataset = upsertEntity(dataset, {kind:"cooperative",central:"1002",cooperative:"9999",name:"Cooperativa TESTE"});
+  dataset = upsertPlanRow(dataset, {entityId:"cooperative:1002:9999",metric:"VN",annualTarget:1200});
+  const central = aggregate(dataset.rows,"central")[0];
+  assert.equal(central.name,"Central TESTE");
+  assert.equal(central.cooperative,"");
+  assert.equal(central.cooperativeName,"");
+  assert.equal(central.pa,null);
 });

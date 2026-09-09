@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyze } from "../lib/analytics.mjs";
+import { aggregate, analyze } from "../lib/analytics.mjs";
 import { buildDecisionInsights, buildPartialCommunication } from "../lib/communication.mjs";
 
 const pa = (changes = {}) => ({
@@ -226,4 +226,33 @@ test("insights do not add overlapping PA and cooperative populations", () => {
   assert.equal(insights[0].tone, "warning");
   assert.match(insights[0].detail, /evitar dupla contagem/);
   assert.equal(buildDecisionInsights([])[0].title, "Sem registros");
+});
+
+test("central aggregates identify the central instead of the first cooperative", () => {
+  const cooperatives = [
+    pa({ source: "base", cooperativeName: "PRIMEIRA COOPERATIVA", targets: Array(12).fill(1000), annualTarget: 12000, actuals: Array(12).fill(100) }),
+    pa({ source: "base", cooperative: "3025", cooperativeName: "SEGUNDA COOPERATIVA", targets: Array(12).fill(1000), annualTarget: 12000, actuals: Array(12).fill(300) }),
+  ];
+  const analyses = aggregate(cooperatives, "central").map((row) =>
+    // Older aggregate snapshots retained their first member's descriptive fields.
+    analyze({ ...row, cooperative: "3017", cooperativeName: "PRIMEIRA COOPERATIVA", pa: "1" }, { year: 2026, month: 8, period: "month" }),
+  );
+  const draft = draftFor([], { analyses, source: "base" });
+  assert.equal(draft.summary.gap, 1600);
+  assert.match(draft.subject, /Centrais · Venda Nova/);
+  assert.match(draft.body, /Acompanhamento das Centrais/);
+  assert.match(draft.body, /de 1 central com meta atingida ou em rota/);
+  assert.match(draft.body, /todas as centrais atinjam 100%/);
+  assert.match(plain(draft.body), /1002 · Sicoob Central Bahia: saldo R\$ 1\.600,00/);
+  assert.doesNotMatch(draft.body, /PRIMEIRA COOPERATIVA|SEGUNDA COOPERATIVA/);
+  const concentration = buildDecisionInsights(analyses).find((item) => item.title === "Concentração do saldo");
+  assert.match(concentration.detail, /1002 · Sicoob Central Bahia/);
+  assert.doesNotMatch(concentration.detail, /PRIMEIRA COOPERATIVA|SEGUNDA COOPERATIVA/);
+});
+
+test("central identity honors an explicitly registered central name", () => {
+  const rows = aggregate([pa({ source: "base", centralName: "Central Regional Personalizada", cooperativeName: "COOPERATIVA INTEGRANTE" })], "central");
+  const draft = draftFor(rows, { source: "base" });
+  assert.match(draft.body, /1002 · Central Regional Personalizada/);
+  assert.doesNotMatch(draft.body, /COOPERATIVA INTEGRANTE/);
 });
