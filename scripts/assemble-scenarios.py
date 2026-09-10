@@ -1,46 +1,46 @@
 from pathlib import Path
-import re
 
-def patch(s, old, new):
-    if old not in s: raise RuntimeError('Anchor missing: '+old[:120])
-    return s.replace(old,new)
+def replace(path, old, new):
+    p = Path(path); text = p.read_text()
+    if new in text: return
+    if old not in text: raise RuntimeError('Missing anchor in '+path+': '+old[:100])
+    p.write_text(text.replace(old, new))
 
-# Model all Supabase roles when running complete migrations in isolated PostgreSQL.
-for p in Path('tests').glob('*.mjs'):
-    s=p.read_text()
-    if re.search(r'create role authenticated;',s,re.I) and not re.search(r'create role service_role',s,re.I):
-        s=re.sub(r'(create role authenticated;)',r'\1 create role service_role;',s,flags=re.I)
-        p.write_text(s)
-p=Path('tests/browser/portfolio.spec.mjs');s=p.read_text()
-if 'registerScenarioTests' not in s:
-    s='import { registerScenarioTests } from "./scenario-cases.mjs";\n'+s
-    s=patch(s,'  const drafts = [];','  const drafts = [];\n  const templates = new Map();')
-    anchor="    if (url.pathname === '/rest/v1/commercial_entity_contacts')"
-    block="""    if (url.pathname === '/rest/v1/commercial_message_templates') {
-      const key = `${url.searchParams.get('entity_kind')}:${url.searchParams.get('metric')}`;
-      if (['POST','PATCH'].includes(request.method())) {
-        const row = request.postDataJSON(); templates.set(`eq.${row.entity_kind}:eq.${row.metric}`, row); return answer(row);
-      }
-      return answer(templates.get(key) || null);
-    }
-"""
-    s=patch(s,anchor,block+anchor)
-    s+='\nregisterScenarioTests({ test, expect, setup, composer, owner, created });\n'
+# A cached year must reload its own revision, never reuse the currently displayed year.
+replace('components/dashboard.tsx', '      let revision = current ? workspaceRevision : null;', '      let revision = !historical && dataset?.year === config.year ? workspaceRevision : null;')
+replace('components/dashboard.tsx', 'Ordem pelo maior GAP projetado em reais. Abra uma', 'Ordem conforme o critério selecionado. Abra uma')
+replace('components/dashboard.tsx', '''                  Grupo {selected.group} · Meta fixa mensal:{" "}
+                  {money(paTargetForGroup(selected.group)?.monthly)} · Meta fixa
+                  anual: {money(paTargetForGroup(selected.group)?.annual)} ·{" "}''', '''                  Grupo {selected.group} · Meta cadastrada em {MONTHS[month]}:{" "}
+                  {money(selected.targets[month])} · Meta anual cadastrada:{" "}
+                  {money(selected.annualTarget)} ·{" "}''')
+# Imported historical goals are explicit, protected plans; changing P group is not permission to replace them.
+replace('lib/importer.mjs', 'targetRule: cadence ? historicalPa ? "registry" : "group-fixed" : "source",', 'targetRule: cadence ? historicalPa ? "manual" : "group-fixed" : "source",')
+replace('components/message-customization.tsx', '  const editError = [values.email, values.whatsapp].some(value => !value.trim())', '  const editError = [values.email, values.whatsapp].some(value => value.length > 12000) ? "O texto de cada canal deve ter até 12 mil caracteres. Use {{cenario}} para inserir automaticamente um cenário extenso." : [values.email, values.whatsapp].some(value => !value.trim())')
+replace('components/scenario-panels.tsx', '      <p className="helper">Variação percentual requer produção anterior positiva;', '      {filters.source === "base" && filters.level === "central" && <p className="helper">A composição de cooperativas de uma central pode mudar entre anos. Para isolar unidades comuns, compare no nível Cooperativas e marque a opção de presença nos dois anos.</p>}\n      <p className="helper">Variação percentual requer produção anterior positiva;')
+p=Path('components/scenario-panels.tsx');p.write_text(p.read_text().replace('<th>', '<th scope="col">'))
+# Role locators match the actual accessible select names and avoid label text including option children.
+p=Path('tests/browser/scenario-cases.mjs');s=p.read_text()
+for name in ['Central', 'Período', 'Mês de referência']:
+    s=s.replace("page.getByLabel('"+name+"',{exact:true})", "page.getByRole('combobox',{name:'"+name+"',exact:true})")
+s=s.replace("comparison.getByLabel('Comparar 2026 com')", "comparison.getByRole('combobox',{name:'Comparar 2026 com',exact:true})")
+s=s.replace("toContainText('100,0%')", "toContainText('100%')")
+p.write_text(s)
+# Align the CLI-created local migration version with the successful remote apply_migration.
+p=Path('supabase/migrations/20260910184749_scenario_message_defaults.sql')
+if p.exists(): p.rename('supabase/migrations/20260910185201_scenario_message_defaults.sql')
+p=Path('tests/historical-import.test.mjs');s=p.read_text()
+if 'historic group changes preserve explicit' not in s:
+    s=s.replace('initializeRegistry, mergeProduction', 'initializeRegistry, mergeProduction, upsertEntity')
+    s+='''
+test('historic group changes preserve explicit imported goals rather than applying a newer policy',async()=>{
+ const part=await parseWorkbook(await workbook(),'historico.xlsx',config);
+ const dataset=mergeProduction(null,combineImports([part],config));
+ const entity=dataset.registry.entities.find(value=>value.kind==='pa');
+ const changed=upsertEntity(dataset,{...entity,group:'P5'},entity.id);
+ assert.equal(changed.rows[0].targets[0],200);assert.equal(changed.rows[0].annualTarget,2400);
+ assert.equal(changed.rows[0].group,'P5');assert.equal(dataset.rows[0].group,'P1');
+});
+'''
     p.write_text(s)
-p=Path('components/message-customization.tsx');s=p.read_text()
-if 'editError' not in s:
-    s=patch(s,'  const message = baseMessage ?', '  const editError = [values.email, values.whatsapp].some(value => !value.trim()) ? "Preencha o texto dos dois canais ou restaure o texto automático." : [values.email, values.whatsapp].some(value => (value.match(/\\{\\{cenario\\}\\}/g) || []).length > 1) ? "Use {{cenario}} apenas uma vez em cada canal." : "";\n  const safeEmail = editError ? DEFAULT_MESSAGE_TEMPLATE : values.email;\n  const safeWhatsapp = editError ? DEFAULT_MESSAGE_TEMPLATE : values.whatsapp;\n  const message = baseMessage ?')
-    s=s.replace('applyMessageTemplate(values.email,','applyMessageTemplate(safeEmail,').replace('templateHtml(values.email,','templateHtml(safeEmail,').replace('applyMessageTemplate(values.whatsapp,','applyMessageTemplate(safeWhatsapp,')
-    s=patch(s,'    if (!owner || !supabase || stored?.scope !== scope) return;', '    if (!owner || !supabase || stored?.scope !== scope || editError) return;')
-    s=patch(s,'disabled={!owner || saving || stored?.scope !== scope}', 'disabled={!owner || saving || stored?.scope !== scope || !!editError}')
-    s=patch(s,'    <label>Texto / modelo do e-mail', '    {editError && <p role="alert" className={styles.warning}>{editError} A prévia usa o cenário automático até a correção.</p>}\n    <button type="button" className="button secondary" onClick={() => change({ email: baseMessage?.text ?? DEFAULT_MESSAGE_TEMPLATE })}>Editar texto completo do e-mail</button>\n    <label>Texto / modelo do e-mail')
-    s=patch(s,'    <label>Texto / modelo do WhatsApp', '    <button type="button" className="button secondary" onClick={() => change({ whatsapp: baseWhatsapp?.whatsapp ?? DEFAULT_MESSAGE_TEMPLATE })}>Editar texto completo do WhatsApp</button>\n    <label>Texto / modelo do WhatsApp')
-    s=patch(s,'return { message, whatsappMessage, editor };','return { message, whatsappMessage, editor, editError };')
-    p.write_text(s)
-p=Path('components/portfolio-communication.tsx');s=p.read_text()
-if 'editError: templateError' not in s:
-    s=patch(s,'editor: messageEditor } = useMessageCustomization','editor: messageEditor, editError: templateError } = useMessageCustomization')
-    s=patch(s,'  const invalid = recipients.error;', '  const invalid = recipients.error || templateError;')
-    s=patch(s,'{whatsapp.value && !loading ?', '{whatsapp.value && !loading && !templateError ?')
-    p.write_text(s)
-print('Scenario browser and isolated PostgreSQL integration updated.')
+print('Historical revision isolation, protected goals, accessible controls and deployed migration version refined.')
