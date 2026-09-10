@@ -18,13 +18,13 @@ jobs:
         with:
           node-version: '22'
       - run: node .work/refine-portfolio.mjs
-      - name: Commit only reviewed refinements
+      - name: Commit reviewed fix and remove temporary integration files
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/portfolio-communication.mjs
+          git add -A -- components/dashboard.tsx supabase/migrations .work .github/workflows/assemble-portfolio.yml
           if ! git diff --cached --quiet; then
-            git commit -m 'fix: fold email headers and validate unique recipients and phone area codes'
+            git commit -m 'fix: accessible mobile entry and finalize applied migration'
             git push origin HEAD:feat/comunicacao-carteira-outlook-whatsapp
           fi
       - uses: actions/upload-artifact@v4
@@ -36,6 +36,7 @@ jobs:
             lib
             supabase/migrations
             tests
+            app/*.css
             package.json
             package-lock.json
             tsconfig.json
