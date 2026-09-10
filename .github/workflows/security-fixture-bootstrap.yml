@@ -1,0 +1,34 @@
+name: Prepare security migration and fixtures
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'security/mandatory-login-and-data-isolation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/mandatory-login-and-data-isolation
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/prepare-security-fixtures.mjs
+      - name: Generate migration filename using Supabase CLI
+        run: |
+          if ! ls supabase/migrations/*_mandatory_sessions.sql >/dev/null 2>&1; then
+            npx --yes supabase --version
+            npx --yes supabase migration new --help
+            npx --yes supabase migration new mandatory_sessions
+            cp supabase/security/mandatory_sessions.sql "$(ls supabase/migrations/*_mandatory_sessions.sql)"
+          fi
+      - name: Commit only reviewed fixtures and generated migration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/browser/portfolio.spec.mjs tests/database.test.mjs tests/workspace-database.test.mjs tests/portfolio-database.test.mjs supabase/migrations
+          git diff --cached --quiet || git commit -m 'test(security): use verified synthetic sessions and CLI-generated migration'
+          git push origin HEAD:security/mandatory-login-and-data-isolation
