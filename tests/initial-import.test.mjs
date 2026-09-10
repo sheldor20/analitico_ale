@@ -93,7 +93,7 @@ test("later production-only uploads replace realized values without changing reg
   const updated = mergeProduction(registered, {
     ...imported([
       row({
-        cutoff: "2026-09-11",
+        cutoff: "2026-09-10",
         targets: Array(12).fill(999),
         annualTarget: 11988,
         actuals: nextActuals,
@@ -101,7 +101,7 @@ test("later production-only uploads replace realized values without changing reg
     ]),
     rows: [
       row({
-        cutoff: "2026-09-11",
+        cutoff: "2026-09-10",
         targets: Array(12).fill(999),
         annualTarget: 11988,
         actuals: nextActuals,
