@@ -2,6 +2,7 @@ import { portfolioFixture } from '../portfolio-fixture.mjs';
 export function registerUxTests({test,expect,setup,owner,created}) {
  test('UX: primary data comes before optional panels; PAs toggle by keyboard and selected unit',async({page},testInfo)=>{
   const {errors}=await setup(page);
+  await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
   await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
   await page.getByRole('button',{name:'Fechar mensagem',exact:true}).click();
   await expect(page.getByRole('heading',{level:1,name:'Visão geral',exact:true})).toBeVisible();
@@ -62,7 +63,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   });
   await page.getByRole('button',{name:'Recarregar cadastro salvo',exact:true}).click();
   await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
-  await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
+  await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');
   expect(historicalReads).toBe(0);
   const comparison=page.getByRole('region',{name:'Comparativo entre anos',exact:true});
   await comparison.getByRole('button',{name:'Comparar anos',exact:true}).click();
@@ -77,7 +78,8 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await comparison.screenshot({path:testInfo.outputPath('ux-comparison-mobile.png')});
   await page.getByRole('combobox',{name:'Cooperativa',exact:true}).selectOption('1002:3017');
   await expect(comparison.getByLabel('Resumo de 2026',{exact:true})).toContainText('400,00');
-  await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('daily');
+  await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
+  await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('8');
   await expect(comparison.getByLabel('Dashboard comparativo',{exact:true})).toHaveCount(0);
   await expect(comparison).toContainText('Não há mês fechado comum');
   expect(errors).toEqual([]);
