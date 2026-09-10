@@ -1,0 +1,32 @@
+name: Prepare isolated UX workbench
+on:
+  push:
+    branches: [ux/cenarios-intuitivos-comparativo-visual]
+    paths: [.github/workflows/ux-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Package tracked source and locked dependencies without credentials
+        run: |
+          git archive --format=tar HEAD > /tmp/ux-source.tar
+          tar -czf /tmp/ux-dependencies.tar.gz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-workbench
+          retention-days: 1
+          compression-level: 0
+          path: |
+            /tmp/ux-source.tar
+            /tmp/ux-dependencies.tar.gz
