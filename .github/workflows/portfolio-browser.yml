@@ -1,0 +1,38 @@
+name: Validate portfolio browser
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: portfolio-browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://portfolio-test.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: synthetic-public-test-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Install pinned browser test runner without altering application lockfile
+        run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify desktop, mobile and channel links without external dispatch
+        run: npx playwright test --config tests/browser/playwright.config.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portfolio-browser-verification
+          retention-days: 7
+          path: |
+            test-results
+            playwright-report
