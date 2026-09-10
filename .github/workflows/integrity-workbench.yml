@@ -1,0 +1,26 @@
+name: Prepare integrity workbench
+on:
+  push:
+    branches: [feat/consistencia-acoes-previas-cadastro]
+    paths: [.github/workflows/integrity-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes supabase@2.81.3 --version && npx --yes supabase@2.81.3 migration --help
+      - run: npx --yes supabase@2.81.3 migration new workspace_action_continuity
+      - run: mkdir /tmp/browser-tools && cd /tmp/browser-tools && npm init -y && npm install --save-exact @playwright/test@1.55.0 agent-browser@0.21.0
+      - run: tar -czf /tmp/browser-tools.tar.gz -C /tmp/browser-tools node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integrity-tools
+          retention-days: 1
+          path: |
+            supabase/migrations/*_workspace_action_continuity.sql
+            /tmp/browser-tools.tar.gz
