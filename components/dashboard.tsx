@@ -976,6 +976,7 @@ export default function Dashboard() {
             <button
               className="button quiet"
               disabled={!!busy}
+              aria-label={user ? "Sair" : "Entrar"}
               onClick={() => (user ? logout() : setShowLogin(true))}
             >
               {user ? <LogOut size={17} /> : <LogIn size={17} />}
