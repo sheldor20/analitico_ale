@@ -14,10 +14,21 @@ test('CSRF rejects absent, null, cross-origin and sibling-subdomain origins',()=
   assert.equal(sameOrigin(new Request(url,{headers:{origin:'https://app.example.com','sec-fetch-site':'same-origin'}})),true);
   assert.equal(sameOrigin(new Request(url,{headers:{origin:'https://app.example.com','sec-fetch-site':'cross-site'}})),false);
 });
+test('CSRF uses the destination Host behind a proxy, never an untrusted forwarded host',()=>{
+  const url='http://localhost:3000/api/auth/login';
+  const make=headers=>new Request(url,{headers});
+  assert.equal(sameOrigin(make({host:'app.example.com',origin:'https://app.example.com'})),true);
+  assert.equal(sameOrigin(make({host:'127.0.0.1:3000',origin:'http://127.0.0.1:3000'})),true);
+  assert.equal(sameOrigin(make({host:'app.example.com',origin:'https://attacker.example','x-forwarded-host':'attacker.example'})),false);
+  assert.equal(sameOrigin(make({host:'app.example.com',origin:'http://app.example.com'})),false);
+  assert.equal(sameOrigin(make({host:'app.example.com',origin:'https://app.example.com/path'})),false);
+  assert.equal(sameOrigin(make({host:'app.example.com',origin:'https://app.example.com:444'})),false);
+  assert.equal(sameOrigin(make({host:'app.example.com',referer:'https://app.example.com/'})),false);
+});
 test('CSP uses request nonce, no inline scripts or eval in production, and sensitive responses are never cached',()=>{
   const h=securityHeaders('abc','https://project.supabase.co',true), c=h['Content-Security-Policy'];
   assert.match(c,/nonce-abc/); assert.match(c,/frame-ancestors 'none'/); assert.match(c,/script-src-attr 'none'/);
-  assert.doesNotMatch(c.split(';').find(x=>x.startsWith('script-src ')),/unsafe-inline|unsafe-eval/);
+  assert.doesNotMatch(c.split(';').find(x=>x.trim().startsWith('script-src ')),/unsafe-inline|unsafe-eval/);
   assert.match(c,/connect-src 'self' https:\/\/project.supabase.co wss:\/\/project.supabase.co/);
   assert.match(h['Cache-Control'],/private, no-store/); assert.equal(h['Vercel-CDN-Cache-Control'],'no-store');
 });

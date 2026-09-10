@@ -4,7 +4,7 @@ const loginData={email:'browser-test@example.com',password:'Synthetic-only-passw
 const post=(request,data=loginData,headers={})=>request.post('/api/auth/login',{data,headers:{origin,...headers}});
 test('unauthenticated routes fail closed, including API, RSC and extension-spoofed links',async({request})=>{
   for(const path of ['/','/dashboard','/imports','/registry','/relatorio.xlsx','/private.png','/login/admin','/brand/private.pdf']){
-    const r=await request.get(path,{maxRedirects:0});expect(r.status(),path).toBe(307);expect(r.headers().location).toBe(`${origin}/login`);
+    const r=await request.get(path,{maxRedirects:0});expect(r.status(),path).toBe(307);expect(new URL(r.headers().location,origin).href).toBe(`${origin}/login`);
   }
   for(const path of ['/api/health','/api/auth/session','/api/unknown','/api/data.json']){
     const r=await request.get(path,{maxRedirects:0});expect(r.status(),path).toBe(401);expect(await r.json()).toEqual({error:'Autenticação necessária.'});
@@ -36,6 +36,7 @@ test('malformed and forged cookies cannot open the dashboard or APIs',async({req
 });
 test('CSRF, unsupported content and oversized credential payloads are rejected',async({request})=>{
   expect((await post(request,loginData,{origin:'https://attacker.invalid'})).status()).toBe(403);
+  expect((await post(request,loginData,{origin:'https://attacker.invalid','x-forwarded-host':'attacker.invalid'})).status()).toBe(403);
   expect((await request.post('/api/auth/login',{data:loginData})).status()).toBe(403);
   expect((await post(request,{email:'x@example.com',password:'x'.repeat(5000)})).status()).toBe(400);
   expect((await request.post('/api/auth/login',{data:'{',headers:{origin,'content-type':'application/json'}})).status()).toBe(400);
@@ -45,7 +46,7 @@ test('correct login uses server cookies; logout invalidates replay of the old se
   const cookies=(await request.storageState()).cookies;expect(cookies.some(c=>c.name.startsWith('sb-')&&c.secure&&c.sameSite==='Lax')).toBe(true);
   const session=await request.get('/api/auth/session');expect(session.status()).toBe(200);expect((await session.json()).userId).toBe('00000000-0000-0000-0000-000000000001');
   expect((await request.get('/',{maxRedirects:0})).status()).toBe(200);
-  // Extract this synthetic token only to exercise provider revocation. Never print it or use production accounts.
+  // Synthetic token only: exercise provider revocation without printing it or using production accounts.
   const chunks=cookies.filter(c=>/^sb-127-auth-token(?:\.\d+)?$/.test(c.name)).sort((a,b)=>a.name.localeCompare(b.name));
   const packed=decodeURIComponent(chunks.map(c=>c.value).join(''));
   const payload=JSON.parse(packed.startsWith('base64-')?Buffer.from(packed.slice(7),'base64url').toString():packed);
