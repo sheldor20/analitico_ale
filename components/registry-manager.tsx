@@ -5,6 +5,7 @@ import { Building2, Check, Info, LoaderCircle, Pencil, Plus, Save, Search, Trash
 import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
 import { deleteEntity, distributeAmount, entityId as registryEntityId, getPlanRow, initializeRegistry, upsertEntity, upsertPlanRow } from "@/lib/registry.mjs";
 import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "@/lib/types";
+import ResponsibleManager from "@/components/responsible-manager";
 
 type RegistryManagerProps = {
   dataset: Dataset;
@@ -193,6 +194,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
           {deleting ? <div className="registry-delete-confirm" role="alertdialog" aria-labelledby="registry-delete-title" aria-describedby="registry-delete-description">
             <h3 id="registry-delete-title">Excluir {selected.name}?</h3><p id="registry-delete-description">Serão removidos deste cadastro de {dataset.year}: esta unidade{descendants.length ? `, ${descendants.filter((entity) => entity.kind === "cooperative").length} cooperativas e ${descendants.filter((entity) => entity.kind === "pa").length} PAs vinculados` : ""}, além de {affectedRows} registros de metas e produção. Os acumulados serão recalculados. Esta alteração não pode ser desfeita nesta tela.</p><div className="registry-actions"><button type="button" className="button secondary" onClick={() => setDeleting(false)} disabled={locked}>Manter cadastro</button><button type="button" className="button registry-danger" disabled={locked} onClick={confirmDelete}><Trash2 size={17} /> Confirmar exclusão</button></div>
           </div> : <>
+            <ResponsibleManager key={`${selected.id}:${dataset.year}`} entity={selected} year={dataset.year} disabled={locked} />
             <label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
             <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onSave={async (input) => {
               clearFeedback();
