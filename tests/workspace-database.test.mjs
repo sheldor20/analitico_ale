@@ -1,3 +1,4 @@
+import { installAuthFixture } from './auth-db-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -42,6 +43,7 @@ async function database() {
     grant usage on schema auth to authenticated,anon;
     grant execute on function auth.uid() to authenticated,anon;
     insert into auth.users values ('${USER_A}'),('${USER_B}');`);
+  await installAuthFixture(db);
   const directory = new URL("../supabase/migrations/", import.meta.url);
   for (const file of (await readdir(directory)).filter((f) => f.endsWith(".sql")).sort())
     await db.exec(await readFile(new URL(file, directory), "utf8"));
