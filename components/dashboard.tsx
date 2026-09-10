@@ -48,6 +48,8 @@ import {
 } from "@/lib/analytics.mjs";
 import { buildPartialCommunication, buildDecisionInsights } from "@/lib/communication.mjs";
 import RegistryManager from "@/components/registry-manager";
+import PortfolioCommunication from "@/components/portfolio-communication";
+import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
 import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
 import { supabase } from "@/lib/supabase";
@@ -142,6 +144,7 @@ export default function Dashboard() {
     });
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState("");
+  const [communicationInitialKey, setCommunicationInitialKey] = useState("");
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
   useEffect(() => {
@@ -973,6 +976,7 @@ export default function Dashboard() {
             <button
               className="button quiet"
               disabled={!!busy}
+              aria-label={user ? "Sair" : "Entrar"}
               onClick={() => (user ? logout() : setShowLogin(true))}
             >
               {user ? <LogOut size={17} /> : <LogIn size={17} />}
@@ -1015,15 +1019,9 @@ export default function Dashboard() {
             </div>
             {dataset && view !== "imports" && view !== "registry" && (
               <div className="page-heading-actions">
-                {communicationDraft && (
-                  <button
-                    className="button primary"
-                    onClick={() => setShowCommunication(true)}
-                  >
-                    <MessageSquareText size={17} />
-                    {communicationDraft.isPartial
-                      ? "Comunicação parcial"
-                      : "Comunicação do período"}
+                {displayed.length > 0 && (
+                  <button className="button primary" onClick={() => { setCommunicationInitialKey(""); setShowCommunication(true); }}>
+                    <MessageSquareText size={17} /> Gerar e-mail / WhatsApp
                   </button>
                 )}
                 <button className="button secondary" onClick={exportCsv}>
@@ -1701,6 +1699,8 @@ export default function Dashboard() {
                                       <Pill>{r.status}</Pill>
                                     </td>
                                     <td>
+                                      <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
+                                        onClick={() => { setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
                                       <button
                                         className="icon-button"
                                         aria-label={`Detalhar ${r.name}`}
@@ -1748,12 +1748,10 @@ export default function Dashboard() {
           )}
         </Modal>
       )}
-      {showCommunication && communicationDraft && (
-        <CommunicationModal
-          key={`${communicationDraft.subject}:${communicationDraft.body.length}`}
-          draft={communicationDraft}
-          onClose={() => setShowCommunication(false)}
-        />
+      {showCommunication && dataset && displayed.length > 0 && (
+        <PortfolioCommunication dataset={dataset} candidates={displayed.map(entityFromAnalysis)} initialKey={communicationInitialKey}
+          metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
+          onClose={() => setShowCommunication(false)} />
       )}
       {showLogin && (
         <Modal title="Entrar na conta" onClose={() => setShowLogin(false)}>
@@ -2047,117 +2045,6 @@ function FileSlot({
         </button>
       )}
     </div>
-  );
-}
-
-function CommunicationModal({
-  draft,
-  onClose,
-}: {
-  draft: ReturnType<typeof buildPartialCommunication>;
-  onClose: () => void;
-}) {
-  const [recipient, setRecipient] = useState("");
-  const [subject, setSubject] = useState(draft.subject);
-  const [body, setBody] = useState(draft.body);
-  const [feedback, setFeedback] = useState("");
-
-  async function copyText() {
-    try {
-      await navigator.clipboard.writeText(body);
-      setFeedback("Texto copiado. Cole no WhatsApp, Teams ou canal desejado.");
-    } catch {
-      setFeedback("Não foi possível copiar automaticamente. Selecione o texto abaixo.");
-    }
-  }
-
-  function downloadText() {
-    const url = URL.createObjectURL(
-      new Blob([`${subject}\r\n\r\n${body}`], {
-        type: "text/plain;charset=utf-8",
-      }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "comunicacao-cenario-comercial.txt";
-    link.click();
-    URL.revokeObjectURL(url);
-    setFeedback("Comunicação exportada em arquivo de texto.");
-  }
-
-  function openEmail() {
-    window.location.href = `mailto:${encodeURIComponent(recipient.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }
-
-  return (
-    <Modal title="Comunicação do cenário" onClose={onClose} wide>
-      <div className="communication-content">
-        <div className="communication-header">
-          <div>
-            <span className="section-label">COMUNICAÇÃO COMERCIAL</span>
-            <h2>Cenário pronto para compartilhar</h2>
-            <p>
-              Revise o texto e envie por e-mail ou copie para WhatsApp e Teams.
-            </p>
-          </div>
-          <span className={`pill ${draft.isPartial ? "warning" : "neutral"}`}>
-            {draft.isIncomplete ? "Dados incompletos" : draft.isPartial ? "Cenário parcial" : "Período fechado"}
-          </span>
-        </div>
-        <div className="communication-form">
-          <label>
-            Destinatário do e-mail (opcional)
-            <input
-              type="email"
-              value={recipient}
-              placeholder="cooperativa@exemplo.com.br"
-              onChange={(event) => setRecipient(event.target.value)}
-            />
-          </label>
-          <label>
-            Assunto
-            <input
-              value={subject}
-              maxLength={200}
-              onChange={(event) => setSubject(event.target.value)}
-            />
-          </label>
-          <label>
-            Mensagem
-            <textarea
-              rows={18}
-              value={body}
-              maxLength={12000}
-              onChange={(event) => setBody(event.target.value)}
-            />
-          </label>
-        </div>
-        {feedback && (
-          <div className="message success" role="status">
-            <CheckCircle2 size={18} />
-            <span>{feedback}</span>
-          </div>
-        )}
-        <div className="communication-actions">
-          <button className="button secondary" onClick={copyText}>
-            <Copy size={17} />
-            Copiar texto
-          </button>
-          <button className="button secondary" onClick={downloadText}>
-            <Download size={17} />
-            Baixar texto
-          </button>
-          <button className="button primary" onClick={openEmail}>
-            <Mail size={17} />
-            Abrir no e-mail
-          </button>
-        </div>
-        <p className="helper communication-helper">
-          O botão abre o aplicativo de e-mail para revisão final. Nenhuma mensagem
-          é enviada automaticamente pelo sistema.
-        </p>
-      </div>
-    </Modal>
   );
 }
 

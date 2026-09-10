@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PortfolioCommunication from "@/components/portfolio-communication";
 import { Building2, Check, Info, LoaderCircle, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
 import { deleteEntity, distributeAmount, entityId as registryEntityId, getPlanRow, initializeRegistry, upsertEntity, upsertPlanRow } from "@/lib/registry.mjs";
@@ -77,6 +78,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
   const [entityForm, setEntityForm] = useState<EntityDraft | null>(null);
   const [editingId, setEditingId] = useState<string | undefined>();
   const [deleting, setDeleting] = useState(false);
+  const [showCommunication, setShowCommunication] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -103,6 +105,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
 
   function clearFeedback() { setError(""); setNotice(""); }
   function selectEntity(entity: RegistryEntity) {
+    setShowCommunication(false);
     setSelectedId(entity.id); setEntityForm(null); setDeleting(false); clearFeedback();
   }
   function startCreate() {
@@ -191,6 +194,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
           </fieldset>
         </form> : selected ? <>
           <div className="panel-heading"><div><span className="section-label">{kindLabel[selected.kind]} · {selected.kind === "pa" ? selected.pa : selected.kind === "cooperative" ? selected.cooperative : selected.central}</span><h3>{selected.name}</h3><p>Central {selected.central}{selected.cooperative ? ` · Cooperativa ${selected.cooperative}` : ""}{selected.group ? ` · ${selected.group}` : ""}</p></div><div className="registry-actions"><button type="button" className="button secondary" onClick={startEdit} disabled={locked}><Pencil size={16} /> Editar</button><button type="button" className="button quiet registry-danger" onClick={() => { clearFeedback(); setDeleting(true); }} disabled={locked}><Trash2 size={16} /> Excluir</button></div></div>
+          <div className="registry-actions"><button type="button" className="button secondary" disabled={locked || deleting} onClick={() => setShowCommunication(true)}>Gerar e-mail / WhatsApp</button></div>
           {deleting ? <div className="registry-delete-confirm" role="alertdialog" aria-labelledby="registry-delete-title" aria-describedby="registry-delete-description">
             <h3 id="registry-delete-title">Excluir {selected.name}?</h3><p id="registry-delete-description">Serão removidos deste cadastro de {dataset.year}: esta unidade{descendants.length ? `, ${descendants.filter((entity) => entity.kind === "cooperative").length} cooperativas e ${descendants.filter((entity) => entity.kind === "pa").length} PAs vinculados` : ""}, além de {affectedRows} registros de metas e produção. Os acumulados serão recalculados. Esta alteração não pode ser desfeita nesta tela.</p><div className="registry-actions"><button type="button" className="button secondary" onClick={() => setDeleting(false)} disabled={locked}>Manter cadastro</button><button type="button" className="button registry-danger" disabled={locked} onClick={confirmDelete}><Trash2 size={17} /> Confirmar exclusão</button></div>
           </div> : <>
@@ -204,6 +208,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
         </> : <div className="empty compact"><Building2 size={30} /><h3>Selecione uma unidade</h3><p>Edite o cadastro, defina as metas anuais e atualize a produção mensal.</p><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={17} /> Nova unidade</button></div>}
       </div>
     </div>
+    {showCommunication && selected && <PortfolioCommunication dataset={normalized} candidates={[selected]} initialKey={selected.id} metric={effectiveMetric} period="ytd" month={Number(defaultCutoff(normalized, effectiveMetric, selected.kind).slice(5, 7)) - 1} onClose={() => setShowCommunication(false)} />}
   </section>;
 }
 
