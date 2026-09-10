@@ -1,0 +1,21 @@
+name: Prepare period verification
+on:
+  push:
+    branches: [fix/periodos-explicitos-acumulado]
+    paths: [.github/workflows/period-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive HEAD -o /tmp/period-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: period-source
+          path: /tmp/period-source.tar
+          retention-days: 1
