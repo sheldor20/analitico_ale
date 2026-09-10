@@ -35,3 +35,14 @@ Migração: `supabase/migrations/20260910134016_portfolio_communication_drafts.s
 ## Validação
 
 A suíte Node cobre escopo, PA 0, períodos, nulos, cortes diferentes, indicadores, destinatários, HTML e cabeçalhos MIME. Os testes PostgreSQL embarcados verificam restrições, isolamento e imutabilidade. O workflow de navegador usa Chromium, dados sintéticos e endpoints Supabase interceptados: não usa contas reais nem envia mensagens. O pipeline original de testes, TypeScript e build foi preservado.
+
+
+## Período em destaque e painel no WhatsApp
+
+O cenário selecionado conduz a mensagem e os indicadores. A evolução contém somente os meses desse período. A visão anual fica em um bloco compacto de apoio depois de todos os indicadores principais; na seleção Anual, não há bloco secundário repetido. O texto destaca realizado, meta, saldo, projeção e foco comercial, respeitando períodos fechados, dados incompletos e metas já atingidas.
+
+Na aba Painel do WhatsApp, o mesmo modelo de dashboard do e-mail é renderizado como imagem PNG, com a saudação do responsável escolhido para WhatsApp. Compartilhar painel + mensagem abre o compartilhamento do aparelho quando suportado: escolha WhatsApp e confirme o destinatário. O número do formulário não pré-seleciona o contato no compartilhamento de arquivos. Alguns aparelhos não encaminham a legenda junto da imagem; use Copiar WhatsApp nesses casos.
+
+Sem suporte a compartilhar arquivos, use Baixar painel WhatsApp (PNG), abra a conversa e anexe a imagem. O link Abrir WhatsApp leva somente texto e não anexa imagem. Nenhum canal envia automaticamente, nem registra entrega confirmada. A imagem é gerada no navegador, sem upload e sem link público.
+
+Novos rascunhos gravam presentation_version=2 e whatsapp_dashboard, um modelo estruturado privado para regenerar o PNG original. Rascunhos antigos ficam intactos, sem painel retroativo. Metas, produção, regras PA e políticas de isolamento não são alteradas.

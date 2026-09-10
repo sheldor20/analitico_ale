@@ -1,3 +1,4 @@
+import { registerDashboardTests } from "./dashboard-cases.mjs";
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -130,7 +131,7 @@ test('mobile: fixed registry entry exposes usable communication without horizont
   expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   await dialog.evaluate((node) => { node.scrollTop = 0; });
   await page.screenshot({ path: testInfo.outputPath('mobile-portfolio.png'), fullPage: true });
-  await dialog.getByRole('button', { name: 'Texto do WhatsApp', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
   await expect(dialog.getByLabel('WhatsApp gerado')).toHaveValue(/Paula Teste/);
   await page.screenshot({ path: testInfo.outputPath('mobile-whatsapp.png'), fullPage: true });
   expect(errors).toEqual([]);
@@ -157,3 +158,5 @@ test('long valid recipient list keeps complete EML export and draft while Outloo
   expect(writes).toHaveLength(1); expect(writes[0].recipients).toHaveLength(36);
   expect(errors).toEqual([]);
 });
+
+registerDashboardTests({ setup, composer, selectAugust });
