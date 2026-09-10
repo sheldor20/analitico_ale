@@ -2,7 +2,7 @@ name: Assemble portfolio integration
 on:
   push:
     branches: [feat/comunicacao-carteira-outlook-whatsapp]
-    paths: ['.work/assemble-portfolio.mjs', '.work/portfolio.sql', '.github/workflows/assemble-portfolio.yml']
+    paths: ['.work/*.mjs', '.github/workflows/assemble-portfolio.yml']
 permissions:
   contents: write
 jobs:
@@ -17,23 +17,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node .work/assemble-portfolio.mjs
-      - name: Generate migration using Supabase CLI
-        run: |
-          npx --yes supabase@2.79.0 --version
-          npx --yes supabase@2.79.0 migration new --help
-          if ! find supabase/migrations -name '*_portfolio_communication_drafts.sql' | grep -q .; then
-            npx --yes supabase@2.79.0 migration new portfolio_communication_drafts
-            target=$(find supabase/migrations -name '*_portfolio_communication_drafts.sql' | head -1)
-            cp .work/portfolio.sql "$target"
-          fi
-      - name: Commit only guarded integration and generated migration
+      - run: node .work/refine-portfolio.mjs
+      - name: Commit only reviewed refinements
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add components/dashboard.tsx components/registry-manager.tsx supabase/migrations
+          git add lib/portfolio-communication.mjs
           if ! git diff --cached --quiet; then
-            git commit -m 'feat: integrate portfolio communication into selected units'
+            git commit -m 'fix: fold email headers and validate unique recipients and phone area codes'
             git push origin HEAD:feat/comunicacao-carteira-outlook-whatsapp
           fi
       - uses: actions/upload-artifact@v4
@@ -41,6 +32,11 @@ jobs:
           name: portfolio-source-review
           retention-days: 1
           path: |
-            components/*.tsx
-            lib/*.mjs
-            supabase/migrations/*.sql
+            components
+            lib
+            supabase/migrations
+            tests
+            package.json
+            package-lock.json
+            tsconfig.json
+            next.config.mjs
