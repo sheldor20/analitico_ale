@@ -106,7 +106,7 @@ test('central and PA use their own responsible contacts and original level', asy
   await expect(dialog.getByText('Celia Teste', { exact: true })).toBeVisible();
   await expect(dialog.getByLabel('Unidade selecionada')).toHaveValue('central:1002');
   await dialog.getByRole('button', { name: 'Texto do e-mail', exact: true }).click();
-  await expect(dialog.getByLabel('E-mail gerado')).toContainText('todas as 2 cooperativas');
+  await expect(dialog.getByLabel('E-mail gerado')).toHaveValue(/todas as 2 cooperativas/);
   await dialog.getByRole('button', { name: 'Fechar comunicação', exact: true }).click();
   await page.getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
   await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
@@ -131,7 +131,29 @@ test('mobile: fixed registry entry exposes usable communication without horizont
   await dialog.evaluate((node) => { node.scrollTop = 0; });
   await page.screenshot({ path: testInfo.outputPath('mobile-portfolio.png'), fullPage: true });
   await dialog.getByRole('button', { name: 'Texto do WhatsApp', exact: true }).click();
-  await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Paula Teste');
+  await expect(dialog.getByLabel('WhatsApp gerado')).toHaveValue(/Paula Teste/);
   await page.screenshot({ path: testInfo.outputPath('mobile-whatsapp.png'), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test('long valid recipient list keeps complete EML export and draft while Outlook link is unavailable', async ({ page }) => {
+  const { errors, writes } = await setup(page);
+  await page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true }).click();
+  const dialog = composer(page);
+  await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
+  await expect(dialog.getByText('Ana Teste', { exact: true })).toBeVisible();
+  const addresses = Array.from({ length: 35 }, (_, i) => `${'a'.repeat(60)}${i}@${'b'.repeat(60)}.${'c'.repeat(60)}.${'d'.repeat(60)}.com`);
+  await dialog.getByLabel('E-mails adicionais').fill(addresses.join(';'));
+  await expect(dialog.getByText('Muitos destinatários para um link. Reduza a seleção ou baixe o arquivo de e-mail.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Abrir Outlook', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true })).toBeEnabled();
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true }).click();
+  const file = await download;
+  const eml = await readFile(await file.path(), 'utf8');
+  for (const address of addresses) expect(eml).toContain(address);
+  await dialog.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('Rascunho salvo');
+  expect(writes).toHaveLength(1); expect(writes[0].recipients).toHaveLength(36);
   expect(errors).toEqual([]);
 });
