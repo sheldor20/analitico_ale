@@ -202,6 +202,8 @@ export default function Dashboard() {
     month,
     search,
     level,
+    sortBy,
+    statusFilter,
   ]);
   useEffect(() => {
     if (!selected && !showImport && !showLogin && !showCommunication) return;
@@ -405,7 +407,9 @@ export default function Dashboard() {
       const saved = user ? await loadWorkspace(user.id, year) : null;
       if (activeOwner.current !== owner) return;
       const next = saved ? initializeRegistry(saved.dataset) : sessionYears.current.get(year) ?? createEmptyDataset(year);
+      sessionYears.current.set(next.year, next);
       setDataset(next); setWorkspaceRevision(saved?.revision ?? null); setConfig(next.config);
+      if (owner) refreshWorkspaces(owner);
       setHistorical(false); setDatasetId(null); setSelected(null); setActions({}); resetFilters();
       setNotice(saved ? "Cadastro anual recuperado." : "Novo cadastro anual. Inclua as unidades ou importe a base fixa.");
     } catch(e) { setError(e instanceof Error ? e.message : "Não foi possível abrir o cadastro."); }
