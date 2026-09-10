@@ -1,3 +1,4 @@
+import { registerUxTests } from './ux-cases.mjs';
 import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
 import { test, expect } from '@playwright/test';
@@ -171,3 +172,5 @@ test('long valid recipient list keeps complete EML export and draft while Outloo
 registerDashboardTests({ setup, composer, selectAugust });
 
 registerScenarioTests({ test, expect, setup, composer, owner, created });
+
+registerUxTests({test,expect,setup,owner,created});
