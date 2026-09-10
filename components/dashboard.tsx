@@ -53,6 +53,8 @@ import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
 import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
 import { supabase } from "@/lib/supabase";
+import { sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
+import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
 import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
 
 type View = "overview" | "cadence" | "actions" | "audit" | "imports" | "registry";
@@ -108,6 +110,7 @@ export default function Dashboard() {
   const [historical, setHistorical] = useState(false);
   const [importMode, setImportMode] = useState("production");
   const [sortBy, setSortBy] = useState("gap");
+  const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState("all");
   const activeOwner = useRef<string | null>(null);
   const sessionYears = useRef(new Map<number,Dataset>());
@@ -309,12 +312,12 @@ export default function Dashboard() {
       ),
     [filtered, dataset, config.year, month, period, uplift],
   );
-  const displayed = analyses.filter((r) =>
+  const displayed = sortAnalysis(analyses.filter((r) =>
     `${r.name} ${r.cooperative} ${r.pa ?? ""}`.toLowerCase().includes(search.toLowerCase()) &&
     (statusFilter === "all" || (statusFilter === "attention" ? ["Atenção", "Prazo encerrado"].includes(r.status) :
       statusFilter === "missing" ? !r.complete || r.status === "Sem meta" : ["Em rota", "Meta atingida"].includes(r.status))),
-  ).sort((a,b) => sortBy === "name" ? a.name.localeCompare(b.name) : sortBy === "attainment" ?
-    (a.attainment ?? -1) - (b.attainment ?? -1) : (b.projectionGap ?? b.gap ?? -1) - (a.projectionGap ?? a.gap ?? -1));
+  ), sortBy);
+  const scenarioFilters = { central, coop, source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
   const insights = buildDecisionInsights(analyses);
   const cutoffs = [...new Set(filtered.map((r) => r.cutoff))].sort();
   const cutoff = cutoffs[0];
@@ -417,6 +420,7 @@ export default function Dashboard() {
         if (activeOwner.current !== user.id) return;
         setWorkspaceRevision(saved.revision);
       }
+      sessionYears.current.set(next.year, next);
       setDataset(next); setConfig(next.config); setDatasetId(null); setSelected(null);
       if (user) refreshWorkspaces(user.id);
       setNotice(user ? "Cadastro salvo. Metas, acumulados e indicadores recalculados." : "Cadastro atualizado nesta sessão. Entre e salve para retomar depois.");
@@ -438,7 +442,8 @@ export default function Dashboard() {
       const { parseWorkbook, combineImports } = await import(
         "@/lib/importer.mjs"
       );
-      let current = !historical && dataset?.year === config.year ? dataset : null;
+      if (dataset && !historical) sessionYears.current.set(dataset.year, dataset);
+      let current = !historical && dataset?.year === config.year ? dataset : sessionYears.current.get(config.year) ?? null;
       let revision = current ? workspaceRevision : null;
       if (user && (!current || revision === null)) {
         const saved = await loadWorkspace(user.id, config.year);
@@ -447,6 +452,7 @@ export default function Dashboard() {
       const allowedCentrals = [...new Set(["1002", "2007", ...(current?.registry?.entities.filter((e) => e.kind === "central").map((e) => e.central) ?? [])])];
       const parts = [];
       for (const [expectedSource, file] of selectedFiles) {
+        if (file.size > 10 * 1024 * 1024) throw new Error("Cada arquivo pode ter até 10 MB.");
         const parsed = await parseWorkbook(
           await file.arrayBuffer(),
           file.name,
@@ -469,6 +475,7 @@ export default function Dashboard() {
         if (activeOwner.current !== user.id) return;
         setWorkspaceRevision(saved.revision);
       } else setWorkspaceRevision(null);
+      sessionYears.current.set(data.year, data);
       setDataset(data);
       setConfig(data.config);
       if (user) refreshWorkspaces(user.id);
@@ -736,7 +743,7 @@ export default function Dashboard() {
         "Realizado",
         "Atingimento",
         "Projeção",
-        "Gap projetado",
+        "GAP projetado",
         "Necessário/dia útil",
         "Status",
         "Ação",
@@ -786,11 +793,14 @@ export default function Dashboard() {
         Cadastre as unidades e metas uma vez. Nos próximos envios, atualize a produção mantendo seu planejamento anual.
       </p>
       <label className="import-mode">Objetivo deste envio
-        <select value={importMode} onChange={(e) => setImportMode(e.target.value)}>
+        <select value={importMode} onChange={(e) => { setImportMode(e.target.value); if (e.target.value === "history") { const year = (dataset?.year ?? new Date().getFullYear()) - 1; setConfig({ ...config, year, vnCutoff: `${year}-12-31`, arCutoff: `${year}-12-31`, cadenceCutoff: `${year}-12-31`, paTargetMode: "source" }); } }}>
           <option value="production">Atualizar produção · preservar metas cadastradas</option>
           <option value="fixed">Cadastrar base fixa · unidades e metas</option>
+          <option value="history">Base e produção de outro ano · comparativo histórico</option>
         </select>
       </label>
+      {importMode === "history" && <p className="helper">As metas, a produção e as unidades serão guardadas somente no ano informado. Confirme os cortes; não use 31/12 se a base ainda for parcial. Novas cooperativas e PAs não serão incluídos retroativamente em outros anos.</p>}
+      <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha · preservar histórico</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
       <div className="source-upload-grid">
         <FileSlot
           id="base-file"
@@ -835,7 +845,7 @@ export default function Dashboard() {
             max="2100"
             value={config.year}
             onChange={(e) =>
-              setConfig({ ...config, year: Number(e.target.value) })
+              setConfig({ ...config, year: Number(e.target.value), vnCutoff: "", arCutoff: "", cadenceCutoff: "", paTargetMode: Number(e.target.value) < 2026 ? "source" : config.paTargetMode })
             }
           />
         </label>
@@ -883,7 +893,7 @@ export default function Dashboard() {
         ) : (
           <ArrowRight size={18} />
         )}
-        {importMode === "fixed" ? "Cadastrar base fixa" : "Atualizar produção"}
+        {importMode === "fixed" ? "Cadastrar base fixa" : importMode === "history" ? "Importar ano histórico" : "Atualizar produção"}
       </button>
     </>
   );
@@ -1071,6 +1081,7 @@ export default function Dashboard() {
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
             <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
+            <label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event => setRequestedYear(Number(event.target.value))} /></label><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(requestedYear)}>Abrir ano</button>
             {user && <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
             <span className="muted">{user && workspaceRevision ? `Salvo · revisão ${workspaceRevision}` : "Dados nesta sessão"}</span>
           </div>}
@@ -1109,7 +1120,7 @@ export default function Dashboard() {
                   <span>03</span>
                   <div>
                     <strong>Prioridades em reais</strong>
-                    <p>Gap, esforço por dia útil e ação recomendada.</p>
+                    <p>GAP, esforço por dia útil e ação recomendada.</p>
                   </div>
                 </div>
                 <div className="source-note">
@@ -1270,7 +1281,9 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </label>
+                <label>Organizar lista<select aria-label="Ordenar análise" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
               </section>
+              {dataset && <NetworkSummary dataset={dataset} filters={scenarioFilters} />}
               <div className="position-line">
                 <span>
                   <span className="position-dot" />
@@ -1286,6 +1299,8 @@ export default function Dashboard() {
                     : "Consolidado das cooperativas · sem dupla contagem dos PAs"}
                 </span>
               </div>
+              {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} />}
+              {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
               {effectiveSource === "cadence" && (
                 <section
                   className="pa-target-policy"
@@ -1346,7 +1361,7 @@ export default function Dashboard() {
                         Preserva a sazonalidade das metas.
                       </p>
                       <p>
-                        <strong>Esforço:</strong> saldo para a meta ÷ dias úteis
+                        <strong>Esforço:</strong> GAP para a meta ÷ dias úteis
                         restantes após o corte.
                       </p>
                       <p>
@@ -1401,7 +1416,7 @@ export default function Dashboard() {
                         <strong>Realizado diário indisponível.</strong> As bases
                         trazem totais mensais. Meta diária estimada:{" "}
                         <strong>{money(leafSummary.dailyTarget)}</strong> (meta
-                        mensal ÷ dias úteis do mês). Abaixo, o saldo do mês e o
+                        mensal ÷ dias úteis do mês). Abaixo, o GAP do mês e o
                         esforço por dia útil após o corte.
                       </span>
                     </div>
@@ -1427,7 +1442,7 @@ export default function Dashboard() {
                       accent
                     />
                     <Kpi
-                      title="Saldo para a meta"
+                      title="GAP para a meta"
                       value={money(summary.gap)}
                       sub={`Esforço total: ${money(summary.requiredDaily)}/dia útil`}
                       icon={<Flag size={20} />}
@@ -1438,10 +1453,10 @@ export default function Dashboard() {
                     <span>
                       Para todos atingirem 100%:{" "}
                       <strong>{money(leafSummary.individualGap)}</strong> de
-                      saldo somado entre{" "}
+                      GAP somado entre{" "}
                       {effectiveSource === "cadence" ? "PAs" : "cooperativas"} (
                       {money(leafSummary.requiredDaily)}/dia útil). A superação
-                      de uma unidade não elimina o saldo das demais.
+                      de uma unidade não elimina o GAP das demais.
                     </span>
                   </div>
                   <section className="decision-insights" aria-label="Informações para decidir">
@@ -1453,7 +1468,7 @@ export default function Dashboard() {
                         <div>
                           <h2>Prioridades para atingir a meta</h2>
                           <p>
-                            Ordem pelo maior gap projetado em reais. Abra uma
+                            Ordem pelo maior GAP projetado em reais. Abra uma
                             ação para definir responsável e prazo.
                           </p>
                         </div>
@@ -1597,9 +1612,6 @@ export default function Dashboard() {
                             <select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                               <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
                             </select>
-                            <select aria-label="Ordenar análise" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                              <option value="gap">Maior gap</option><option value="attainment">Menor atingimento</option><option value="name">Nome / código</option>
-                            </select>
                             {effectiveSource === "base" && (
                               <label className="sr-only-label">
                                 <span>Agrupar por</span>
@@ -1699,6 +1711,7 @@ export default function Dashboard() {
                                       <Pill>{r.status}</Pill>
                                     </td>
                                     <td>
+                                      {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} onClick={() => { setCoop(`${r.central}:${r.cooperative}`); setLevel("cooperative"); }}>Ver PAs</button>}
                                       <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
                                         onClick={() => { setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
                                       <button
@@ -1830,7 +1843,7 @@ export default function Dashboard() {
             </div>
             <div className="detail-metrics">
               <div>
-                <span>Saldo para a meta</span>
+                <span>GAP para a meta</span>
                 <strong>{money(selected.gap)}</strong>
               </div>
               <div>
@@ -1854,7 +1867,7 @@ export default function Dashboard() {
                   anual: {money(paTargetForGroup(selected.group)?.annual)} ·{" "}
                 </>
               )}
-              Meta esperada até o corte: {money(selected.expected)} · Gap
+              Meta esperada até o corte: {money(selected.expected)} · GAP
               projetado: {money(selected.projectionGap)} ·{" "}
               {selected.remainingDays} dias úteis restantes
               {selected.acceleration != null

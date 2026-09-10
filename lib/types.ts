@@ -29,6 +29,7 @@ export type ImportConfig = {
   arCutoff: string;
   cadenceCutoff: string;
   allowedCentrals?: string[];
+  paTargetMode?: "source" | "group";
 };
 export type RegistryEntity = {
   id: string;

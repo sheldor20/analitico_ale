@@ -11,6 +11,7 @@ import { deletePortfolioDraft, listPortfolioDrafts, savePortfolioDraft } from "@
 import type { PortfolioDraft } from "@/lib/portfolio-store";
 import type { Dataset, Metric, RegistryEntity } from "@/lib/types";
 import WhatsappDashboard from "./whatsapp-dashboard";
+import { useMessageCustomization } from "./message-customization";
 import styles from "./portfolio-communication.module.css";
 
 type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
@@ -101,8 +102,9 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const recipients = attempt(() => normalizeRecipients([...selectedContacts.flatMap((contact) => contact.emails), ...extraEmails.split(/[;,\n]+/)]));
   const reportResult = useMemo(() => attempt(() => buildPortfolioReport({ dataset, entity, metric, includeBoth, month, period, uplift })), [dataset, entity, metric, includeBoth, month, period, uplift]);
   const report = reportResult.value;
-  const message = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
-  const whatsappMessage = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
+  const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
+  const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
+  const { message, whatsappMessage, editor: messageEditor } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: PERIOD_LABELS[period] || period, baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
@@ -164,6 +166,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
         <label>Assinatura / orientação final<textarea rows={2} maxLength={1000} value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Seu nome e mensagem de encerramento" /></label>
         <p className="helper">Os números são gerados pela análise. A abertura e a assinatura são aplicadas aos dois canais.</p>
       </section>
+      {messageEditor}
       <section className={styles.card}>
         <h3>WhatsApp</h3>
         <label>Responsável para o WhatsApp<select value={phoneContact} onChange={(event) => { const contact = contacts.find((entry) => entry.id === event.target.value); setPhoneContact(event.target.value); setPhone(contact?.whatsapp ?? ""); setPhoneName(contact?.name ?? ""); }}><option value="">Informar manualmente / escolher no WhatsApp</option>{contacts.filter((contact) => contact.whatsapp).map((contact) => <option value={contact.id} key={contact.id}>{contact.name} · {contact.whatsapp}</option>)}</select></label>
