@@ -1,3 +1,4 @@
+import { registerPeriodTests } from './period-cases.mjs';
 import { registerUxTests } from './ux-cases.mjs';
 import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
@@ -9,6 +10,7 @@ const created = '2026-09-10T12:00:00Z';
 const user = { id: owner, aud: 'authenticated', role: 'authenticated', email: 'browser-test@example.com', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: created };
 function contact(entity, name, email, index) { return { id: `00000000-0000-0000-0000-${String(100 + index).padStart(12,'0')}`, owner_id: owner, workspace_year: 2026, entity_id: entity.id, entity_kind: entity.kind, central: entity.central, cooperative: entity.cooperative ?? null, pa: entity.pa ?? null, name, job_title: 'Gerente', teams: '', whatsapp: '(71) 99999-9999', emails: [email], created_at: created, updated_at: created }; }
 async function setup(page) {
+  await page.clock.setFixedTime(new Date("2026-09-10T15:00:00Z"));
   const dataset = portfolioFixture();
   const errors = [];
   const writes = [];
@@ -64,7 +66,7 @@ async function setup(page) {
   return { errors, writes };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Do cenário à conversa' });
-async function selectAugust(dialog) { await dialog.getByLabel('Mês de referência').selectOption('7'); }
+async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
 
 test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved draft', async ({ page }, testInfo) => {
   const { errors, writes } = await setup(page);
@@ -174,3 +176,5 @@ registerDashboardTests({ setup, composer, selectAugust });
 registerScenarioTests({ test, expect, setup, composer, owner, created });
 
 registerUxTests({test,expect,setup,owner,created});
+
+registerPeriodTests({ test, expect, setup, composer });

@@ -57,6 +57,8 @@ import { sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
 import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
 import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
 import "./dashboard-ux.css";
+import PeriodSelector, { usePeriodSelection } from './period-selector';
+import { periodTitle } from '@/lib/periods.mjs';
 
 type View = "overview" | "cadence" | "actions" | "audit" | "imports" | "registry";
 const VIEW_TITLES: Record<View, string> = {
@@ -70,14 +72,6 @@ const EMPTY_ACTION: ActionState = {
   due: "",
   status: "Aberta",
   notes: "",
-};
-const periodNames: Record<string, string> = {
-  daily: "Diário · esforço",
-  month: "Mensal",
-  quarter: "Trimestral",
-  semester: "Semestral",
-  annual: "Anual",
-  ytd: "Acumulado no ano",
 };
 const metricName = (metric: string) =>
   metric === "VN" ? "Venda Nova" : "Arrecadação";
@@ -105,9 +99,8 @@ export default function Dashboard() {
     [central, setCentral] = useState("all"),
     [coop, setCoop] = useState("all"),
     [group, setGroup] = useState("all");
-  const [period, setPeriod] = useState("ytd"),
-    [month, setMonth] = useState(new Date().getMonth()),
-    [level, setLevel] = useState("cooperative"),
+  const { period, month, setPeriod, setMonth } = usePeriodSelection();
+  const [level, setLevel] = useState("cooperative"),
     [search, setSearch] = useState(""),
     [page, setPage] = useState(0);
   const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
@@ -157,6 +150,7 @@ export default function Dashboard() {
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
+  const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
   const paPanelKey = `${dataset?.year}:${coop}`;
   useEffect(() => {
     if (!supabase) return;
@@ -346,7 +340,6 @@ export default function Dashboard() {
   }, [central, coop, group, cooperatives, centralOptions]);
   const communicationDraft = useMemo(() => {
     if (
-      period === "daily" ||
       !cutoff ||
       !analyses.length
     )
@@ -357,7 +350,7 @@ export default function Dashboard() {
       metric: effectiveMetric,
       year: dataset?.year ?? config.year,
       month,
-      periodLabel: periodNames[period],
+      periodLabel: periodDescription,
       scopeLabel,
       cutoff,
       group,
@@ -372,6 +365,7 @@ export default function Dashboard() {
     config.year,
     month,
     period,
+    periodDescription,
     scopeLabel,
     group,
     uplift,
@@ -771,7 +765,7 @@ export default function Dashboard() {
         r.source === "cadence" ? r.targets[month] : "",
         r.source === "cadence" ? r.annualTarget : "",
         r.name,
-        periodNames[period],
+        periodDescription,
         MONTHS[month],
         r.cutoff,
         r.target,
@@ -792,7 +786,7 @@ export default function Dashboard() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `analitico-${effectiveSource}-${dataset?.year}-${month + 1}.csv`;
+    a.download = `analitico-${effectiveSource}-${dataset?.year}-${period}-${month + 1}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -1055,7 +1049,7 @@ export default function Dashboard() {
                   : view === "imports"
                     ? "Importe uma nova posição ou retome uma análise salva."
                     : dataset
-                      ? `${dataset.year} · ${effectiveSource === "cadence" ? "Cadência comercial dos PAs" : metricName(effectiveMetric)} · ${periodNames[period]}`
+                      ? `${effectiveSource === "cadence" ? "Cadência comercial dos PAs" : metricName(effectiveMetric)} · ${periodDescription}`
                       : "Metas, resultados e prioridades das centrais Bahia e Nordeste."}
               </p>
             </div>
@@ -1288,32 +1282,8 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  Período
-                  <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                  >
-                    {Object.entries(periodNames).map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Mês de referência
-                  <select
-                    value={month}
-                    onChange={(e) => setMonth(Number(e.target.value))}
-                  >
-                    {MONTHS.map((m, i) => (
-                      <option key={m} value={i}>
-                        {m} / {dataset?.year}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
+                  onPeriodChange={setPeriod} onMonthChange={setMonth} />
               </section>
               <div className="position-line">
                 <span>
@@ -1396,7 +1366,7 @@ export default function Dashboard() {
                         restantes.
                       </p>
                       <p>
-                        <strong>Diário:</strong> meta rateada e esforço
+                        <strong>Esforço por dia útil:</strong> meta rateada e esforço
                         estimado; realizado diário indisponível.
                       </p>
                     </div>
@@ -1414,23 +1384,11 @@ export default function Dashboard() {
                 </section>
               ) : (
                 <>
-                  {period === "daily" && (
-                    <div className="message">
-                      <Info size={18} />
-                      <span>
-                        <strong>Realizado diário indisponível.</strong> As bases
-                        trazem totais mensais. Meta diária estimada:{" "}
-                        <strong>{money(leafSummary.dailyTarget)}</strong> (meta
-                        mensal ÷ dias úteis do mês). Abaixo, o GAP do mês e o
-                        esforço por dia útil após o corte.
-                      </span>
-                    </div>
-                  )}
                   <section className="kpi-grid" aria-label="Resultado do período">
                     <Kpi
                       title="Meta do período"
                       value={money(summary.target)}
-                      sub={`${periodNames[period === "daily" ? "month" : period]} · ${MONTHS[month]}/${dataset?.year}`}
+                      sub={periodDescription}
                       icon={<Target size={20} />}
                     />
                     <Kpi
@@ -1829,7 +1787,7 @@ export default function Dashboard() {
                 <h2>{selected.name}</h2>
                 <p>
                   Posição em {shortDate(selected.cutoff)} ·{" "}
-                  {periodNames[period]} · {MONTHS[month]}/{dataset?.year}
+                  {periodDescription}
                 </p>
               </div>
               <Pill>{selected.status}</Pill>

@@ -38,7 +38,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('button',{name:'Recarregar cadastro salvo',exact:true}).click();
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('ytd');
-    await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
+    await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');
     await page.getByRole('button',{name:'Comparar anos',exact:true}).click();
     const comparison=page.getByRole('region',{name:'Comparativo entre anos',exact:true});
     await expect(comparison.getByRole('combobox',{name:'Comparar 2026 com',exact:true})).toHaveValue('2025');

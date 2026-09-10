@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Mail, MessageSquareText, Save, Trash2, X } from "lucide-react";
-import { MONTHS } from "@/lib/analytics.mjs";
+import PeriodSelector, { usePeriodSelection } from './period-selector';
+import { periodTitle } from '@/lib/periods.mjs';
 import { supabase } from "@/lib/supabase";
 import { listResponsibleContacts } from "@/lib/contact-store";
 import type { ResponsibleContact } from "@/lib/contact-store";
-import { buildEmailFile, buildOutlookLink, buildPortfolioReport, buildWhatsappLink, KIND_LABELS, normalizeRecipients, PERIOD_LABELS, recipientsForContacts, renderPortfolioCommunication } from "@/lib/portfolio-communication.mjs";
+import { buildEmailFile, buildOutlookLink, buildPortfolioReport, buildWhatsappLink, KIND_LABELS, normalizeRecipients, recipientsForContacts, renderPortfolioCommunication } from "@/lib/portfolio-communication.mjs";
 import { deletePortfolioDraft, listPortfolioDrafts, savePortfolioDraft } from "@/lib/portfolio-store";
 import type { PortfolioDraft } from "@/lib/portfolio-store";
 import type { Dataset, Metric, RegistryEntity } from "@/lib/types";
@@ -24,8 +25,7 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
   const entities = useMemo(() => [...new Map(candidates.map((candidate) => [candidate.id, dataset.registry?.entities.find((entry) => entry.id === candidate.id) ?? candidate])).values()], [candidates, dataset.registry]);
   const [entityId, setEntityId] = useState(initialKey || entities[0]?.id || "");
   const [owner, setOwner] = useState<string | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState(Object.hasOwn(PERIOD_LABELS, period) ? period : "ytd");
-  const [selectedMonth, setSelectedMonth] = useState(month);
+  const { period: selectedPeriod, month: selectedMonth, setPeriod: setSelectedPeriod, setMonth: setSelectedMonth } = usePeriodSelection(period, month);
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const selected = entities.find((entry) => entry.id === entityId) ?? entities[0];
@@ -55,8 +55,8 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
       <div className={styles.heading}><div><span className="section-label">COMUNICAÇÃO DA CARTEIRA</span><h2 id="portfolio-title">Do cenário à conversa</h2><p>Uma unidade por mensagem. Revise o painel, os destinatários e as próximas ações.</p></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
       <div className={styles.filters}>
         <label>Unidade selecionada<select value={selected?.id ?? ""} onChange={(event) => setEntityId(event.target.value)}>{entities.map((entry) => <option key={entry.id} value={entry.id}>{KIND_LABELS[entry.kind]} {entry.kind === "pa" ? `${entry.cooperative} / ${entry.pa}` : entry.kind === "cooperative" ? entry.cooperative : entry.central} · {entry.name}</option>)}</select></label>
-        <label>Período da mensagem<select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)}>{Object.entries(PERIOD_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <label>Mês de referência<select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>{MONTHS.map((label: string, index: number) => <option key={label} value={index}>{label}/{dataset.year}</option>)}</select></label>
+        <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
+          onPeriodChange={setSelectedPeriod} onMonthChange={setSelectedMonth} />
       </div>
       {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} /> : <p role="alert">Não há unidades neste filtro.</p>}
     </section>
@@ -104,7 +104,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const report = reportResult.value;
   const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
   const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
-  const { message, whatsappMessage, editor: messageEditor, editError: templateError } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: PERIOD_LABELS[period] || period, baseMessage, baseWhatsapp });
+  const { message, whatsappMessage, editor: messageEditor, editError: templateError } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: periodTitle(period, month, dataset.year), baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
