@@ -1,10 +1,12 @@
+import type { PortfolioDashboard } from "./portfolio-presentation.mjs";
+import { validateDashboard } from "./portfolio-presentation.mjs";
 import { supabase } from "./supabase";
 import { normalizeRecipients, whatsappNumber } from "./portfolio-communication.mjs";
 import type { PortfolioMessage, PortfolioReport } from "./portfolio-communication.mjs";
 
 export type PortfolioDraft = {
   id: string; created_at: string; subject: string; email_body: string; whatsapp_body: string;
-  recipients: string[]; whatsapp_number: string;
+  recipients: string[]; whatsapp_number: string; presentation_version?: number; whatsapp_dashboard?: PortfolioDashboard | null;
 };
 function db() {
   if (!supabase) throw new Error("Entre na sua conta para salvar os rascunhos.");
@@ -17,7 +19,7 @@ async function verifyOwner(owner: string) {
 export async function listPortfolioDrafts(owner: string, year: number, entityId: string): Promise<PortfolioDraft[]> {
   await verifyOwner(owner);
   const { data, error } = await db().from("commercial_communication_drafts")
-    .select("id,created_at,subject,email_body,whatsapp_body,recipients,whatsapp_number")
+    .select("id,created_at,subject,email_body,whatsapp_body,recipients,whatsapp_number,presentation_version,whatsapp_dashboard")
     .eq("owner_id", owner).eq("year", year).eq("entity_id", entityId)
     .order("created_at", { ascending: false }).limit(10);
   if (error) throw new Error("Não foi possível consultar os rascunhos. Verifique sua conexão e a configuração do banco.");
@@ -31,7 +33,8 @@ export async function savePortfolioDraft(owner: string, report: PortfolioReport,
     subject: message.subject, email_body: message.text, email_html: message.html,
     whatsapp_body: message.whatsapp, recipients: normalizeRecipients(recipients),
     whatsapp_number: whatsappNumber(phone), report,
-  }).select("id,created_at,subject,email_body,whatsapp_body,recipients,whatsapp_number").single();
+    presentation_version: 2, whatsapp_dashboard: validateDashboard(message.dashboard),
+  }).select("id,created_at,subject,email_body,whatsapp_body,recipients,whatsapp_number,presentation_version,whatsapp_dashboard").single();
   if (error) throw new Error("Não foi possível salvar o rascunho. Nenhuma mensagem foi enviada. Verifique sua conexão e tente novamente.");
   return data as PortfolioDraft;
 }

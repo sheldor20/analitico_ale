@@ -10,6 +10,7 @@ import { buildEmailFile, buildOutlookLink, buildPortfolioReport, buildWhatsappLi
 import { deletePortfolioDraft, listPortfolioDrafts, savePortfolioDraft } from "@/lib/portfolio-store";
 import type { PortfolioDraft } from "@/lib/portfolio-store";
 import type { Dataset, Metric, RegistryEntity } from "@/lib/types";
+import WhatsappDashboard from "./whatsapp-dashboard";
 import styles from "./portfolio-communication.module.css";
 
 type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
@@ -133,7 +134,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
     if (!owner || !report || !message || !whatsappMessage || !recipients.value) return;
     setSaving(true); setError(""); setFeedback("");
     try {
-      const saved = await savePortfolioDraft(owner, report, { ...message, whatsapp: whatsappMessage.whatsapp }, recipients.value, phone);
+      const saved = await savePortfolioDraft(owner, report, { ...message, whatsapp: whatsappMessage.whatsapp, dashboard: whatsappMessage.dashboard }, recipients.value, phone);
       if (!mounted.current) return;
       setDrafts((items) => [saved, ...items].slice(0, 10)); setFeedback("Rascunho salvo na sua conta. Isso não confirma envio nem entrega.");
     } catch (reason) { if (mounted.current) setError(errorText(reason)); }
@@ -173,8 +174,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
       </section>
     </div>
     <div className={styles.preview}>
-      <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[["panel", "Painel do e-mail"], ["email", "Texto do e-mail"], ["whatsapp", "Texto do WhatsApp"]].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? "primary" : "secondary"}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
-      {tab === "panel" ? <iframe className={styles.frame} title="Painel do e-mail da carteira" sandbox="" srcDoc={message.html} /> : <label className={styles.textPreview}>{tab === "email" ? "E-mail gerado" : "WhatsApp gerado"}<textarea rows={24} readOnly value={tab === "email" ? message.text : whatsappMessage.whatsapp} /></label>}
+      <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[["panel", "Painel do e-mail"], ["email", "Texto do e-mail"], ["whatsapp", "Painel do WhatsApp"]].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? "primary" : "secondary"}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
+      {tab === "panel" ? <iframe className={styles.frame} title="Painel do e-mail da carteira" sandbox="" srcDoc={message.html} /> : tab === "email" ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><label className={styles.textPreview}>WhatsApp gerado<textarea rows={12} readOnly value={whatsappMessage.whatsapp} /></label></>}
       <div className={styles.card}>
         <h3>Preparar o envio</h3>
         <label>Conta do Outlook<select value={personalOutlook ? "personal" : "work"} onChange={(event) => setPersonalOutlook(event.target.value === "personal")}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
@@ -188,17 +189,24 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
           <button className="button secondary" onClick={() => copy(message.text, "Texto do e-mail copiado.")}><Copy size={17} /> Copiar e-mail</button>
           {outlook.value && !invalid && !loading ? <a className="button primary" href={outlook.value.url} target="_blank" rel="noopener noreferrer"><Mail size={17} /> Abrir Outlook</a> : <button className="button primary" disabled><Mail size={17} /> Abrir Outlook</button>}
           <button className="button secondary" disabled={!outlook.value || !!invalid || loading} onClick={() => outlook.value && copy(outlook.value.url, "Link do Outlook copiado. Ele contém os destinatários e pode conter os dados da carteira; compartilhe apenas com pessoas autorizadas.")}>Copiar link Outlook</button>
+          <button className="button primary" onClick={() => setTab("whatsapp")}><MessageSquareText size={17} /> Preparar painel para WhatsApp</button>
           <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, "Texto adaptado para WhatsApp copiado.")}><Copy size={17} /> Copiar WhatsApp</button>
           {whatsapp.value && !loading ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button primary" disabled>Abrir WhatsApp</button>}
           <button className="button secondary" disabled={!!invalid || loading} onClick={() => download("eml")}><Download size={17} /> Baixar e-mail (.eml)</button>
           <button className="button secondary" onClick={() => download("html")}><Download size={17} /> Baixar painel HTML</button>
           <button className="button secondary" disabled={!owner || saving || loading || !!invalid || !!whatsapp.error} onClick={save}><Save size={17} /> {saving ? "Salvando…" : "Salvar rascunho"}</button>
         </div>
+        <p className="helper">Abrir WhatsApp leva apenas o texto. Para enviar o dashboard, use Preparar painel para WhatsApp e compartilhe ou anexe a imagem.</p>
         <p className="helper">Nenhuma mensagem é enviada automaticamente. Abrir um canal ou salvar um rascunho não confirma envio nem entrega. Os links podem conter dados da carteira.</p>
         {feedback && <p className="message success" role="status">{feedback}</p>}
         {error && <p className="message error" role="alert">{error}</p>}
       </div>
-      {drafts.length > 0 && <section className={styles.card}><h3>Rascunhos salvos desta unidade</h3><p className="helper">Últimos 10. Os textos abaixo preservam o cenário da data de gravação; não são atualizados automaticamente.</p>{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString("pt-BR")} · {draft.subject}</summary><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label><div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, "Texto do rascunho copiado.")}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, "WhatsApp do rascunho copiado.")}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm("Excluir este rascunho salvo?")) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</section>}
+      {drafts.length > 0 && <section className={styles.card}><h3>Rascunhos salvos desta unidade</h3><p className="helper">Últimos 10. Os textos abaixo preservam o cenário da data de gravação; não são atualizados automaticamente.</p>{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString("pt-BR")} · {draft.subject}</summary><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label>{draft.whatsapp_dashboard && <SavedDashboard draft={draft} />}<div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, "Texto do rascunho copiado.")}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, "WhatsApp do rascunho copiado.")}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm("Excluir este rascunho salvo?")) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</section>}
     </div>
   </div>;
+}
+
+function SavedDashboard({ draft }: { draft: PortfolioDraft }) {
+  const [open, setOpen] = useState(false);
+  return <div><button className="button secondary" onClick={() => setOpen((value) => !value)}>{open ? "Ocultar painel salvo" : "Ver painel WhatsApp salvo"}</button>{open && draft.whatsapp_dashboard && <WhatsappDashboard model={draft.whatsapp_dashboard} text={draft.whatsapp_body} subject={draft.subject} saved />}</div>;
 }

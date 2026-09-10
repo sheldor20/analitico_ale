@@ -1,3 +1,4 @@
+import type { PortfolioDashboard } from "./portfolio-presentation.mjs";
 import type { Dataset, RegistryEntity, Metric } from "./types";
 import type { ResponsibleContact } from "./contact-store";
 export const PERIOD_LABELS: Readonly<Record<string, string>>;
@@ -20,7 +21,7 @@ export type PortfolioReport = {
   version: 1; year: number; month: number; period: string; periodLabel: string;
   source: "base" | "cadence"; uplift: number; entity: RegistryEntity; sections: PortfolioSection[];
 };
-export type PortfolioMessage = { subject: string; text: string; whatsapp: string; html: string };
+export type PortfolioMessage = { subject: string; text: string; whatsapp: string; html: string; dashboard: PortfolioDashboard };
 export function escapeHtml(value: unknown): string;
 export function entityFromAnalysis(row: { [key: string]: any }): RegistryEntity;
 export function recipientsForContacts(contacts: ResponsibleContact[], year: number, entity: RegistryEntity): ResponsibleContact[];

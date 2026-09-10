@@ -1,0 +1,43 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readdir, readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import { buildPortfolioReport, renderPortfolioCommunication } from '../lib/portfolio-communication.mjs';
+import { portfolioFixture, unit } from './portfolio-fixture.mjs';
+const A = '00000000-0000-0000-0000-000000000001', B = '00000000-0000-0000-0000-000000000002';
+test('dashboard migration preserves legacy drafts, validates v2 and retains RLS and immutability', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create schema auth; create role anon; create role authenticated;
+      create table auth.users(id uuid primary key);
+      create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+      grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;
+      insert into auth.users values ('${A}'),('${B}');`);
+    const dir = new URL('../supabase/migrations/',import.meta.url);
+    const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
+    const latest = files.find((f) => f.endsWith('_portfolio_dashboard_presentation.sql'));
+    assert.ok(latest,'versioned migration must be committed');
+    for (const f of files.filter((f) => f !== latest)) await db.exec(await readFile(new URL(f,dir),'utf8'));
+    await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${A}',false);`);
+    const dataset = portfolioFixture();
+    const report = buildPortfolioReport({dataset,entity:unit(dataset,'cooperative:1002:3017'),month:7,period:'month'});
+    const message = renderPortfolioCommunication(report);
+    const args = [JSON.stringify(report),message.subject,message.text,message.html,message.whatsapp];
+    const insert = `insert into public.commercial_communication_drafts(owner_id,year,entity_id,entity_kind,report,subject,email_body,email_html,whatsapp_body) values(auth.uid(),2026,'cooperative:1002:3017','cooperative',$1,$2,$3,$4,$5) returning *`;
+    const legacy = (await db.query(insert,args)).rows[0];
+    await db.exec('reset role'); await db.exec(await readFile(new URL(latest,dir),'utf8'));
+    await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${A}',false);`);
+    const old = (await db.query('select * from public.commercial_communication_drafts')).rows[0];
+    assert.equal(old.email_body,legacy.email_body); assert.equal(old.presentation_version,1); assert.equal(old.whatsapp_dashboard,null);
+    const v2 = `insert into public.commercial_communication_drafts(owner_id,year,entity_id,entity_kind,report,subject,email_body,email_html,whatsapp_body,presentation_version,whatsapp_dashboard) values(auth.uid(),2026,'cooperative:1002:3017','cooperative',$1,$2,$3,$4,$5,2,$6) returning *`;
+    const row = (await db.query(v2,[...args,JSON.stringify(message.dashboard)])).rows[0];
+    assert.deepEqual(row.whatsapp_dashboard,message.dashboard);
+    for (const bad of [{...message.dashboard,period:'annual'}, {...message.dashboard,entityId:'central:2007'}, {...message.dashboard,blocks:[{type:'unknown'}]}, {...message.dashboard,notes:null}]) await assert.rejects(() => db.query(v2,[...args,JSON.stringify(bad)]),/check constraint/);
+    await assert.rejects(() => db.query("update public.commercial_communication_drafts set presentation_version=1"),/permission denied/);
+    await db.exec(`select set_config('request.jwt.claim.sub','${B}',false)`);
+    assert.equal((await db.query('select id from public.commercial_communication_drafts')).rows.length,0);
+    assert.equal((await db.query('delete from public.commercial_communication_drafts returning id')).rows.length,0);
+    await db.exec('reset role; set role anon');
+    await assert.rejects(() => db.query('select * from public.commercial_communication_drafts'),/permission denied/);
+  } finally { await db.close(); }
+});
