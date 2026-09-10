@@ -1,3 +1,4 @@
+import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -11,6 +12,7 @@ async function setup(page) {
   const errors = [];
   const writes = [];
   const drafts = [];
+  const templates = new Map();
   page.on('pageerror', (error) => errors.push(error.message));
   const names = { 'cooperative:1002:3017': ['Ana Teste', 'ana@example.com'], 'cooperative:1002:3025': ['Bruno Teste','bruno@example.com'], 'central:1002': ['Celia Teste','celia@example.com'], 'pa:1002:3017:0': ['Paula Teste','paula@example.com'] };
   const contacts = dataset.registry.entities.flatMap((entity, index) => names[entity.id] ? [contact(entity, ...names[entity.id], index)] : []);
@@ -30,6 +32,13 @@ async function setup(page) {
     if (url.pathname === '/rest/v1/commercial_workspaces') {
       const row = { id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset };
       return answer((request.headers().accept || '').includes('vnd.pgrst.object') ? row : [row]);
+    }
+    if (url.pathname === '/rest/v1/commercial_message_templates') {
+      const key = `${url.searchParams.get('entity_kind')}:${url.searchParams.get('metric')}`;
+      if (['POST','PATCH'].includes(request.method())) {
+        const row = request.postDataJSON(); templates.set(`eq.${row.entity_kind}:eq.${row.metric}`, row); return answer(row);
+      }
+      return answer(templates.get(key) || null);
     }
     if (url.pathname === '/rest/v1/commercial_entity_contacts') return answer(contacts.filter((entry) => `eq.${entry.entity_id}` === url.searchParams.get('entity_id')));
     if (url.pathname === '/rest/v1/commercial_communication_drafts') {
@@ -160,3 +169,5 @@ test('long valid recipient list keeps complete EML export and draft while Outloo
 });
 
 registerDashboardTests({ setup, composer, selectAugust });
+
+registerScenarioTests({ test, expect, setup, composer, owner, created });

@@ -104,7 +104,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const report = reportResult.value;
   const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
   const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
-  const { message, whatsappMessage, editor: messageEditor } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: PERIOD_LABELS[period] || period, baseMessage, baseWhatsapp });
+  const { message, whatsappMessage, editor: messageEditor, editError: templateError } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: PERIOD_LABELS[period] || period, baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
@@ -144,7 +144,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   }
   if (!report || !message || !whatsappMessage) return <p role="alert" className="message error">{reportResult.error || "Não foi possível gerar o cenário."}</p>;
   // A URL-size limitation must not disable the complete MIME export or persistence.
-  const invalid = recipients.error;
+  const invalid = recipients.error || templateError;
   return <div className={styles.composer}>
     <div className={styles.settings}>
       <section className={styles.card} aria-label="Destinatários da unidade">
@@ -194,7 +194,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
           <button className="button secondary" disabled={!outlook.value || !!invalid || loading} onClick={() => outlook.value && copy(outlook.value.url, "Link do Outlook copiado. Ele contém os destinatários e pode conter os dados da carteira; compartilhe apenas com pessoas autorizadas.")}>Copiar link Outlook</button>
           <button className="button primary" onClick={() => setTab("whatsapp")}><MessageSquareText size={17} /> Preparar painel para WhatsApp</button>
           <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, "Texto adaptado para WhatsApp copiado.")}><Copy size={17} /> Copiar WhatsApp</button>
-          {whatsapp.value && !loading ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button primary" disabled>Abrir WhatsApp</button>}
+          {whatsapp.value && !loading && !templateError ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button primary" disabled>Abrir WhatsApp</button>}
           <button className="button secondary" disabled={!!invalid || loading} onClick={() => download("eml")}><Download size={17} /> Baixar e-mail (.eml)</button>
           <button className="button secondary" onClick={() => download("html")}><Download size={17} /> Baixar painel HTML</button>
           <button className="button secondary" disabled={!owner || saving || loading || !!invalid || !!whatsapp.error} onClick={save}><Save size={17} /> {saving ? "Salvando…" : "Salvar rascunho"}</button>
