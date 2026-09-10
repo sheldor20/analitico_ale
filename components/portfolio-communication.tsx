@@ -140,7 +140,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
     finally { if (mounted.current) setSaving(false); }
   }
   if (!report || !message || !whatsappMessage) return <p role="alert" className="message error">{reportResult.error || "Não foi possível gerar o cenário."}</p>;
-  const invalid = recipients.error || outlook.error;
+  // A URL-size limitation must not disable the complete MIME export or persistence.
+  const invalid = recipients.error;
   return <div className={styles.composer}>
     <div className={styles.settings}>
       <section className={styles.card} aria-label="Destinatários da unidade">
@@ -178,6 +179,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
         <h3>Preparar o envio</h3>
         <label>Conta do Outlook<select value={personalOutlook ? "personal" : "work"} onChange={(event) => setPersonalOutlook(event.target.value === "personal")}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
         <p className="helper">O link do Outlook abre assunto, destinatários e texto. Para enviar o dashboard, use Copiar painel e cole no corpo do e-mail, substituindo o texto, ou abra o arquivo .eml em um cliente compatível.</p>
+        {outlook.error && <p role="alert" className={styles.warning}>{outlook.error}</p>}
         {outlook.value?.requiresPaste && <p className={styles.warning}>Este e-mail excede o tamanho seguro do link. Copie o texto ou o painel e cole no Outlook; o link levará somente assunto e destinatários, sem cortar a mensagem.</p>}
         {whatsapp.value?.requiresPaste && <p className={styles.warning}>Este texto excede o tamanho seguro do link. Copie o WhatsApp completo e cole na conversa aberta; nenhuma parte será cortada.</p>}
         {!recipients.value?.length && <p className="helper">Sem destinatários de e-mail: informe-os no Outlook antes de enviar.</p>}
@@ -188,7 +190,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
           <button className="button secondary" disabled={!outlook.value || !!invalid || loading} onClick={() => outlook.value && copy(outlook.value.url, "Link do Outlook copiado. Ele contém os destinatários e pode conter os dados da carteira; compartilhe apenas com pessoas autorizadas.")}>Copiar link Outlook</button>
           <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, "Texto adaptado para WhatsApp copiado.")}><Copy size={17} /> Copiar WhatsApp</button>
           {whatsapp.value && !loading ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button primary" disabled>Abrir WhatsApp</button>}
-          <button className="button secondary" disabled={!!invalid} onClick={() => download("eml")}><Download size={17} /> Baixar e-mail (.eml)</button>
+          <button className="button secondary" disabled={!!invalid || loading} onClick={() => download("eml")}><Download size={17} /> Baixar e-mail (.eml)</button>
           <button className="button secondary" onClick={() => download("html")}><Download size={17} /> Baixar painel HTML</button>
           <button className="button secondary" disabled={!owner || saving || loading || !!invalid || !!whatsapp.error} onClick={save}><Save size={17} /> {saving ? "Salvando…" : "Salvar rascunho"}</button>
         </div>
