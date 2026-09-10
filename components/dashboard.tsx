@@ -56,8 +56,13 @@ import { supabase } from "@/lib/supabase";
 import { sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
 import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
 import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
+import "./dashboard-ux.css";
 
 type View = "overview" | "cadence" | "actions" | "audit" | "imports" | "registry";
+const VIEW_TITLES: Record<View, string> = {
+  overview: "Visão geral", cadence: "Cadência dos PAs", actions: "Plano de ação",
+  audit: "Conferência da base", imports: "Importações", registry: "Cadastro e metas",
+};
 type Analysis = ReturnType<typeof analyze>;
 type SourceFiles = { base: File | null; cadence: File | null };
 const EMPTY_ACTION: ActionState = {
@@ -112,6 +117,8 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState("gap");
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [expandedPaKey, setExpandedPaKey] = useState("");
+  const [showMoreIndicators, setShowMoreIndicators] = useState(false);
   const activeOwner = useRef<string | null>(null);
   const sessionYears = useRef(new Map<number,Dataset>());
   const [uplift, setUplift] = useState(0),
@@ -150,6 +157,7 @@ export default function Dashboard() {
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
+  const paPanelKey = `${dataset?.year}:${coop}`;
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -158,7 +166,7 @@ export default function Dashboard() {
       if (event === "SIGNED_OUT" || (activeOwner.current && activeOwner.current !== nextId)) {
         setDataset(null); setDatasetId(null); setSelected(null); setActions({});
         setFiles({base:null,cadence:null}); setWorkspaceRevision(null); setWorkspaces([]);
-        setHistorical(false); sessionYears.current.clear();
+        setHistorical(false); sessionYears.current.clear(); setExpandedPaKey("");
       }
       activeOwner.current = nextId;
       setUser(session?.user ?? null);
@@ -376,6 +384,7 @@ export default function Dashboard() {
   function navigate(next: View) {
     if (next === "registry" && !dataset) setDataset(createEmptyDataset(config.year));
     setView(next);
+    setExpandedPaKey("");
     setSearch("");
     if (next === "cadence") {
       setSource("cadence");
@@ -787,6 +796,35 @@ export default function Dashboard() {
     a.click();
     URL.revokeObjectURL(url);
   }
+  const listControls = <>
+                            <select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                              <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
+                            </select>
+                            {effectiveSource === "base" && view !== "actions" && (
+                              <label className="sr-only-label">
+                                <span>Agrupar por</span>
+                                <select
+                                  value={level}
+                                  onChange={(e) => setLevel(e.target.value)}
+                                >
+                                  <option value="cooperative">
+                                    Cooperativas
+                                  </option>
+                                  <option value="central">Centrais</option>
+                                </select>
+                              </label>
+                            )}
+                            <label className="search-input">
+                              <Search size={17} />
+                              <input
+                                aria-label="Buscar cooperativa ou PA"
+                                placeholder="Buscar nome ou código"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                              />
+                            </label>
+                            <select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+  </>;
   const importPanel = (
     <>
       <div className="section-label">
@@ -1006,21 +1044,11 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main>
+        <main className="workspace-content">
           <div className="page-heading">
             <div>
               <div className="eyebrow">PERFORMANCE COMERCIAL</div>
-              <h1>
-                {view === "registry" ? "Sua base, sempre atualizada." : view === "cadence"
-                  ? "Cada PA faz a diferença."
-                  : view === "actions"
-                    ? "Da análise à ação."
-                    : view === "audit"
-                      ? "Confiança em cada número."
-                      : view === "imports"
-                        ? "Suas bases, organizadas."
-                        : "O caminho para os 100%."}
-              </h1>
+              <h1>{VIEW_TITLES[view]}</h1>
               <p>
                 {view === "registry" ? "Cadastre unidades, distribua metas e ajuste a produção. Os indicadores acompanham cada alteração." : view === "audit"
                   ? "Confira as fontes, as diferenças e as regras dos indicadores."
@@ -1031,7 +1059,7 @@ export default function Dashboard() {
                       : "Metas, resultados e prioridades das centrais Bahia e Nordeste."}
               </p>
             </div>
-            {dataset && view !== "imports" && view !== "registry" && (
+            {dataset && ["overview", "cadence", "actions"].includes(view) && (
               <div className="page-heading-actions">
                 {displayed.length > 0 && (
                   <button className="button primary" onClick={() => { setCommunicationInitialKey(""); setShowCommunication(true); }}>
@@ -1084,8 +1112,9 @@ export default function Dashboard() {
             <label>Ano do cadastro <select value={dataset.year} disabled={!!busy} onChange={(e) => openWorkspace(Number(e.target.value))}>
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
-            <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
+            <details className="year-management"><summary>Gerenciar anos</summary><div>            <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
             <label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event => setRequestedYear(Number(event.target.value))} /></label><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(requestedYear)}>Abrir ano</button>
+</div></details>
             {user && <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
             <span className="muted">{user && workspaceRevision ? `Salvo · revisão ${workspaceRevision}` : "Dados nesta sessão"}</span>
           </div>}
@@ -1285,9 +1314,7 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </label>
-                <label>Organizar lista<select aria-label="Ordenar análise" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
               </section>
-              {dataset && <NetworkSummary dataset={dataset} filters={scenarioFilters} />}
               <div className="position-line">
                 <span>
                   <span className="position-dot" />
@@ -1303,35 +1330,32 @@ export default function Dashboard() {
                     : "Consolidado das cooperativas · sem dupla contagem dos PAs"}
                 </span>
               </div>
-              {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} />}
-              {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
-              {effectiveSource === "cadence" && (
-                <section
-                  className="pa-target-policy"
-                  aria-label="Metas fixas mensais por grupo de PA"
-                >
-                  <div>
-                    <span className="section-label">META FIXA POR GRUPO</span>
-                    <p>Referência inicial. Metas editadas no cadastro têm prioridade em todos os períodos.</p>
-                  </div>
-                  <div className="pa-target-groups">
-                    {Object.entries(PA_GROUP_TARGETS).map(([name, target]) => (
-                      <button
-                        key={name}
-                        className={group === name ? "active" : ""}
-                        onClick={() => setGroup(group === name ? "all" : name)}
-                        aria-pressed={group === name}
-                      >
-                        <strong>{name}</strong>
-                        <span>{money(target.monthly)}/mês</span>
-                        <small>{money(target.annual)}/ano</small>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              )}
+              {uplift > 0 && view !== "audit" && <div className="simulation-banner"><span>Simulação de ritmo +{uplift}% ativa · somente projeções</span><button className="button quiet" onClick={() => setUplift(0)}>Limpar simulação</button></div>}
               {view === "audit" ? (
                 <>
+                  <section className="panel">
+                    <div className="panel-heading">
+                      <div>
+                        <h2>Conferência das fontes</h2>
+                        <p>
+                          Diferenças são sinalizadas e os valores originais são
+                          preservados.
+                        </p>
+                      </div>
+                      <span className="pill neutral">
+                        {audits.length} registros
+                      </span>
+                    </div>
+                    <div className="audit-list">
+                      {audits.map((i, n) => (
+                        <div key={n}>
+                          <Info size={18} />
+                          <p>{i.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <details className="progressive-panel"><summary>Fontes e regras de cálculo</summary>
                   <section className="audit-top">
                     <div className="panel">
                       <div className="section-label">FONTES IMPORTADAS</div>
@@ -1355,9 +1379,7 @@ export default function Dashboard() {
                         das metas do mesmo período.
                       </p>
                       <p>
-                        <strong>Cadência PA:</strong> P1 R$ 450, P2 R$ 600, P3
-                        R$ 750, P4 R$ 850 e P5 R$ 1.000 por mês. O anual
-                        corresponde a 12 meses.
+                        <strong>Cadência PA:</strong> metas do cadastro anual. Metas históricas da planilha e ajustes manuais têm prioridade sobre a referência P1–P5 de 2026.
                       </p>
                       <p>
                         <strong>Projeção:</strong> realizado + meta restante ×
@@ -1379,28 +1401,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                   </section>
-                  <section className="panel">
-                    <div className="panel-heading">
-                      <div>
-                        <h2>Conferência das fontes</h2>
-                        <p>
-                          Diferenças são sinalizadas e os valores originais são
-                          preservados.
-                        </p>
-                      </div>
-                      <span className="pill neutral">
-                        {audits.length} registros
-                      </span>
-                    </div>
-                    <div className="audit-list">
-                      {audits.map((i, n) => (
-                        <div key={n}>
-                          <Info size={18} />
-                          <p>{i.message}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
+                  </details>
                 </>
               ) : !filtered.length ? (
                 <section className="panel empty">
@@ -1425,7 +1426,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                   )}
-                  <section className="kpi-grid">
+                  <section className="kpi-grid" aria-label="Resultado do período">
                     <Kpi
                       title="Meta do período"
                       value={money(summary.target)}
@@ -1452,7 +1453,7 @@ export default function Dashboard() {
                       icon={<Flag size={20} />}
                     />
                   </section>
-                  <div className="all-goals-note">
+                  {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
                     <Info size={16} />
                     <span>
                       Para todos atingirem 100%:{" "}
@@ -1462,12 +1463,10 @@ export default function Dashboard() {
                       {money(leafSummary.requiredDaily)}/dia útil). A superação
                       de uma unidade não elimina o GAP das demais.
                     </span>
-                  </div>
-                  <section className="decision-insights" aria-label="Informações para decidir">
-                    {insights.slice(0,3).map((insight) => <article className={`panel insight ${insight.tone}`} key={insight.title}><h3>{insight.title}</h3><p>{insight.detail}</p></article>)}
-                  </section>
+                  </div>}
+                  {view !== "actions" && dataset && <NetworkSummary dataset={dataset} filters={scenarioFilters} />}
                   {view === "actions" ? (
-                    <section className="panel">
+                    <section className="panel action-panel" aria-label="Lista de ações">
                       <div className="panel-heading">
                         <div>
                           <h2>Prioridades para atingir a meta</h2>
@@ -1480,6 +1479,8 @@ export default function Dashboard() {
                           {summary.attention} em atenção
                         </span>
                       </div>
+                      <div className="table-controls action-controls">{listControls}</div>
+                      {!displayed.length && <p className="empty">Nenhuma ação corresponde aos filtros.</p>}
                       <div className="action-list">
                         {displayed
                           .slice(page * 12, page * 12 + 12)
@@ -1501,7 +1502,7 @@ export default function Dashboard() {
                                       {actions[r.key]?.status ?? a.priority}
                                     </Pill>
                                   </div>
-                                  <p>{a.text}</p>
+                                  <p>GAP: {money(r.gap)}{r.requiredDaily != null ? ` · Necessário: ${money(r.requiredDaily)}/dia útil` : ""}</p>
                                   <small>
                                     {r.cooperative}
                                     {r.pa != null ? ` · PA ${r.pa}` : ""} ·{" "}
@@ -1525,6 +1526,124 @@ export default function Dashboard() {
                     </section>
                   ) : (
                     <>
+                      <section className="panel table-panel" aria-label="Lista de unidades">
+                        <div className="panel-heading table-heading">
+                          <div>
+                            <h2>
+                              {actualLevel === "pa"
+                                ? "Cadência por PA"
+                                : actualLevel === "central"
+                                  ? "Resultado por central"
+                                  : "Resultado por cooperativa"}
+                            </h2>
+                            <p>{displayed.length} de {analyses.length} unidades · todas na mesma página</p>
+                          </div>
+                          <div className="table-controls">
+                            {listControls}
+                            <label className="indicator-toggle"><input type="checkbox" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Mais indicadores</label>
+                          </div>
+                        </div>
+                        <div className="table-scroll">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th scope="col">
+                                  {actualLevel === "pa"
+                                    ? "PA / Cooperativa"
+                                    : actualLevel === "central"
+                                      ? "Central"
+                                      : "Cooperativa"}
+                                </th>
+                                <th scope="col" className="numeric">Meta</th>
+                                <th scope="col" className="numeric">Realizado</th>
+                                <th scope="col">Atingimento</th>
+                                <th scope="col" className="numeric">GAP</th>
+                                {showMoreIndicators && <><th scope="col" className="numeric">Projeção</th><th scope="col" className="numeric">Necessário/dia</th></>}
+                                <th scope="col">Situação</th>
+                                <th scope="col">
+                                  <span className="sr-only">Detalhes</span>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {displayed.map((r) => (
+                                  <tr key={r.key}>
+                                    <td>
+                                      <button
+                                        className="entity-button"
+                                        onClick={() => setSelected(r)}
+                                      >
+                                        <strong>
+                                          {r.name.replace(
+                                            /^SICOOB\s*-?\s*/i,
+                                            "",
+                                          )}
+                                        </strong>
+                                        <small>
+                                          {actualLevel === "central"
+                                            ? r.central
+                                            : `${r.cooperative}${r.pa != null ? ` · PA ${r.pa} · ${r.group}` : ""} · ${centralOptions.find(([id])=>id===r.central)?.[1] ?? centralName(r.central)}`}
+                                        </small>
+                                      </button>
+                                    </td>
+                                    <td className="numeric">
+                                      {money(r.target)}
+                                    </td>
+                                    <td className="numeric">
+                                      {money(r.actual)}
+                                    </td>
+                                    <td>
+                                      <div className="attainment">
+                                        <strong>{percent(r.attainment)}</strong>
+                                        <span className="mini-progress">
+                                          <i
+                                            style={{
+                                              width: `${Math.max(0, Math.min(100, (r.attainment ?? 0) * 100))}%`,
+                                            }}
+                                          />
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="numeric">{money(r.gap)}</td>
+                                    {showMoreIndicators && <>
+                                    <td className="numeric">
+                                      {money(r.projected)}
+                                      <small className="cell-note">
+                                        {percent(r.projectedAttainment)} da meta
+                                      </small>
+                                    </td>
+                                    <td className="numeric">
+                                      {money(r.requiredDaily)}
+                                    </td>
+                                    </>}
+                                    <td>
+                                      <Pill>{r.status}</Pill>
+                                    </td>
+                                    <td>
+                                      {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} onClick={() => { setCoop(`${r.central}:${r.cooperative}`); setLevel("cooperative"); setExpandedPaKey(`${dataset?.year}:${r.central}:${r.cooperative}`); }}>Ver PAs</button>}
+                                      <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
+                                        onClick={() => { setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
+                                      <button
+                                        className="icon-button"
+                                        aria-label={`Detalhar ${r.name}`}
+                                        onClick={() => setSelected(r)}
+                                      >
+                                        <ChevronRight size={18} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {!displayed.length && (
+                          <p className="empty">Nenhum registro encontrado.</p>
+                        )}
+                        <div className="pagination">{displayed.length} unidades exibidas · exportação inclui a seleção completa</div>
+                      </section>
+                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
+              {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
+                      <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">
                         <div className="panel chart-panel">
                           <div className="panel-heading">
@@ -1600,144 +1719,14 @@ export default function Dashboard() {
                           </div>
                         </div>
                       </section>
-                      <section className="panel table-panel">
-                        <div className="panel-heading table-heading">
-                          <div>
-                            <h2>
-                              {actualLevel === "pa"
-                                ? "Cadência por PA"
-                                : actualLevel === "central"
-                                  ? "Resultado por central"
-                                  : "Resultado por cooperativa"}
-                            </h2>
-                            <p>{displayed.length} de {analyses.length} unidades · todas na mesma página</p>
-                          </div>
-                          <div className="table-controls">
-                            <select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                              <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
-                            </select>
-                            {effectiveSource === "base" && (
-                              <label className="sr-only-label">
-                                <span>Agrupar por</span>
-                                <select
-                                  value={level}
-                                  onChange={(e) => setLevel(e.target.value)}
-                                >
-                                  <option value="cooperative">
-                                    Cooperativas
-                                  </option>
-                                  <option value="central">Centrais</option>
-                                </select>
-                              </label>
-                            )}
-                            <label className="search-input">
-                              <Search size={17} />
-                              <input
-                                aria-label="Buscar cooperativa ou PA"
-                                placeholder="Buscar nome ou código"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                        <div className="table-scroll">
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>
-                                  {actualLevel === "pa"
-                                    ? "PA / Cooperativa"
-                                    : actualLevel === "central"
-                                      ? "Central"
-                                      : "Cooperativa"}
-                                </th>
-                                <th className="numeric">Meta</th>
-                                <th className="numeric">Realizado</th>
-                                <th>Atingimento</th>
-                                <th className="numeric">Projeção</th>
-                                <th className="numeric">Necessário/dia</th>
-                                <th>Situação</th>
-                                <th>
-                                  <span className="sr-only">Detalhes</span>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {displayed.map((r) => (
-                                  <tr key={r.key}>
-                                    <td>
-                                      <button
-                                        className="entity-button"
-                                        onClick={() => setSelected(r)}
-                                      >
-                                        <strong>
-                                          {r.name.replace(
-                                            /^SICOOB\s*-?\s*/i,
-                                            "",
-                                          )}
-                                        </strong>
-                                        <small>
-                                          {actualLevel === "central"
-                                            ? r.central
-                                            : `${r.cooperative}${r.pa != null ? ` · PA ${r.pa} · ${r.group}` : ""} · ${centralOptions.find(([id])=>id===r.central)?.[1] ?? centralName(r.central)}`}
-                                        </small>
-                                      </button>
-                                    </td>
-                                    <td className="numeric">
-                                      {money(r.target)}
-                                    </td>
-                                    <td className="numeric">
-                                      {money(r.actual)}
-                                    </td>
-                                    <td>
-                                      <div className="attainment">
-                                        <strong>{percent(r.attainment)}</strong>
-                                        <span className="mini-progress">
-                                          <i
-                                            style={{
-                                              width: `${Math.max(0, Math.min(100, (r.attainment ?? 0) * 100))}%`,
-                                            }}
-                                          />
-                                        </span>
-                                      </div>
-                                    </td>
-                                    <td className="numeric">
-                                      {money(r.projected)}
-                                      <small className="cell-note">
-                                        {percent(r.projectedAttainment)} da meta
-                                      </small>
-                                    </td>
-                                    <td className="numeric">
-                                      {money(r.requiredDaily)}
-                                    </td>
-                                    <td>
-                                      <Pill>{r.status}</Pill>
-                                    </td>
-                                    <td>
-                                      {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} onClick={() => { setCoop(`${r.central}:${r.cooperative}`); setLevel("cooperative"); }}>Ver PAs</button>}
-                                      <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
-                                        onClick={() => { setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
-                                      <button
-                                        className="icon-button"
-                                        aria-label={`Detalhar ${r.name}`}
-                                        onClick={() => setSelected(r)}
-                                      >
-                                        <ChevronRight size={18} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {!displayed.length && (
-                          <p className="empty">Nenhum registro encontrado.</p>
-                        )}
-                        <div className="pagination">{displayed.length} unidades exibidas · exportação inclui a seleção completa</div>
-                      </section>
+                      </details>
                     </>
                   )}
+                  <details className="progressive-panel"><summary>Insights para atuação</summary>
+                  <section className="decision-insights" aria-label="Informações para decidir">
+                    {insights.slice(0,3).map((insight) => <article className={`panel insight ${insight.tone}`} key={insight.title}><h3>{insight.title}</h3><p>{insight.detail}</p></article>)}
+                  </section>
+                  </details>
                 </>
               )}
               <footer className="method-footer">
@@ -1885,11 +1874,11 @@ export default function Dashboard() {
                 </caption>
                 <thead>
                   <tr>
-                    <th>Mês</th>
-                    <th className="numeric">Meta</th>
-                    <th className="numeric">Realizado</th>
-                    <th className="numeric">Atingimento</th>
-                    <th>Posição</th>
+                    <th scope="col">Mês</th>
+                    <th scope="col" className="numeric">Meta</th>
+                    <th scope="col" className="numeric">Realizado</th>
+                    <th scope="col" className="numeric">Atingimento</th>
+                    <th scope="col">Posição</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2297,9 +2286,9 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
           <table>
             <thead>
               <tr>
-                <th>Mês</th>
-                <th className="numeric">Meta</th>
-                <th className="numeric">Realizado</th>
+                <th scope="col">Mês</th>
+                <th scope="col" className="numeric">Meta</th>
+                <th scope="col" className="numeric">Realizado</th>
               </tr>
             </thead>
             <tbody>

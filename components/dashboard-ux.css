@@ -26,3 +26,6 @@
 @media(max-width:1100px){.workspace-content .filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){.workspace-content .filters{grid-template-columns:repeat(2,minmax(0,1fr));padding:14px}.workspace-content .page-heading{gap:12px}.workspace-content .page-heading h1{font-size:27px}.workspace-content .workspace-toolbar{gap:8px;flex-wrap:wrap}.workspace-content .workspace-toolbar>span{width:auto;margin-left:0}.progressive-panel>summary{padding:15px}.workspace-content .table-controls>select,.workspace-content .table-controls>label{flex-basis:135px;max-width:none}.workspace-content .position-line>span:last-child{display:none}}
 @media(prefers-reduced-motion:reduce){.workspace-content *{scroll-behavior:auto!important}}
+
+/* Bounded checkbox overrides the generic full-width form input rule. */
+.workspace-content .table-controls .indicator-toggle input[type="checkbox"]{width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;margin:0;accent-color:var(--sicoob-dark)}

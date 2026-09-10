@@ -43,11 +43,14 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     const comparison=page.getByRole('region',{name:'Comparativo entre anos',exact:true});
     await expect(comparison.getByRole('combobox',{name:'Comparar 2026 com',exact:true})).toHaveValue('2025');
     await expect(comparison).toContainText('JAN a AGO');
-    await expect(comparison.locator('tbody tr')).toHaveCount(2);
+    await expect(comparison.getByLabel('Dashboard comparativo',{exact:true})).toBeVisible();
+    await expect(comparison.locator('.comparison-unit-table')).toBeHidden();
+    await comparison.locator('summary').filter({hasText:'Detalhar por unidade'}).click();
+    await expect(comparison.locator('.comparison-unit-table tbody tr')).toHaveCount(2);
     await expect(comparison).toContainText('Somente no cadastro de 2026');
     await comparison.getByLabel('Somente unidades presentes nos dois anos').check();
-    await expect(comparison.locator('tbody tr')).toHaveCount(1);
-    await expect(comparison.locator('tbody')).toContainText('100%');
+    await expect(comparison.locator('.comparison-unit-table tbody tr')).toHaveCount(1);
+    await expect(comparison.locator('.comparison-unit-table tbody')).toContainText('100%');
     expect(errors).toEqual([]);
   });
   test('texts: editable channels, optional private default, restore and disable persistence',async({page})=>{
