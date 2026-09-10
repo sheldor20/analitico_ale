@@ -2,9 +2,9 @@ import { portfolioFixture } from '../portfolio-fixture.mjs';
 export function registerScenarioTests({test,expect,setup,composer,owner,created}) {
   test('network: overview cooperative PAs, summary, descending sorts and responsive layout',async({page},testInfo)=>{
     const {errors}=await setup(page);
-    await page.getByLabel('Central',{exact:true}).selectOption('1002');
-    await page.getByLabel('Período',{exact:true}).selectOption('month');
-    await page.getByLabel('Mês de referência',{exact:true}).selectOption('7');
+    await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
+    await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
+    await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
     await expect(page.getByRole('region',{name:'Resumo da rede filtrada'})).toContainText('2');
     await page.getByLabel('Ordenar análise').selectOption('attainment-desc');
     const table=page.locator('.table-panel tbody');
@@ -36,18 +36,18 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
       await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify((route.request().headers().accept||'').includes('vnd.pgrst.object')?filtered[0]||null:filtered)});
     });
     await page.getByRole('button',{name:'Recarregar cadastro salvo',exact:true}).click();
-    await page.getByLabel('Central',{exact:true}).selectOption('1002');
-    await page.getByLabel('Período',{exact:true}).selectOption('ytd');
-    await page.getByLabel('Mês de referência',{exact:true}).selectOption('7');
+    await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
+    await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('ytd');
+    await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
     await page.getByRole('button',{name:'Comparar anos',exact:true}).click();
     const comparison=page.getByRole('region',{name:'Comparativo entre anos',exact:true});
-    await expect(comparison.getByLabel('Comparar 2026 com')).toHaveValue('2025');
+    await expect(comparison.getByRole('combobox',{name:'Comparar 2026 com',exact:true})).toHaveValue('2025');
     await expect(comparison).toContainText('JAN a AGO');
     await expect(comparison.locator('tbody tr')).toHaveCount(2);
     await expect(comparison).toContainText('Somente no cadastro de 2026');
     await comparison.getByLabel('Somente unidades presentes nos dois anos').check();
     await expect(comparison.locator('tbody tr')).toHaveCount(1);
-    await expect(comparison.locator('tbody')).toContainText('100,0%');
+    await expect(comparison.locator('tbody')).toContainText('100%');
     expect(errors).toEqual([]);
   });
   test('texts: editable channels, optional private default, restore and disable persistence',async({page})=>{

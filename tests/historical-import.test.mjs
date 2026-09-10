@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import { parseWorkbook, combineImports } from '../lib/importer.mjs';
-import { initializeRegistry, mergeProduction } from '../lib/registry.mjs';
+import { initializeRegistry, mergeProduction, upsertEntity } from '../lib/registry.mjs';
 import { analyze, MONTHS } from '../lib/analytics.mjs';
 const config={year:2025,vnCutoff:'2025-12-31',arCutoff:'2025-12-31',cadenceCutoff:'2025-12-31'};
 async function workbook({monthly=200,annual=2400,seasonal=false,missing=false}={}) {
@@ -27,4 +27,13 @@ test('fixed 2026 policy is only applied to prior years when explicitly selected'
 });
 test('annual-only historical goal distributes cents without loss',async()=>{
  const part=await parseWorkbook(await workbook({monthly:null,annual:1000.01}),'historico.xlsx',config);assert.equal(Math.round(part.rows[0].targets.reduce((sum,value)=>sum+value,0)*100),100001);
+});
+
+test('historic group changes preserve explicit imported goals rather than applying a newer policy',async()=>{
+ const part=await parseWorkbook(await workbook(),'historico.xlsx',config);
+ const dataset=mergeProduction(null,combineImports([part],config));
+ const entity=dataset.registry.entities.find(value=>value.kind==='pa');
+ const changed=upsertEntity(dataset,{...entity,group:'P5'},entity.id);
+ assert.equal(changed.rows[0].targets[0],200);assert.equal(changed.rows[0].annualTarget,2400);
+ assert.equal(changed.rows[0].group,'P5');assert.equal(dataset.rows[0].group,'P1');
 });

@@ -27,7 +27,7 @@ export function useMessageCustomization({ owner, kind, metric, contextKey, unit,
   const key = `${scope}:${contextKey}`;
   const values = edited?.key === key ? edited : { key, email: standard?.enabled ? standard.email_template : DEFAULT_MESSAGE_TEMPLATE, whatsapp: standard?.enabled ? standard.whatsapp_template : DEFAULT_MESSAGE_TEMPLATE, enabled: standard?.enabled || false };
   const context = { unit, year, period };
-  const editError = [values.email, values.whatsapp].some(value => !value.trim()) ? "Preencha o texto dos dois canais ou restaure o texto automático." : [values.email, values.whatsapp].some(value => (value.match(/\{\{cenario\}\}/g) || []).length > 1) ? "Use {{cenario}} apenas uma vez em cada canal." : "";
+  const editError = [values.email, values.whatsapp].some(value => value.length > 12000) ? "O texto de cada canal deve ter até 12 mil caracteres. Use {{cenario}} para inserir automaticamente um cenário extenso." : [values.email, values.whatsapp].some(value => !value.trim()) ? "Preencha o texto dos dois canais ou restaure o texto automático." : [values.email, values.whatsapp].some(value => (value.match(/\{\{cenario\}\}/g) || []).length > 1) ? "Use {{cenario}} apenas uma vez em cada canal." : "";
   const safeEmail = editError ? DEFAULT_MESSAGE_TEMPLATE : values.email;
   const safeWhatsapp = editError ? DEFAULT_MESSAGE_TEMPLATE : values.whatsapp;
   const message = baseMessage ? { ...baseMessage, text: applyMessageTemplate(safeEmail, baseMessage.text, context), html: templateHtml(safeEmail, baseMessage.html, context) } : null;

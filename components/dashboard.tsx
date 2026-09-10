@@ -444,7 +444,7 @@ export default function Dashboard() {
       );
       if (dataset && !historical) sessionYears.current.set(dataset.year, dataset);
       let current = !historical && dataset?.year === config.year ? dataset : sessionYears.current.get(config.year) ?? null;
-      let revision = current ? workspaceRevision : null;
+      let revision = !historical && dataset?.year === config.year ? workspaceRevision : null;
       if (user && (!current || revision === null)) {
         const saved = await loadWorkspace(user.id, config.year);
         if (saved) { current = initializeRegistry(saved.dataset); revision = saved.revision; }
@@ -1468,7 +1468,7 @@ export default function Dashboard() {
                         <div>
                           <h2>Prioridades para atingir a meta</h2>
                           <p>
-                            Ordem pelo maior GAP projetado em reais. Abra uma
+                            Ordem conforme o critério selecionado. Abra uma
                             ação para definir responsável e prazo.
                           </p>
                         </div>
@@ -1862,9 +1862,9 @@ export default function Dashboard() {
             <div className="detail-meta">
               {selected.source === "cadence" && (
                 <>
-                  Grupo {selected.group} · Meta fixa mensal:{" "}
-                  {money(paTargetForGroup(selected.group)?.monthly)} · Meta fixa
-                  anual: {money(paTargetForGroup(selected.group)?.annual)} ·{" "}
+                  Grupo {selected.group} · Meta cadastrada em {MONTHS[month]}:{" "}
+                  {money(selected.targets[month])} · Meta anual cadastrada:{" "}
+                  {money(selected.annualTarget)} ·{" "}
                 </>
               )}
               Meta esperada até o corte: {money(selected.expected)} · GAP
