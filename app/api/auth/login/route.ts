@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     if (error || !data.user || data.user.is_anonymous) return failure(error?.status === 429 ? 429 : 401, error?.status === 429 ? 60 : undefined);
     const access = await client.rpc('commercial_session_allowed');
     if (access.error || access.data !== true) { await client.auth.signOut({ scope: 'local' }); return failure(); }
+    attempts.entries.delete(key); // A successful login resets consecutive failures.
     // Session cookies are set by the official SSR adapter. No token is returned in JSON.
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch { return failure(503); }

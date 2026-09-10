@@ -1,4 +1,5 @@
 "use client";
+import { readWorkbookFile } from "@/lib/xlsx-safety.mjs";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Activity,
@@ -448,7 +449,7 @@ export default function Dashboard() {
       const parts = [];
       for (const [expectedSource, file] of selectedFiles) {
         const parsed = await parseWorkbook(
-          await file.arrayBuffer(),
+          await readWorkbookFile(file),
           file.name,
           { ...config, allowedCentrals,
             ...(importMode === "fixed" ? { vnCutoff: `${config.year}-01-01`, arCutoff: `${config.year}-01-01`, cadenceCutoff: `${config.year}-01-01` } : {}) },
