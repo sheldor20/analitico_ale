@@ -1,32 +1,50 @@
-name: Prepare isolated UX workbench
+name: Validate UX integration
 on:
   push:
     branches: [ux/cenarios-intuitivos-comparativo-visual]
-    paths: [.github/workflows/ux-workbench.yml]
+    paths: [scripts/refine-dashboard.py, scripts/refine-scenarios.py, .github/workflows/ux-workbench.yml, components/comparison-dashboard.tsx, components/dashboard-ux.css, components/scenario-panels.module.css, lib/comparison-dashboard.mjs, tests/comparison-dashboard.test.mjs, tests/browser/ux-cases.mjs]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: ux-refinement-integration
+  cancel-in-progress: true
 jobs:
-  prepare:
+  validate:
+    if: github.repository == 'sheldor20/analitico_ale'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://portfolio-test.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: synthetic-public-test-key
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: ux/cenarios-intuitivos-comparativo-visual
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+      - run: python3 scripts/refine-dashboard.py && python3 scripts/refine-scenarios.py
       - run: npm ci --no-audit --no-fund
-      - name: Package tracked source and locked dependencies without credentials
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config tests/browser/playwright.config.mjs
+      - name: Commit integrated source only after all verification succeeds
         run: |
-          git archive --format=tar HEAD > /tmp/ux-source.tar
-          tar -czf /tmp/ux-dependencies.tar.gz node_modules
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add components/dashboard.tsx components/scenario-panels.tsx tests/browser/portfolio.spec.mjs tests/browser/scenario-cases.mjs
+          git diff --cached --quiet || git commit -m 'feat: organize scenarios and reveal visual comparisons on demand'
+          git push origin HEAD:ux/cenarios-intuitivos-comparativo-visual
+          git rev-parse HEAD
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: ux-workbench
-          retention-days: 1
-          compression-level: 0
+          name: ux-verification
+          retention-days: 7
           path: |
-            /tmp/ux-source.tar
-            /tmp/ux-dependencies.tar.gz
+            test-results
+            playwright-report

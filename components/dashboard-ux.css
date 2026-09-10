@@ -1,0 +1,28 @@
+/* Scope refinements to the workspace; dialogs, login, registry and exports retain their own rules. */
+.workspace-content .page-heading{margin-bottom:18px;align-items:center}
+.workspace-content .page-heading h1{font-size:clamp(24px,2.3vw,34px);line-height:1.15;letter-spacing:-.03em}
+.workspace-content .eyebrow{display:none}
+.workspace-content .workspace-toolbar{padding:12px 16px;margin-bottom:16px;align-items:center}
+.workspace-content .workspace-toolbar>label{min-width:130px}
+.workspace-content .workspace-toolbar>.button{min-height:38px;font-size:13px}
+.year-management{position:relative;font-size:13px}.year-management>summary{cursor:pointer;font-weight:600;padding:10px}
+.year-management>div{position:absolute;top:100%;left:0;z-index:10;width:min(330px,75vw);padding:16px;display:grid;gap:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow)}
+.year-management:not([open])>div{display:none}
+.workspace-content .filters{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;padding:16px}
+.workspace-content .position-line{margin:12px 0;font-size:12px}
+.workspace-content .kpi-grid{gap:12px;margin:16px 0}
+.workspace-content .kpi{padding:18px}.workspace-content .kpi .kpi-value{font-size:clamp(22px,2vw,30px)}
+.workspace-content .table-controls{gap:10px}.workspace-content .table-controls .indicator-toggle{display:flex;align-items:center;gap:8px;flex:0 1 150px;font-size:13px;white-space:normal}
+.indicator-toggle input{width:16px;height:16px;min-height:16px;margin:0;accent-color:var(--sicoob-dark)}
+.progressive-panel{margin:16px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);min-width:0}
+.progressive-panel>summary{font-size:14px;font-weight:650;padding:17px 20px;cursor:pointer;color:var(--ink)}
+.progressive-panel[open]>summary{border-bottom:1px solid var(--line);margin-bottom:14px}
+.progressive-panel>.chart-grid,.progressive-panel>.decision-insights,.progressive-panel>.audit-top{margin:0;padding:0 16px 16px}
+.progressive-panel:not([open])>:not(summary){display:none!important}
+.progressive-panel .panel{box-shadow:none}
+.action-controls{margin:0 0 18px}.action-panel .action-card{padding:16px}.action-panel .action-card p{margin:6px 0;font-size:13px}.action-panel .action-card small{font-size:12px}
+.simulation-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--green-light);border-radius:10px;padding:8px 14px;font-size:13px}
+.workspace-content .method-footer{margin-top:18px;font-size:12px}
+@media(max-width:1100px){.workspace-content .filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.workspace-content .filters{grid-template-columns:repeat(2,minmax(0,1fr));padding:14px}.workspace-content .page-heading{gap:12px}.workspace-content .page-heading h1{font-size:27px}.workspace-content .workspace-toolbar{gap:8px;flex-wrap:wrap}.workspace-content .workspace-toolbar>span{width:auto;margin-left:0}.progressive-panel>summary{padding:15px}.workspace-content .table-controls>select,.workspace-content .table-controls>label{flex-basis:135px;max-width:none}.workspace-content .position-line>span:last-child{display:none}}
+@media(prefers-reduced-motion:reduce){.workspace-content *{scroll-behavior:auto!important}}
