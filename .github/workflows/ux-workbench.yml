@@ -2,7 +2,7 @@ name: Validate UX integration
 on:
   push:
     branches: [ux/cenarios-intuitivos-comparativo-visual]
-    paths: [scripts/refine-dashboard.py, scripts/refine-scenarios.py, .github/workflows/ux-workbench.yml, components/comparison-dashboard.tsx, components/dashboard-ux.css, components/scenario-panels.module.css, lib/comparison-dashboard.mjs, tests/comparison-dashboard.test.mjs, tests/browser/ux-cases.mjs]
+    paths: [scripts/refine-dashboard.py, scripts/refine-scenarios.py, scripts/refine-ux-accessibility.py, .github/workflows/ux-workbench.yml, components/comparison-dashboard.tsx, components/dashboard-ux.css, components/scenario-panels.module.css, lib/comparison-dashboard.mjs, tests/comparison-dashboard.test.mjs, tests/browser/ux-cases.mjs]
 permissions:
   contents: write
 concurrency:
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: python3 scripts/refine-dashboard.py && python3 scripts/refine-scenarios.py
+      - run: python3 scripts/refine-dashboard.py && python3 scripts/refine-scenarios.py && python3 scripts/refine-ux-accessibility.py
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run check
@@ -36,7 +36,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add components/dashboard.tsx components/scenario-panels.tsx tests/browser/portfolio.spec.mjs tests/browser/scenario-cases.mjs
+          git add components/dashboard.tsx components/scenario-panels.tsx components/dashboard-ux.css components/scenario-panels.module.css tests/browser/portfolio.spec.mjs tests/browser/scenario-cases.mjs
           git diff --cached --quiet || git commit -m 'feat: organize scenarios and reveal visual comparisons on demand'
           git push origin HEAD:ux/cenarios-intuitivos-comparativo-visual
           git rev-parse HEAD
