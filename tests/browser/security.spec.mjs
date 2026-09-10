@@ -41,18 +41,29 @@ test('CSRF, unsupported content and oversized credential payloads are rejected',
   expect((await post(request,{email:'x@example.com',password:'x'.repeat(5000)})).status()).toBe(400);
   expect((await request.post('/api/auth/login',{data:'{',headers:{origin,'content-type':'application/json'}})).status()).toBe(400);
 });
-test('correct login uses server cookies; logout invalidates replay of the old session',async({request})=>{
-  const r=await post(request);expect(r.status()).toBe(200);expect(await r.json()).toEqual({ok:true});
-  const cookies=(await request.storageState()).cookies;expect(cookies.some(c=>c.name.startsWith('sb-')&&c.secure&&c.sameSite==='Lax')).toBe(true);
-  const session=await request.get('/api/auth/session');expect(session.status()).toBe(200);expect((await session.json()).userId).toBe('00000000-0000-0000-0000-000000000001');
-  expect((await request.get('/',{maxRedirects:0})).status()).toBe(200);
-  // Synthetic token only: exercise provider revocation without printing it or using production accounts.
+test('correct login uses server cookies; logout invalidates replay of the old session',async({page})=>{
+  // Chromium recognizes loopback as a trustworthy origin for Secure cookies.
+  // Keep production cookie flags intact instead of weakening them for Node's HTTP cookie jar.
+  await page.goto('/login');
+  await page.getByLabel('E-mail',{exact:true}).fill(loginData.email);
+  await page.getByLabel('Senha',{exact:true}).fill(loginData.password);
+  const pending=page.waitForResponse(r=>r.url().endsWith('/api/auth/login')&&r.request().method()==='POST');
+  await page.getByRole('button',{name:'Entrar',exact:true}).click();
+  const r=await pending;expect(r.status()).toBe(200);expect(await r.json()).toEqual({ok:true});
+  await expect(page).toHaveURL(`${origin}/`);
+  const cookies=await page.context().cookies();
+  expect(cookies.some(c=>c.name.startsWith('sb-')&&c.secure&&c.sameSite==='Lax')).toBe(true);
+  const session=await page.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store'});return {status:r.status,body:await r.json()};});
+  expect(session.status).toBe(200);expect(session.body.userId).toBe('00000000-0000-0000-0000-000000000001');
+  // Capture synthetic bytes only to test replay after provider-side revocation, never print them.
   const chunks=cookies.filter(c=>/^sb-127-auth-token(?:\.\d+)?$/.test(c.name)).sort((a,b)=>a.name.localeCompare(b.name));
   const packed=decodeURIComponent(chunks.map(c=>c.value).join(''));
   const payload=JSON.parse(packed.startsWith('base64-')?Buffer.from(packed.slice(7),'base64url').toString():packed);
-  const revoke=await request.post('http://127.0.0.1:4600/auth/v1/logout',{headers:{authorization:`Bearer ${payload.access_token}`}});expect(revoke.status()).toBe(200);
-  expect((await request.get('/api/auth/session')).status()).toBe(401);
-  expect((await request.get('/',{maxRedirects:0})).status()).toBe(307);
+  const revoke=await page.request.post('http://127.0.0.1:4600/auth/v1/logout',{headers:{authorization:`Bearer ${payload.access_token}`}});expect(revoke.status()).toBe(200);
+  const headers={cookie:chunks.map(c=>`${c.name}=${c.value}`).join('; ')};
+  expect((await page.request.get('/api/auth/session',{headers})).status()).toBe(401);
+  expect((await page.request.get('/',{headers,maxRedirects:0})).status()).toBe(307);
+  await page.reload();await expect(page).toHaveURL(`${origin}/login`);
 });
 test('controlled password guessing is throttled without locking a real account',async({request})=>{
   const data={email:'invalid-only-test@example.com',password:'not-a-real-password'};
