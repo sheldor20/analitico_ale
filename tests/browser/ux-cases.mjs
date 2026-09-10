@@ -29,7 +29,10 @@ export function registerUxTests({test,expect,setup,owner,created}) {
  test('UX: actions and audit exclude unrelated comparisons; hidden simulation stays explicit',async({page},testInfo)=>{
   const {errors}=await setup(page);
   await page.locator('summary').filter({hasText:'Evolução e simulação'}).click();
-  await page.getByLabel('Simular aumento de ritmo').fill('25');
+  await page.getByLabel('Simular aumento de ritmo').focus();
+  await page.keyboard.press('Home');
+  for(let step=0;step<5;step++)await page.keyboard.press('ArrowRight');
+  await expect(page.getByLabel('Simular aumento de ritmo')).toHaveValue('25');
   await page.locator('summary').filter({hasText:'Evolução e simulação'}).click();
   await expect(page.getByText('Simulação de ritmo +25% ativa · somente projeções',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Limpar simulação',exact:true}).click();
