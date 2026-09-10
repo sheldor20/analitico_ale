@@ -194,9 +194,9 @@ test("insights weight attainment by targets and preserve gaps despite consolidat
   const insights = buildDecisionInsights(analyses);
   const weighted = insights.find((item) => item.title === "Atingimento ponderado");
   assert.match(weighted.detail, /110%/);
-  assert.match(weighted.detail, /ainda deixa unidades com saldo individual/);
+  assert.match(weighted.detail, /ainda deixa unidades com GAP individual/);
   assert.equal(weighted.tone, "neutral");
-  assert.match(insights.find((item) => item.title === "Concentração do saldo").detail, /PA 2/);
+  assert.match(insights.find((item) => item.title === "Concentração do GAP").detail, /PA 2/);
 });
 
 test("insights flag actual zero only in observed active periods", () => {
@@ -215,7 +215,7 @@ test("insights show the top three share of the individual gap", () => {
   const analyses = [100, 200, 300, 400].map((actual, index) =>
     analyze(pa({ pa: String(index + 1), actuals: Array(12).fill(actual) }), { year: 2026, month: 8, period: "month" }),
   );
-  const gapInsight = buildDecisionInsights(analyses).find((item) => item.title === "Concentração do saldo");
+  const gapInsight = buildDecisionInsights(analyses).find((item) => item.title === "Concentração do GAP");
   assert.match(gapInsight.detail, /85,7%/);
   assert.doesNotMatch(gapInsight.detail, /PA 4/);
 });
@@ -243,9 +243,9 @@ test("central aggregates identify the central instead of the first cooperative",
   assert.match(draft.body, /Acompanhamento das Centrais/);
   assert.match(draft.body, /de 1 central com meta atingida ou em rota/);
   assert.match(draft.body, /todas as centrais atinjam 100%/);
-  assert.match(plain(draft.body), /1002 · Sicoob Central Bahia: saldo R\$ 1\.600,00/);
+  assert.match(plain(draft.body), /1002 · Sicoob Central Bahia: GAP R\$ 1\.600,00/);
   assert.doesNotMatch(draft.body, /PRIMEIRA COOPERATIVA|SEGUNDA COOPERATIVA/);
-  const concentration = buildDecisionInsights(analyses).find((item) => item.title === "Concentração do saldo");
+  const concentration = buildDecisionInsights(analyses).find((item) => item.title === "Concentração do GAP");
   assert.match(concentration.detail, /1002 · Sicoob Central Bahia/);
   assert.doesNotMatch(concentration.detail, /PRIMEIRA COOPERATIVA|SEGUNDA COOPERATIVA/);
 });

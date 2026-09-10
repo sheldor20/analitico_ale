@@ -8,7 +8,7 @@ const A = '00000000-0000-0000-0000-000000000001', B = '00000000-0000-0000-0000-0
 test('dashboard migration preserves legacy drafts, validates v2 and retains RLS and immutability', async () => {
   const db = new PGlite();
   try {
-    await db.exec(`create schema auth; create role anon; create role authenticated;
+    await db.exec(`create schema auth; create role anon; create role authenticated; create role service_role;
       create table auth.users(id uuid primary key);
       create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
       grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;
