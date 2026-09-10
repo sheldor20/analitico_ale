@@ -41,6 +41,11 @@ test('CSRF, unsupported content and oversized credential payloads are rejected',
   expect((await post(request,{email:'x@example.com',password:'x'.repeat(5000)})).status()).toBe(400);
   expect((await request.post('/api/auth/login',{data:'{',headers:{origin,'content-type':'application/json'}})).status()).toBe(400);
 });
+test('successful login JSON contains no tokens, passwords or account details',async({request})=>{
+  const response=await post(request);expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ok:true});
+  expect(response.headers()['cache-control']).toContain('no-store');
+});
 test('correct login uses server cookies; logout invalidates replay of the old session',async({page})=>{
   // Chromium recognizes loopback as a trustworthy origin for Secure cookies.
   // Keep production cookie flags intact instead of weakening them for Node's HTTP cookie jar.
@@ -49,7 +54,8 @@ test('correct login uses server cookies; logout invalidates replay of the old se
   await page.getByLabel('Senha',{exact:true}).fill(loginData.password);
   const pending=page.waitForResponse(r=>r.url().endsWith('/api/auth/login')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Entrar',exact:true}).click();
-  const r=await pending;expect(r.status()).toBe(200);expect(await r.json()).toEqual({ok:true});
+  expect((await pending).status()).toBe(200);
+  // The form navigates immediately; response-body assertions belong to the API test above.
   await expect(page).toHaveURL(`${origin}/`);
   const cookies=await page.context().cookies();
   expect(cookies.some(c=>c.name.startsWith('sb-')&&c.secure&&c.sameSite==='Lax')).toBe(true);
