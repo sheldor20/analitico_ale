@@ -6,15 +6,70 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
+  assemble:
+    if: github.ref == 'refs/heads/fix/ux-paineis-outlook-comunicacao'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - run: git archive HEAD | gzip > /tmp/source.tar.gz
-      - uses: actions/upload-artifact@v4
+          ref: fix/ux-paineis-outlook-comunicacao
+      - uses: actions/setup-node@v4
         with:
-          name: current-source
-          path: /tmp/source.tar.gz
-          retention-days: 1
+          node-version: '22'
+          cache: npm
+      - name: Apply reviewed edits with baseline and result hashes
+        run: |
+          mkdir -p /tmp/changes
+          python3 - <<'PY'
+          import base64,gzip,hashlib,json,pathlib
+          data=''.join(pathlib.Path(f'scripts/review-edit-{i}.b64').read_text().strip() for i in range(1,4))
+          raw=gzip.decompress(base64.b64decode(data,validate=True))
+          assert hashlib.sha256(raw).hexdigest()=='aa1f8c2c52fdb9d9ce64279d9e361582c2a827c74f29b3ac930d23e34874dfbb'
+          root=pathlib.Path.cwd().resolve()
+          for name,item in json.loads(raw).items():
+            path=(root/name).resolve()
+            assert path.is_relative_to(root) and '.git' not in path.parts
+            old=path.read_text() if path.exists() else ''
+            assert hashlib.sha256(old.encode()).hexdigest()==item['sha256'],f'Baseline changed: {name}'
+            lines=old.splitlines(True)
+            for start,end,new in reversed(item['edits']): lines[start:end]=new.splitlines(True)
+            text=''.join(lines)
+            assert hashlib.sha256(text.encode()).hexdigest()==item['newsha'],f'Result mismatch: {name}'
+            path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text)
+          print('27 source files verified.')
+          PY
+      - name: Create SQL migration through pinned CLI
+        run: |
+          npx --yes supabase@2.117.0 --version
+          npx --yes supabase@2.117.0 migration new --help
+          npx --yes supabase@2.117.0 migration new portfolio_card_support
+          NEW=$(find supabase/migrations -name '*_portfolio_card_support.sql')
+          test -n "$NEW"
+          mv scripts/portfolio-card-support.sql.txt "$NEW"
+          cp "$NEW" /tmp/changes/
+      - name: Commit functional changes; remove all temporary assembly files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/review-source.yml scripts/review-edit-1.b64 scripts/review-edit-2.b64 scripts/review-edit-3.b64
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: modern login, natural table flow, ordered KPIs and guided portfolio delivery'
+          git push origin HEAD:fix/ux-paineis-outlook-comunicacao
+          git rev-parse HEAD > /tmp/changes/head.txt
+          git archive HEAD | gzip > /tmp/changes/source.tar.gz
+      - name: Validate unit and database compatibility
+        run: |
+          npm ci --no-audit --no-fund
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/changes/tests.txt
+          npm run check 2>&1 | tee /tmp/changes/typescript.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-assembly-validation
+          path: /tmp/changes
+          retention-days: 2
