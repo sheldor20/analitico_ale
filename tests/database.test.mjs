@@ -1,3 +1,4 @@
+import { installAuthFixture } from './auth-db-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -14,6 +15,7 @@ test("migration executes in PostgreSQL; user isolation, immutable imports, dedup
       grant usage on schema auth to authenticated,anon;
       grant execute on function auth.uid() to authenticated,anon;
       insert into auth.users values ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');`);
+    await installAuthFixture(db);
     const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
     const migrations = (await readdir(migrationDirectory))
       .filter((file) => file.endsWith(".sql"))

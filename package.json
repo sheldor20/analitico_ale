@@ -14,19 +14,20 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "^2.57.4",
+    "exceljs": "4.4.0",
+    "lucide-react": "^0.577.0",
     "next": "16.3.4",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "exceljs": "4.4.0",
-    "@supabase/supabase-js": "^2.57.4",
-    "lucide-react": "^0.577.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "@electric-sql/pglite": "^0.3.14",
     "@types/node": "^22.18.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@electric-sql/pglite": "^0.3.14"
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "exceljs": {

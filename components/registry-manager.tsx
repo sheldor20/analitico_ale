@@ -198,14 +198,14 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
           {deleting ? <div className="registry-delete-confirm" role="alertdialog" aria-labelledby="registry-delete-title" aria-describedby="registry-delete-description">
             <h3 id="registry-delete-title">Excluir {selected.name}?</h3><p id="registry-delete-description">Serão removidos deste cadastro de {dataset.year}: esta unidade{descendants.length ? `, ${descendants.filter((entity) => entity.kind === "cooperative").length} cooperativas e ${descendants.filter((entity) => entity.kind === "pa").length} PAs vinculados` : ""}, além de {affectedRows} registros de metas e produção. Os acumulados serão recalculados. Esta alteração não pode ser desfeita nesta tela.</p><div className="registry-actions"><button type="button" className="button secondary" onClick={() => setDeleting(false)} disabled={locked}>Manter cadastro</button><button type="button" className="button registry-danger" disabled={locked} onClick={confirmDelete}><Trash2 size={17} /> Confirmar exclusão</button></div>
           </div> : <>
-            <ResponsibleManager key={`${selected.id}:${dataset.year}`} entity={selected} year={dataset.year} disabled={locked} />
+            <details className="registry-responsibles progressive-panel" key={`responsibles:${selected.id}:${dataset.year}`}><summary>Responsáveis e contatos</summary><ResponsibleManager key={`${selected.id}:${dataset.year}`} entity={selected} year={dataset.year} disabled={locked} /></details>
             <label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
             <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onSave={async (input) => {
               clearFeedback();
               await persist(upsertPlanRow(normalized, { entityId: selected.id, metric: effectiveMetric, ...input }) as Dataset, "Metas e produção salvas. Todos os períodos e acumulados foram atualizados.");
             }} />
           </>}
-        </> : <div className="empty compact"><Building2 size={30} /><h3>Selecione uma unidade</h3><p>Edite o cadastro, defina as metas anuais e atualize a produção mensal.</p><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={17} /> Nova unidade</button></div>}
+        </> : <div className="empty compact"><Building2 size={30} /><h3>Selecione uma unidade</h3><p>Selecione à esquerda para editar metas, produção ou contatos.</p><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={17} /> Nova unidade</button></div>}
       </div>
     </div>
     {showCommunication && selected && <PortfolioCommunication dataset={normalized} candidates={[selected]} initialKey={selected.id} metric={effectiveMetric} period="ytd" month={Number(defaultCutoff(normalized, effectiveMetric, selected.kind).slice(5, 7)) - 1} onClose={() => setShowCommunication(false)} />}

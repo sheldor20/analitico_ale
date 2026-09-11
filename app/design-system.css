@@ -1,0 +1,31 @@
+/* Portal UI v2 — Sicoob brand tokens remain in globals.css. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-sm: 8px; --radius-md: 12px; --control-height: 42px;
+  --focus-ring: var(--sicoob-purple); --danger: #8b2530; --danger-soft: #fff0f0;
+  --on-dark: #ffffff; --on-dark-muted: #c4dedf; --surface-subtle: #f6f9f9;
+  --line-strong: #adc4c7; --control-shadow: 0 8px 28px #00364112;
+}
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 3px;
+}
+:where(input,select,textarea) { accent-color: var(--sicoob-dark); }
+:where(button,summary) { touch-action: manipulation; }
+:where(.numeric,.kpi-value,.registry-month-total) { font-variant-numeric: tabular-nums; }
+.skip-link { position: fixed; left: 16px; top: -100px; padding: 12px 18px; z-index: 1000; background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); }
+.skip-link:focus { top: 12px; outline: 3px solid var(--focus-ring); }
+[hidden] { display: none !important; }
+/* Keep all account actions named and within the viewport, including 320px phones. */
+@media(max-width:720px) {
+  .main-shell .topbar { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; padding: 12px 16px; }
+  .main-shell .topbar .breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+  .main-shell .topbar .breadcrumb > strong { display: none; }
+  .main-shell .topbar .mobile-brand { width: 96px; margin: 0; }
+  .main-shell .top-actions { display: flex; flex-wrap: wrap; width: 100%; min-width: 0; gap: 8px; }
+  .main-shell .top-actions > .button { flex: 1 1 76px; min-width: 0; min-height: 42px; padding: 9px 6px; font-size: 12px !important; white-space: normal; line-height: 1.25; gap: 5px; }
+  .main-shell .top-actions .quiet span { display: inline; }
+  .main-shell .top-actions svg { flex-shrink: 0; }
+}
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+@media(forced-colors:active) { .pill,.kpi,.button,.nav-item.active { border: 1px solid ButtonText; } }

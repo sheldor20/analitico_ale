@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 export function registerPeriodTests({test,expect,setup,composer}) {
   const select = (root,name) => root.getByRole('combobox',{name,exact:true});
-  const target = page => page.getByRole('region',{name:'Resultado do período',exact:true}).locator('article').first();
+  const target = page => page.getByRole('region',{name:'Resultado do período',exact:true}).getByRole('article',{name:'Meta do período',exact:true});
   test('periods: four explicit quarters, two semesters, annual and automatic YTD across views',async({page},info)=>{
     const {errors}=await setup(page);
     await expect(select(page,'Período').locator('option')).toHaveCount(5);

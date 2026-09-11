@@ -1,3 +1,4 @@
+import { registerPortalV2Tests } from './portal-v2-cases.mjs';
 import { registerPeriodTests } from './period-cases.mjs';
 import { registerUxTests } from './ux-cases.mjs';
 import { registerScenarioTests } from "./scenario-cases.mjs";
@@ -19,9 +20,10 @@ async function setup(page) {
   page.on('pageerror', (error) => errors.push(error.message));
   const names = { 'cooperative:1002:3017': ['Ana Teste', 'ana@example.com'], 'cooperative:1002:3025': ['Bruno Teste','bruno@example.com'], 'central:1002': ['Celia Teste','celia@example.com'], 'pa:1002:3017:0': ['Paula Teste','paula@example.com'] };
   const contacts = dataset.registry.entities.flatMap((entity, index) => names[entity.id] ? [contact(entity, ...names[entity.id], index)] : []);
-  await page.route('https://portfolio-test.supabase.co/**', async (route) => {
+  await page.route('http://127.0.0.1:4600/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname.startsWith('/auth/') || url.pathname === '/rest/v1/rpc/commercial_session_allowed') return route.continue();
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     const answer = (body) => route.fulfill({ status: 200, headers, contentType: 'application/json', body: JSON.stringify(body) });
@@ -56,8 +58,7 @@ async function setup(page) {
     errors.push(`Unexpected test request: ${request.method()} ${url.pathname}`); return answer([]);
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  const login = page.getByRole('dialog', { name: 'Entrar na conta' });
+  const login = page.getByRole('form', { name: 'Entrar na conta' });
   await login.getByLabel('E-mail', { exact: true }).fill(user.email);
   await login.getByLabel('Senha', { exact: true }).fill('Synthetic-only-password-123!');
   await login.getByRole('button', { name: 'Entrar', exact: true }).click();
@@ -178,3 +179,5 @@ registerScenarioTests({ test, expect, setup, composer, owner, created });
 registerUxTests({test,expect,setup,owner,created});
 
 registerPeriodTests({ test, expect, setup, composer });
+
+registerPortalV2Tests({ test, expect, setup });

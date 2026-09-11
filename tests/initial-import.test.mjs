@@ -50,7 +50,8 @@ function imported(rows) {
   );
 }
 
-test("fixed spreadsheet registration keeps targets and imports the initial realized values", () => {
+test("fixed spreadsheet registration keeps targets and imports the initial realized values", (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-10T12:00:00Z') });
   const combined = imported([row()]);
   assert.deepEqual(combined.rows[0].__importActuals, actuals);
   assert.match(combined.rows[0].__importCutoff, /^2026-\d{2}-\d{2}$/);
@@ -75,7 +76,8 @@ test("fixed spreadsheet registration keeps targets and imports the initial reali
   assert.equal("__importCutoff" in registered.rows[0], false);
 });
 
-test("later production-only uploads replace realized values without changing registered goals", () => {
+test("later production-only uploads replace realized values without changing registered goals", (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-10T12:00:00Z') });
   const combined = imported([row()]);
   const registered = mergeProduction(
     createEmptyDataset(2026),
