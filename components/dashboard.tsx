@@ -231,7 +231,7 @@ export default function Dashboard() {
         setWorkspaceRevision(saved.revision);
         setConfig(initializeRegistry(saved.dataset).config);
         setHistorical(false);
-        setNotice("Cadastro fixo recuperado. As alterações serão salvas automaticamente.");
+        setNotice("Cadastro carregado.");
       }
     }).catch((e) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setBusy(""); });
@@ -361,6 +361,7 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [view]);
   function navigate(next: View) {
+    if (next === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     if (next === "registry" && !dataset) setDataset(createEmptyDataset(config.year));
     setView(next);
     setExpandedPaKey("");
@@ -1486,13 +1487,13 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </div>
-                          <MonthlyChart rows={filtered} year={dataset!.year} />
+                          <MonthlyChart rows={visibleLeaves} year={dataset!.year} />
                         </div>
                         <div className="panel pace-panel">
                           <div className="section-label">ROTA PARA A META</div>
                           <div className="route-number">
                             {summary.onTrack}
-                            <span> / {analyses.length}</span>
+                            <span> / {displayed.length}</span>
                           </div>
                           <p>
                             {actualLevel === "pa"
@@ -1505,7 +1506,7 @@ export default function Dashboard() {
                           <div className="route-progress">
                             <span
                               style={{
-                                width: `${analyses.length ? (summary.onTrack / analyses.length) * 100 : 0}%`,
+                                width: `${displayed.length ? (summary.onTrack / displayed.length) * 100 : 0}%`,
                               }}
                             />
                           </div>

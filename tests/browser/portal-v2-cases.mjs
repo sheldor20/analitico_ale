@@ -19,6 +19,11 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('attention');
     await expect(result.getByRole('article', { name: 'Realizado até o corte', exact: true })).toContainText('50,00');
     await page.screenshot({ path: info.outputPath('portal-v2-desktop.png'), fullPage: true });
+    await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('all');
+    await page.getByLabel('Buscar cooperativa ou PA').fill('Beta');
+    await page.locator('summary').filter({ hasText: 'Evolução e simulação' }).click();
+    await expect(page.locator('.route-number')).toHaveText(/1\s*\/\s*1/);
+    await expect(page.locator('.route-progress > span')).toHaveAttribute('style', /width: 100%/);
     expect(errors).toEqual([]);
   });
   test('portal v2: filters preserve values while collapsed and navigation works on small screens', async ({ page }, info) => {
