@@ -1,0 +1,25 @@
+name: UX workbench
+on:
+  push:
+    branches: [ux/portal-design-system-login]
+    paths: [.github/workflows/ux-workbench.yml, scripts/ux-refactor.patch]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export tracked source for review
+        run: |
+          mkdir -p /tmp/ux-source
+          git archive HEAD | gzip > /tmp/ux-source/current.tar.gz
+          git archive origin/security/mandatory-login-and-data-isolation | gzip > /tmp/ux-source/security.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-source
+          path: /tmp/ux-source
+          retention-days: 1
