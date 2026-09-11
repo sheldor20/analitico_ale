@@ -1,4 +1,5 @@
 "use client";
+import { readWorkbookFile } from "@/lib/xlsx-safety.mjs";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Activity,
@@ -19,14 +20,11 @@ import {
   Flag,
   History,
   Info,
-  LayoutDashboard,
   LoaderCircle,
-  LogIn,
   LogOut,
   Mail,
   MessageSquareText,
   Search,
-  ShieldCheck,
   Target,
   TrendingUp,
   Upload,
@@ -60,11 +58,11 @@ import "./dashboard-ux.css";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
 
-type View = "overview" | "cadence" | "actions" | "audit" | "imports" | "registry";
-const VIEW_TITLES: Record<View, string> = {
-  overview: "Visão geral", cadence: "Cadência dos PAs", actions: "Plano de ação",
-  audit: "Conferência da base", imports: "Importações", registry: "Cadastro e metas",
-};
+import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/portal-navigation';
+import Kpi from './ui/metric-card';
+import FilterPanel from './ui/filter-panel';
+import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
+import { clearLocalAuth } from '@/lib/session-cleanup';
 type Analysis = ReturnType<typeof analyze>;
 type SourceFiles = { base: File | null; cadence: File | null };
 const EMPTY_ACTION: ActionState = {
@@ -112,12 +110,13 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedPaKey, setExpandedPaKey] = useState("");
   const [showMoreIndicators, setShowMoreIndicators] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const activeOwner = useRef<string | null>(null);
   const sessionYears = useRef(new Map<number,Dataset>());
   const [uplift, setUplift] = useState(0),
     [selected, setSelected] = useState<Analysis | null>(null),
     [showImport, setShowImport] = useState(false),
-    [showLogin, setShowLogin] = useState(false),
     [showCommunication, setShowCommunication] = useState(false);
   const [user, setUser] = useState<User | null>(null),
     [busy, setBusy] = useState(""),
@@ -145,8 +144,6 @@ export default function Dashboard() {
       arCutoff: "",
       cadenceCutoff: "",
     });
-  const [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
@@ -208,18 +205,17 @@ export default function Dashboard() {
     statusFilter,
   ]);
   useEffect(() => {
-    if (!selected && !showImport && !showLogin && !showCommunication) return;
+    if (!selected && !showImport && !showCommunication) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelected(null);
         setShowImport(false);
-        setShowLogin(false);
         setShowCommunication(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selected, showImport, showLogin, showCommunication]);
+  }, [selected, showImport, showCommunication]);
   useEffect(() => {
     activeOwner.current = user?.id ?? null;
     let cancelled = false;
@@ -301,29 +297,13 @@ export default function Dashboard() {
         ),
     [filtered, actualLevel, dataset, config.year, month, period, uplift],
   );
-  const summary = summarize(analyses);
-  const leafSummary = useMemo(
-    () =>
-      summarize(
-        filtered.map((r) =>
-          analyze(r, {
-            year: dataset?.year ?? config.year,
-            month,
-            period,
-            uplift,
-          }),
-        ),
-      ),
-    [filtered, dataset, config.year, month, period, uplift],
-  );
-  const displayed = sortAnalysis(analyses.filter((r) =>
-    `${r.name} ${r.cooperative} ${r.pa ?? ""}`.toLowerCase().includes(search.toLowerCase()) &&
-    (statusFilter === "all" || (statusFilter === "attention" ? ["Atenção", "Prazo encerrado"].includes(r.status) :
-      statusFilter === "missing" ? !r.complete || r.status === "Sem meta" : ["Em rota", "Meta atingida"].includes(r.status))),
-  ), sortBy);
+  const displayed: Analysis[] = sortAnalysis(filterDashboardRows(analyses, search, statusFilter), sortBy);
+  const summary = summarize(displayed);
+  const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(aggregate(filtered, effectiveSource === 'cadence' ? 'pa' : 'cooperative'), displayed, actualLevel);
+  const leafSummary = summarize(visibleLeaves.map(row => analyze(row, { year: dataset?.year ?? config.year, month, period, uplift })));
   const scenarioFilters = { central, coop, source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
-  const insights = buildDecisionInsights(analyses);
-  const cutoffs = [...new Set(filtered.map((r) => r.cutoff))].sort();
+  const insights = buildDecisionInsights(displayed);
+  const cutoffs = [...new Set(visibleLeaves.flatMap((r) => [r.cutoffMin || r.cutoff, r.cutoff]))].sort();
   const cutoff = cutoffs[0];
   const selectedFileCount = Number(!!files.base) + Number(!!files.cadence);
   const scopeLabel = useMemo(() => {
@@ -341,11 +321,11 @@ export default function Dashboard() {
   const communicationDraft = useMemo(() => {
     if (
       !cutoff ||
-      !analyses.length
+      !displayed.length
     )
       return null;
     return buildPartialCommunication({
-      analyses,
+      analyses: displayed,
       source: effectiveSource,
       metric: effectiveMetric,
       year: dataset?.year ?? config.year,
@@ -360,7 +340,7 @@ export default function Dashboard() {
     effectiveSource,
     effectiveMetric,
     cutoff,
-    analyses,
+    displayed,
     dataset,
     config.year,
     month,
@@ -370,11 +350,16 @@ export default function Dashboard() {
     group,
     uplift,
   ]);
+  const [auditKind, setAuditKind] = useState("all");
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
       (central === "all" || !i.central || i.central === central) &&
       (coop === "all" || !i.cooperative || `${i.central}:${i.cooperative}` === coop),
   );
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [view]);
   function navigate(next: View) {
     if (next === "registry" && !dataset) setDataset(createEmptyDataset(config.year));
     setView(next);
@@ -461,7 +446,7 @@ export default function Dashboard() {
       for (const [expectedSource, file] of selectedFiles) {
         if (file.size > 10 * 1024 * 1024) throw new Error("Cada arquivo pode ter até 10 MB.");
         const parsed = await parseWorkbook(
-          await file.arrayBuffer(),
+          await readWorkbookFile(file),
           file.name,
           { ...config, allowedCentrals,
             ...(importMode === "fixed" ? { vnCutoff: `${config.year}-01-01`, arCutoff: `${config.year}-01-01`, cadenceCutoff: `${config.year}-01-01` } : {}) },
@@ -510,38 +495,23 @@ export default function Dashboard() {
       setBusy("");
     }
   }
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    if (!supabase) return;
-    setBusy("Entrando…");
-    setError("");
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setBusy("");
-    if (error) setError("Não foi possível entrar. Confira o e-mail e a senha.");
-    else {
-      setShowLogin(false);
-      setPassword("");
-    }
-  }
   async function logout() {
-    if (supabase) await supabase.auth.signOut();
+    setLeaving(true);
     activeOwner.current = null;
-    setUser(null);
-    setDataset(null);
-    setWorkspaceRevision(null);
-    setHistorical(false);
-    setWorkspaces([]);
-    setDatasetId(null);
-    setActions({});
-    setFiles({ base: null, cadence: null });
-    setNotice("Sessão encerrada.");
+    setDataset(null); setSelected(null); setActions({}); setHistory([]); setWorkspaces([]);
+    setFiles({ base: null, cadence: null }); sessionYears.current.clear();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    } catch { /* Local access is removed even when the provider is unavailable. */ } finally {
+      clearLocalAuth();
+      try { localStorage.setItem('commercial:logout', String(Date.now())); } catch { /* Storage may be disabled. */ }
+      try { const channel = new BroadcastChannel('commercial:session'); channel.postMessage('logout'); channel.close(); } catch { /* Storage/visibility checks remain available. */ }
+      window.location.replace('/login');
+    }
   }
   async function saveDataset() {
     if (!dataset || !supabase || !user) {
-      setShowLogin(true);
+      window.location.replace("/login");
       return;
     }
     setBusy("Salvando a análise…");
@@ -791,11 +761,11 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   }
   const listControls = <>
-                            <select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                            <label className="control-field"><span>Situação</span><select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                               <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
-                            </select>
+                            </select></label>
                             {effectiveSource === "base" && view !== "actions" && (
-                              <label className="sr-only-label">
+                              <label className="control-field">
                                 <span>Agrupar por</span>
                                 <select
                                   value={level}
@@ -817,16 +787,16 @@ export default function Dashboard() {
                                 onChange={(e) => setSearch(e.target.value)}
                               />
                             </label>
-                            <select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+                            <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
   </>;
   const importPanel = (
     <>
       <div className="section-label">
         <FileSpreadsheet size={19} /> IMPORTAR PLANILHAS
       </div>
-      <h2>Transforme a base em decisões.</h2>
+      <h2>Importar planilhas</h2>
       <p className="muted">
-        Cadastre as unidades e metas uma vez. Nos próximos envios, atualize a produção mantendo seu planejamento anual.
+        Escolha o objetivo do envio e as planilhas.
       </p>
       <label className="import-mode">Objetivo deste envio
         <select value={importMode} onChange={(e) => { setImportMode(e.target.value); if (e.target.value === "history") { const year = (dataset?.year ?? new Date().getFullYear()) - 1; setConfig({ ...config, year, vnCutoff: `${year}-12-31`, arCutoff: `${year}-12-31`, cadenceCutoff: `${year}-12-31`, paTargetMode: "source" }); } }}>
@@ -869,7 +839,7 @@ export default function Dashboard() {
       <div className="import-guidance">
         <Info size={18} />
         <span>
-          {importMode === "fixed" ? "Este envio cadastra as unidades e metas; os realizados serão enviados depois. Cadastros já existentes são preservados." : "Confirme a posição de cada fonte. Valores enviados substituem a produção mensal correspondente; meses vazios e fontes não enviadas são preservados."}
+          {importMode === "fixed" ? "Importa unidades, metas e realizados disponíveis. Preserva cadastros existentes." : "Confirme a posição de cada fonte. Valores enviados substituem a produção mensal correspondente; meses vazios e fontes não enviadas são preservados."}
         </span>
       </div>
       <div className="form-grid">
@@ -933,56 +903,25 @@ export default function Dashboard() {
       </button>
     </>
   );
+  if (leaving) return <main className="auth-check" role="status">Encerrando sessão…</main>;
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#conteudo">Ir para o conteúdo</a>
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="Sicoob Gestão Comercial — início">
           <img className="brand-logo" src="/brand/sicoob-logo-light.svg" alt="Sicoob" width="152" height="36" />
           <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
-        <div className="nav-label">ACOMPANHAMENTO</div>
-        <nav aria-label="Navegação principal">
-          {(
-            [
-              { id: "overview", label: "Visão geral", icon: LayoutDashboard },
-              { id: "cadence", label: "Cadência dos PAs", icon: Building2 },
-              { id: "actions", label: "Plano de ação", icon: ClipboardList },
-              { id: "audit", label: "Conferência da base", icon: ShieldCheck },
-              { id: "imports", label: "Importações", icon: History },
-              { id: "registry", label: "Cadastro e metas", icon: Building2 },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              aria-label={item.label}
-              className={`nav-item ${view === item.id ? "active" : ""}`}
-              disabled={!!busy}
-              onClick={() => navigate(item.id)}
-            >
-              <item.icon size={20} />
-              <span>{item.label}</span>
-              {item.id === "audit" && dataset && (
-                <span className="nav-count">
-                  {dataset.issues.filter((i) => i.kind !== "method").length}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+        <PortalNavigation view={view} disabled={!!busy} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
         <div className="sidebar-foot">
           <div className="central-label">BAHIA & NORDESTE</div>
-          <p>
-            Uma visão clara.
-            <br />
-            Uma ação por vez.
-          </p>
           <div className="session-state">
             <span className="avatar">
               {user?.email?.slice(0, 2).toUpperCase() ?? "AC"}
             </span>
             <span>
-              {user ? "Conta conectada" : "Análise nesta sessão"}
-              <small>{user ? "Histórico privado" : "Entre para salvar"}</small>
+              Conta conectada
+              <small>Acesso restrito</small>
             </span>
           </div>
         </div>
@@ -1022,11 +961,11 @@ export default function Dashboard() {
             <button
               className="button quiet"
               disabled={!!busy}
-              aria-label={user ? "Sair" : "Entrar"}
-              onClick={() => (user ? logout() : setShowLogin(true))}
+              aria-label="Sair"
+              onClick={logout}
             >
-              {user ? <LogOut size={17} /> : <LogIn size={17} />}
-              <span>{user ? "Sair" : "Entrar"}</span>
+              <LogOut size={17} />
+              <span>Sair</span>
             </button>
             <button
               className="button primary"
@@ -1038,19 +977,19 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main className="workspace-content">
+        <main id="conteudo" className="workspace-content" tabIndex={-1}>
           <div className="page-heading">
             <div>
               <div className="eyebrow">PERFORMANCE COMERCIAL</div>
-              <h1>{VIEW_TITLES[view]}</h1>
+              <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
               <p>
-                {view === "registry" ? "Cadastre unidades, distribua metas e ajuste a produção. Os indicadores acompanham cada alteração." : view === "audit"
-                  ? "Confira as fontes, as diferenças e as regras dos indicadores."
+                {view === "registry" ? "Unidades, responsáveis, metas e produção." : view === "audit"
+                  ? "Pendências e critérios de cálculo."
                   : view === "imports"
-                    ? "Importe uma nova posição ou retome uma análise salva."
+                    ? "Atualização da produção e histórico de análises."
                     : dataset
                       ? `${effectiveSource === "cadence" ? "Cadência comercial dos PAs" : metricName(effectiveMetric)} · ${periodDescription}`
-                      : "Metas, resultados e prioridades das centrais Bahia e Nordeste."}
+                      : "Escolha uma base para começar."}
               </p>
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
@@ -1118,45 +1057,10 @@ export default function Dashboard() {
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
               <section className="welcome-aside">
-                <div className="welcome-target">
-                  <Target size={44} />
-                </div>
-                <h2>Saiba onde atuar primeiro.</h2>
+                <div className="welcome-target"><Target size={32} aria-hidden="true" /></div>
+                <h2>Sem planilha agora?</h2>
+                <p>Comece pelas unidades e metas. A produção pode ser atualizada depois.</p>
                 <button className="button secondary" disabled={!!busy} onClick={() => navigate("registry")}>Começar pelo cadastro manual</button>
-                <p>
-                  Acompanhe o resultado de cada cooperativa e PA, veja o ritmo
-                  necessário e organize a recuperação das metas.
-                </p>
-                <div className="welcome-feature">
-                  <span>01</span>
-                  <div>
-                    <strong>Metas e resultados</strong>
-                    <p>Mensal, trimestral, semestral, anual e acumulado.</p>
-                  </div>
-                </div>
-                <div className="welcome-feature">
-                  <span>02</span>
-                  <div>
-                    <strong>Projeções com contexto</strong>
-                    <p>
-                      Posições separadas para Venda Nova, Arrecadação e PAs.
-                    </p>
-                  </div>
-                </div>
-                <div className="welcome-feature">
-                  <span>03</span>
-                  <div>
-                    <strong>Prioridades em reais</strong>
-                    <p>GAP, esforço por dia útil e ação recomendada.</p>
-                  </div>
-                </div>
-                <div className="source-note">
-                  <Info size={18} />
-                  <p>
-                    As fontes são mensais. A visão diária apresenta o esforço
-                    calculado; o realizado diário não está disponível.
-                  </p>
-                </div>
               </section>
             </div>
           ) : view === "imports" ? (
@@ -1167,19 +1071,7 @@ export default function Dashboard() {
                   <h2>Histórico de análises</h2>
                   <History size={21} />
                 </div>
-                {!user ? (
-                  <div className="empty compact">
-                    <History size={30} />
-                    <h3>Retome de onde parou.</h3>
-                    <p>Entre para guardar suas importações e planos de ação.</p>
-                    <button
-                      className="button secondary"
-                      onClick={() => setShowLogin(true)}
-                    >
-                      Entrar na conta
-                    </button>
-                  </div>
-                ) : history.length ? (
+                {history.length ? (
                   <div className="history-list">
                     {history.map((item) => (
                       <button
@@ -1206,10 +1098,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <section
-                className="filters panel"
-                aria-label="Filtros da análise"
-              >
+              <FilterPanel description={`${metricName(effectiveMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
                 <label>
                   Fonte
                   <select
@@ -1284,15 +1173,15 @@ export default function Dashboard() {
                 </label>
                 <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
                   onPeriodChange={setPeriod} onMonthChange={setMonth} />
-              </section>
+              </FilterPanel>
               <div className="position-line">
                 <span>
                   <span className="position-dot" />
                   Posição da fonte:{" "}
                   <strong>
-                    {cutoff ? cutoffs.length > 1 ? `${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])} · cortes diferentes` : shortDate(cutoff) : "não importada"}
+                    {cutoff ? cutoffs.length > 1 ? `${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])} · cortes diferentes` : shortDate(cutoff) : displayed.length ? "não importada" : "sem unidades na seleção"}
                   </strong>
-                  {analyses.length > 0 && <> · {analyses[0].phase}</>}
+                  {displayed.length > 0 && <> · {[...new Set(displayed.map(row => row.phase))].join(' / ')}</>}
                 </span>
                 <span>
                   {effectiveSource === "cadence"
@@ -1308,8 +1197,7 @@ export default function Dashboard() {
                       <div>
                         <h2>Conferência das fontes</h2>
                         <p>
-                          Diferenças são sinalizadas e os valores originais são
-                          preservados.
+                          Verifique os avisos antes de compartilhar o cenário.
                         </p>
                       </div>
                       <span className="pill neutral">
@@ -1317,7 +1205,9 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="audit-list">
-                      {audits.map((i, n) => (
+                      <label className="audit-kind">Tipo de aviso<select value={auditKind} onChange={e => setAuditKind(e.target.value)}><option value="all">Todos os avisos</option><option value="data">Dados e importação</option><option value="method">Critérios de cálculo</option></select></label>
+                      {!audits.filter(i => auditKind === 'all' || (auditKind === 'method' ? i.kind === 'method' : i.kind !== 'method')).length && <p className="empty">Nenhum aviso nesta seleção.</p>}
+                      {audits.filter(i => auditKind === 'all' || (auditKind === 'method' ? i.kind === 'method' : i.kind !== 'method')).map((i, n) => (
                         <div key={n}>
                           <Info size={18} />
                           <p>{i.message}</p>
@@ -1384,43 +1274,20 @@ export default function Dashboard() {
                 </section>
               ) : (
                 <>
+                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span></div>
                   <section className="kpi-grid" aria-label="Resultado do período">
-                    <Kpi
-                      title="Meta do período"
-                      value={money(summary.target)}
-                      sub={periodDescription}
-                      icon={<Target size={20} />}
-                    />
-                    <Kpi
-                      title="Realizado até o corte"
-                      value={money(summary.actual)}
-                      sub={`${percent(summary.attainment)} da meta do período`}
-                      icon={<BarChart3 size={20} />}
-                    />
-                    <Kpi
-                      title="Projeção de fechamento"
-                      value={money(summary.projected)}
-                      sub={`${percent(summary.projectedAttainment)} da meta${uplift ? ` · cenário +${uplift}%` : ""}`}
-                      icon={<TrendingUp size={20} />}
-                      accent
-                    />
-                    <Kpi
-                      title="GAP para a meta"
-                      value={money(summary.gap)}
-                      sub={`Esforço total: ${money(summary.requiredDaily)}/dia útil`}
-                      icon={<Flag size={20} />}
-                    />
+                    <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
+                      sub={displayed.length ? `${percent(summary.attainment)} da meta do período` : 'Nenhuma unidade na seleção'}
+                      icon={<BarChart3 size={20} />} accent progress={displayed.length ? summary.attainment : null} />
+                    <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
+                    <Kpi title="GAP para a meta" value={displayed.length ? money(summary.gap) : '—'}
+                      sub={effortLabel(summary.requiredDaily, displayed.length ? summary.gap : null, money)} icon={<Flag size={20} />} />
+                    <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
+                      sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                   </section>
                   {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
-                    <Info size={16} />
-                    <span>
-                      Para todos atingirem 100%:{" "}
-                      <strong>{money(leafSummary.individualGap)}</strong> de
-                      GAP somado entre{" "}
-                      {effectiveSource === "cadence" ? "PAs" : "cooperativas"} (
-                      {money(leafSummary.requiredDaily)}/dia útil). A superação
-                      de uma unidade não elimina o GAP das demais.
-                    </span>
+                    <Info size={17} aria-hidden="true" /><span><strong>GAP somado: {money(leafSummary.individualGap)}.</strong> A superação de uma unidade não cobre a meta das demais.</span>
+                    {view !== 'actions' && <button className="button quiet" onClick={() => setView('actions')}>Ver plano de ação <ArrowRight size={16} /></button>}
                   </div>}
                   {view !== "actions" && dataset && <NetworkSummary dataset={dataset} filters={scenarioFilters} />}
                   {view === "actions" ? (
@@ -1429,8 +1296,7 @@ export default function Dashboard() {
                         <div>
                           <h2>Prioridades para atingir a meta</h2>
                           <p>
-                            Ordem conforme o critério selecionado. Abra uma
-                            ação para definir responsável e prazo.
+                            Defina um responsável e um prazo para cada unidade.
                           </p>
                         </div>
                         <span className="pill warning">
@@ -1494,7 +1360,7 @@ export default function Dashboard() {
                                   ? "Resultado por central"
                                   : "Resultado por cooperativa"}
                             </h2>
-                            <p>{displayed.length} de {analyses.length} unidades · todas na mesma página</p>
+                            <p>{displayed.length} de {analyses.length} unidades</p>
                           </div>
                           <div className="table-controls">
                             {listControls}
@@ -1680,7 +1546,7 @@ export default function Dashboard() {
                       </details>
                     </>
                   )}
-                  <details className="progressive-panel"><summary>Insights para atuação</summary>
+                  <details className="progressive-panel"><summary>Leitura do cenário</summary>
                   <section className="decision-insights" aria-label="Informações para decidir">
                     {insights.slice(0,3).map((insight) => <article className={`panel insight ${insight.tone}`} key={insight.title}><h3>{insight.title}</h3><p>{insight.detail}</p></article>)}
                   </section>
@@ -1716,62 +1582,6 @@ export default function Dashboard() {
         <PortfolioCommunication dataset={dataset} candidates={displayed.map(entityFromAnalysis)} initialKey={communicationInitialKey}
           metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
           onClose={() => setShowCommunication(false)} />
-      )}
-      {showLogin && (
-        <Modal title="Entrar na conta" onClose={() => setShowLogin(false)}>
-          <div className="login-panel">
-            <div className="upload-icon">
-              <ShieldCheck size={28} />
-            </div>
-            <h2>Guarde suas análises.</h2>
-            <p className="muted">
-              Acesse seu histórico privado e acompanhe os planos de ação.
-            </p>
-            {supabase ? (
-              <form onSubmit={login}>
-                <label>
-                  E-mail
-                  <input
-                    type="email"
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Senha
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </label>
-                <button className="button primary wide" disabled={!!busy}>
-                  Entrar
-                </button>
-                <p className="helper">
-                  Use a conta liberada pelo administrador.
-                </p>
-              </form>
-            ) : (
-              <div className="message">
-                <Info size={19} />
-                <p>
-                  O acesso ainda precisa ser configurado. Você pode importar e
-                  analisar as planilhas nesta sessão.
-                </p>
-              </div>
-            )}
-            {error && (
-              <p role="alert" className="inline-error">
-                {error}
-              </p>
-            )}
-          </div>
-        </Modal>
       )}
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)} wide>
@@ -2012,30 +1822,6 @@ function FileSlot({
   );
 }
 
-function Kpi({
-  title,
-  value,
-  sub,
-  icon,
-  accent = false,
-}: {
-  title: string;
-  value: string;
-  sub: string;
-  icon: React.ReactNode;
-  accent?: boolean;
-}) {
-  return (
-    <article className={`kpi panel ${accent ? "accent" : ""}`}>
-      <div className="kpi-heading">
-        <span>{title}</span>
-        {icon}
-      </div>
-      <strong className="kpi-value">{value}</strong>
-      <p>{sub}</p>
-    </article>
-  );
-}
 function Pagination({
   page,
   setPage,

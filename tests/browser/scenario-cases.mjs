@@ -30,7 +30,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     previous.rows=previous.rows.filter(row=>row.cooperative!=='3025');
     previous.rows.forEach(row=>{row.actuals=row.actuals.map(value=>value==null?null:value/2);});
     const rows=[dataset,previous].map((value,index)=>({id:`00000000-0000-0000-0000-00000000001${index}`,owner_id:owner,year:value.year,revision:1,updated_at:created,dataset:value}));
-    await page.route('https://portfolio-test.supabase.co/rest/v1/commercial_workspaces**',async route=>{
+    await page.route('http://127.0.0.1:4600/rest/v1/commercial_workspaces**',async route=>{
       const url=new URL(route.request().url()),year=url.searchParams.get('year');
       const filtered=year?rows.filter(row=>`eq.${row.year}`===year):rows;
       await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify((route.request().headers().accept||'').includes('vnd.pgrst.object')?filtered[0]||null:filtered)});

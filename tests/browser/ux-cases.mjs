@@ -55,7 +55,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   const previous=JSON.parse(JSON.stringify(current).replaceAll('2026','2025'));
   previous.rows.forEach(row=>{row.actuals=row.actuals.map(value=>value==null?null:value/2);});
   const datasets=[current,previous];let historicalReads=0;
-  await page.route('https://portfolio-test.supabase.co/rest/v1/commercial_workspaces**',async route=>{
+  await page.route('http://127.0.0.1:4600/rest/v1/commercial_workspaces**',async route=>{
     if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'*'}});
     const url=new URL(route.request().url()),year=url.searchParams.get('year');if(year==='eq.2025')historicalReads++;
     const rows=datasets.filter(value=>!year||`eq.${value.year}`===year).map((dataset,index)=>({id:`00000000-0000-0000-0000-00000000001${index}`,owner_id:owner,year:dataset.year,revision:1,updated_at:created,dataset}));

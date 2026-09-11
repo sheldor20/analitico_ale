@@ -1,3 +1,4 @@
+import { installAuthFixture } from './auth-db-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
@@ -13,6 +14,7 @@ test('dashboard migration preserves legacy drafts, validates v2 and retains RLS 
       create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
       grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;
       insert into auth.users values ('${A}'),('${B}');`);
+    await installAuthFixture(db);
     const dir = new URL('../supabase/migrations/',import.meta.url);
     const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
     const latest = files.find((f) => f.endsWith('_portfolio_dashboard_presentation.sql'));

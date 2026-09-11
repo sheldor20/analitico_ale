@@ -78,7 +78,7 @@ export default function ResponsibleManager({ entity, year, disabled = false }: {
 
   return <section className="registry-form" aria-label={`Responsáveis de ${entity.name}`}>
     <div className="panel-heading">
-      <div><h3>Responsáveis para comunicação</h3><p>Cadastre quem deve receber o cenário desta carteira por Central, Cooperativa ou PA.</p></div>
+      <div><h3>Responsáveis para comunicação</h3><p>Contatos desta unidade para envio do cenário.</p></div>
       {!form && <button type="button" className="button secondary" onClick={startCreate} disabled={locked || loading}><Plus size={16} /> Adicionar responsável</button>}
     </div>
     {error && <div className="message error registry-error" role="alert"><Info size={17} /><span>{error}</span></div>}
