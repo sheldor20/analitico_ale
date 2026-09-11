@@ -13,13 +13,16 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Export tracked source for review
+      - name: Integrate security in temporary worktree
         run: |
+          git config user.name 'UX validation'
+          git config user.email 'validation@users.noreply.github.com'
+          git merge --no-commit --no-ff 3424dff7381d3c3d2aab68a1742928f0d235575c
           mkdir -p /tmp/ux-source
-          git archive HEAD | gzip > /tmp/ux-source/current.tar.gz
-          git archive origin/security/mandatory-login-and-data-isolation | gzip > /tmp/ux-source/security.tar.gz
+          git ls-files -z | tar --null -T - -czf /tmp/ux-source/integrated.tar.gz
+          git diff --cached --binary HEAD > /tmp/ux-source/security-integration.patch
       - uses: actions/upload-artifact@v4
         with:
-          name: ux-source
+          name: ux-integrated-source
           path: /tmp/ux-source
           retention-days: 1
