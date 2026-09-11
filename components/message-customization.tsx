@@ -58,5 +58,5 @@ export function useMessageCustomization({ owner, kind, metric, contextKey, unit,
     <div className={styles.actions}><button type="button" className="button secondary" onClick={() => change({ email: DEFAULT_MESSAGE_TEMPLATE, whatsapp: DEFAULT_MESSAGE_TEMPLATE, enabled: false })}>Restaurar texto automático</button><button type="button" className="button secondary" disabled={!owner || saving || stored?.scope !== scope || !!editError} onClick={save}>{saving ? 'Salvando…' : 'Salvar preferência de texto'}</button></div>
     {!owner && <p className="helper">Entre para guardar um padrão. Sem salvar, a edição vale apenas para esta comunicação.</p>}{feedback && <p role="status">{feedback}</p>}{error && <p role="alert" className={styles.warning}>{error}</p>}
   </section>;
-  return { message, whatsappMessage, editor, editError };
+  return { message, whatsappMessage, editor, editError, hasEmailPanel: safeEmail.includes('{{cenario}}'), restoreEmailPanel: () => change({ email: DEFAULT_MESSAGE_TEMPLATE }) };
 }

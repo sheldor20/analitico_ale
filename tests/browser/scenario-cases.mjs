@@ -1,3 +1,4 @@
+import { step, customize, emailDelivery, whatsappDelivery } from './composer-navigation.mjs';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
 export function registerScenarioTests({test,expect,setup,composer,owner,created}) {
   test('network: overview cooperative PAs, summary, descending sorts and responsive layout',async({page},testInfo)=>{
@@ -58,32 +59,39 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
     let dialog=composer(page);
     await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
+    await customize(dialog);
     await dialog.getByLabel('Texto / modelo do e-mail',{exact:true}).fill('Olá {{unidade}}!\n{{cenario}}\nVamos atuar.');
     await dialog.getByLabel('Texto / modelo do WhatsApp',{exact:true}).fill('Equipe: {{unidade}} / {{ano}}\n{{cenario}}');
     await dialog.getByLabel('Usar como padrão para este nível e carteira').check();
     await dialog.getByRole('button',{name:'Salvar preferência de texto'}).click();
     await expect(dialog.getByRole('status')).toContainText('Modelo padrão salvo');
-    const outlook=new URL(await dialog.getByRole('link',{name:'Abrir Outlook',exact:true}).getAttribute('href'));
+    await emailDelivery(dialog);
+    const outlook=new URL(await dialog.getByRole('link',{name:'Abrir Outlook somente texto',exact:true}).getAttribute('href'));
     expect(outlook.searchParams.get('body')).toContain('Olá Cooperativa Alfa!');
     await dialog.getByRole('button',{name:'Fechar comunicação'}).click();
     await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
     dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
+    await customize(dialog);
     await expect(dialog.getByLabel('Texto / modelo do e-mail',{exact:true})).toHaveValue(/Vamos atuar/);
     await dialog.getByRole('button',{name:'Editar texto completo do WhatsApp',exact:true}).click();
     await expect(dialog.getByLabel('Texto / modelo do WhatsApp',{exact:true})).toHaveValue(/Cooperativa Alfa/);
     await dialog.getByLabel('Texto / modelo do WhatsApp',{exact:true}).fill('Texto revisado manualmente.');
+    await whatsappDelivery(dialog);
     expect(new URL(await dialog.getByRole('link',{name:'Abrir WhatsApp',exact:true}).getAttribute('href')).searchParams.get('text')).toBe('Texto revisado manualmente.');
     await dialog.getByRole('button',{name:'Salvar rascunho',exact:true}).click();
     await expect.poll(()=>writes.length).toBe(1);expect(writes[0].whatsapp_body).toBe('Texto revisado manualmente.');
+    await customize(dialog);
     await dialog.getByLabel('Usar como padrão para este nível e carteira').uncheck();
     await dialog.getByRole('button',{name:'Salvar preferência de texto'}).click();
     await expect(dialog.getByText('Padrão desativado.',{exact:false})).toBeVisible();
     await dialog.getByRole('button',{name:'Fechar comunicação'}).click();
     await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
     dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
+    await customize(dialog);
     await expect(dialog.getByLabel('Texto / modelo do WhatsApp',{exact:true})).toHaveValue('{{cenario}}');
     await dialog.getByLabel('Texto / modelo do e-mail',{exact:true}).fill('{{cenario}}{{cenario}}');
-    await expect(dialog.getByRole('button',{name:'Abrir Outlook',exact:true})).toBeDisabled();
+    await emailDelivery(dialog);
+    await expect(dialog.getByRole('button',{name:'Abrir Outlook somente texto',exact:true})).toBeDisabled();
     expect(errors).toEqual([]);
   });
 }

@@ -2,7 +2,7 @@ import type { PortfolioReport, PortfolioMessage } from './portfolio-communicatio
 export type DashboardBlock =
   | { type: 'heading'; text: string }
   | { type: 'text'; text: string; tone: 'body' | 'muted' | 'action' | 'warning' }
-  | { type: 'cards'; items: { label: string; value: string }[] }
+  | { type: 'cards'; items: { label: string; value: string; support?: string; accent?: boolean }[] }
   | { type: 'secondary'; title: string; lines: string[] }
   | { type: 'table'; title: string; headers: string[]; rows: string[][] };
 export type PortfolioDashboard = {

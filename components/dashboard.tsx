@@ -1,4 +1,5 @@
 "use client";
+import { goalVariance } from '@/lib/goal-variance.mjs';
 import { readWorkbookFile } from "@/lib/xlsx-safety.mjs";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -299,6 +300,7 @@ export default function Dashboard() {
   );
   const displayed: Analysis[] = sortAnalysis(filterDashboardRows(analyses, search, statusFilter), sortBy);
   const summary = summarize(displayed);
+  const variance = goalVariance(summary.actual, summary.target, summary.gap != null);
   const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(aggregate(filtered, effectiveSource === 'cadence' ? 'pa' : 'cooperative'), displayed, actualLevel);
   const leafSummary = summarize(visibleLeaves.map(row => analyze(row, { year: dataset?.year ?? config.year, month, period, uplift })));
   const scenarioFilters = { central, coop, source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
@@ -1277,12 +1279,13 @@ export default function Dashboard() {
                 <>
                   <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span></div>
                   <section className="kpi-grid" aria-label="Resultado do período">
+                    <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
                     <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
                       sub={displayed.length ? `${percent(summary.attainment)} da meta do período` : 'Nenhuma unidade na seleção'}
                       icon={<BarChart3 size={20} />} accent progress={displayed.length ? summary.attainment : null} />
-                    <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
-                    <Kpi title="GAP para a meta" value={displayed.length ? money(summary.gap) : '—'}
-                      sub={effortLabel(summary.requiredDaily, displayed.length ? summary.gap : null, money)} icon={<Flag size={20} />} />
+                    <Kpi title={variance.label} value={money(variance.value)}
+                      sub={variance.kind === 'growth' ? (variance.ratio == null ? 'Meta zero · sem base percentual' : `${percent(variance.ratio)} acima da meta`) : variance.kind === 'unknown' ? 'Dados insuficientes para avaliar a meta' : effortLabel(summary.requiredDaily, summary.gap, money)}
+                      icon={variance.kind === 'growth' ? <TrendingUp size={20} /> : <Flag size={20} />} growth={variance.kind === 'growth'} />
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                   </section>

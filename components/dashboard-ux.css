@@ -87,3 +87,10 @@
   .progressive-panel>summary{padding:16px 14px}.year-management>div{left:auto;right:0}.workspace-content .welcome-aside{display:block;padding:24px}.workspace-content .welcome-target{display:none}
 }
 @media(max-width:360px) {.filter-toggle>span{display:none}.workspace-content .page-heading h1{font-size:26px}.workspace-content .kpi .kpi-value{font-size:20px}.workspace-content .kpi{padding:14px 10px}.workspace-content .kpi-heading svg{display:none}.workspace-content .workspace-toolbar>label{flex-basis:100%}}
+
+/* Follow-up: all units expand in document flow, never an inner vertical viewport. */
+.workspace-content .table-panel > .table-scroll { max-height:none; overflow-x:auto; overflow-y:visible; }
+.workspace-content .kpi p { font-size:15px; line-height:1.5; }
+.workspace-content .kpi.accent p { font-weight:600; }
+.workspace-content .kpi.growth .kpi-value { color:var(--green); }
+@media(max-width:720px) { .workspace-content .kpi-grid { grid-template-columns:1fr; } .workspace-content .kpi p { font-size:15px; } }

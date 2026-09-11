@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 /** Actuals, targets and estimates share typography, never their meaning. */
-export default function MetricCard({ title, value, sub, icon, accent = false, progress }: {
-  title: string; value: string; sub: string; icon: ReactNode; accent?: boolean; progress?: number | null;
+export default function MetricCard({ title, value, sub, icon, accent = false, growth = false, progress }: {
+  title: string; value: string; sub: string; icon: ReactNode; accent?: boolean; growth?: boolean; progress?: number | null;
 }) {
   const measurable = typeof progress === 'number' && Number.isFinite(progress);
-  return <article className={`kpi panel ${accent ? 'accent' : ''}`} aria-label={title}>
+  return <article className={`kpi panel ${accent ? 'accent' : ''} ${growth ? 'growth' : ''}`} aria-label={title}>
     <div className="kpi-heading"><span>{title}</span><span aria-hidden="true">{icon}</span></div>
     <strong className="kpi-value">{value}</strong>
     <p>{sub}</p>

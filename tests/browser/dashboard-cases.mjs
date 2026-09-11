@@ -1,3 +1,4 @@
+import { step, disclosure } from './composer-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -14,6 +15,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
   test('selected period leads dashboard and annual support is omitted in annual scenario', async ({ page }, info) => {
     const { dialog, errors } = await open(page);
     await dialog.getByLabel('Incluir Venda Nova e Arrecadação, separadamente').check();
+    await step(dialog, 2);
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     for (const period of ['month','quarter','semester','ytd','annual']) {
       await dialog.getByLabel('Período da mensagem').selectOption(period);
@@ -32,6 +34,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await page.setViewportSize({width:390,height:844});
     const { dialog, errors, writes } = await open(page);
     await dialog.getByLabel('Período da mensagem').selectOption('month');
+    await step(dialog, 2);
     await dialog.getByRole('button',{name:'Painel do WhatsApp',exact:true}).click();
     const image = dialog.getByRole('img',{name:/Dashboard Mensal/});
     await expect(image).toBeVisible();
@@ -47,7 +50,9 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await image.screenshot({path:info.outputPath('mobile-dashboard-preview.png')});
     await dialog.getByLabel('Período da mensagem').selectOption('annual');
     await expect(dialog.getByRole('img',{name:/Dashboard Anual/})).toBeVisible();
+    await disclosure(dialog, 'Ver texto do WhatsApp');
     await expect(dialog.getByLabel('WhatsApp gerado')).not.toContainText('Apoio anual');
+    await step(dialog, 3);
     await dialog.getByRole('button',{name:'Salvar rascunho',exact:true}).click();
     await expect.poll(() => writes.length).toBe(1);
     expect(writes[0].presentation_version).toBe(2); expect(writes[0].whatsapp_dashboard.period).toBe('annual');
@@ -65,6 +70,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     });
     const {dialog, errors} = await open(page);
     await dialog.getByLabel('Período da mensagem').selectOption('month');
+    await step(dialog, 2);
     await dialog.getByRole('button',{name:'Painel do WhatsApp',exact:true}).click();
     const share = dialog.getByRole('button',{name:'Compartilhar painel + mensagem',exact:true});
     await expect(share).toBeEnabled(); await share.click();
@@ -79,11 +85,13 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
   test('unsupported file sharing downloads image and keeps copyable commercial message', async ({page}) => {
     await page.addInitScript(() => Object.defineProperty(navigator,'canShare',{configurable:true,value:() => false}));
     const {dialog, errors} = await open(page);
+    await step(dialog, 2);
     await dialog.getByRole('button',{name:'Painel do WhatsApp',exact:true}).click();
     const event = page.waitForEvent('download');
     await dialog.getByRole('button',{name:'Compartilhar painel + mensagem',exact:true}).click();
     expect((await event).suggestedFilename()).toMatch(/\.png$/);
     await expect(dialog.getByRole('status')).toContainText('Anexe a imagem');
+    await disclosure(dialog, 'Ver texto do WhatsApp');
     await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Foco comercial');
     expect(errors).toEqual([]);
   });
