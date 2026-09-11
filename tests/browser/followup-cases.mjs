@@ -133,4 +133,38 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
     await expect(dialog.getByRole('button',{name:'Copiar painel',exact:true})).toBeEnabled();
     await step(dialog,2);await expect(page.frameLocator('iframe').locator('[data-metric="Realizado informado"]')).toBeVisible();
   });
+
+  test('followup review: annual goal conflict cannot claim growth or attainment', async ({page}) => {
+    const {errors}=await setup(page,dataset=>({...dataset,rows:dataset.rows.map(row=>row.source==='base' && row.central==='1002' && row.cooperative==='3025' && row.metric==='VN' ? {...row,annualTarget:1000} : row)}));
+    await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('annual');
+    await page.getByLabel('Buscar cooperativa ou PA').fill('Beta');
+    const region=page.getByRole('region',{name:'Resultado do período',exact:true});
+    await expect(page.getByRole('region',{name:'Lista de unidades'})).toContainText('Metas divergentes');
+    await expect(region.getByRole('article',{name:'Crescimento sobre a meta'})).toHaveCount(0);
+    await expect(region.getByRole('article').nth(2)).toContainText('Metas divergentes');
+    await expect(region.getByRole('article').nth(2).locator('.kpi-value')).toHaveText('Não disponível');
+    await expect(region.getByRole('meter')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+  test('followup review: any other in-app or native copy requires copying the panel again',async({page,context})=>{
+    await context.grantPermissions(['clipboard-read','clipboard-write']);
+    const {errors}=await setup(page);
+    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    const dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');await selectAugust(dialog);
+    await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible();await step(dialog,3);
+    const copyPanel=dialog.getByRole('button',{name:'Copiar painel',exact:true});
+    const openPanel=dialog.getByRole('link',{name:'Abrir Outlook e colar painel',exact:true});
+    await copyPanel.click();await expect(openPanel).toBeVisible();
+    await disclosure(dialog,'Outras opções de e-mail');await dialog.getByRole('button',{name:'Copiar e-mail',exact:true}).click();
+    await expect(dialog.getByRole('status')).toContainText('Texto do e-mail copiado.');
+    await expect(openPanel).toHaveCount(0);
+    await expect(dialog.getByRole('button',{name:'Abrir Outlook e colar painel',exact:true})).toBeDisabled();
+    for(const event of ['copy','cut']) {
+      await copyPanel.click();await expect(openPanel).toBeVisible();
+      await page.evaluate(name=>document.dispatchEvent(new Event(name)),event);
+      await expect(openPanel).toHaveCount(0);
+    }
+    await copyPanel.click();await expect(openPanel).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 }

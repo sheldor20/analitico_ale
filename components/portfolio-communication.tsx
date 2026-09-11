@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Mail, MessageSquareText, Save, Trash2, X } from "lucide-react";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
@@ -31,12 +31,13 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const selected = entities.find((entry) => entry.id === entityId) ?? entities[0];
-  useEffect(() => {
+  // Capture the opener before descendant passive effects move focus into a step.
+  useLayoutEffect(() => {
     const previous = document.body.style.overflow;
     const active = document.activeElement as HTMLElement | null;
     document.body.style.overflow = "hidden";
     closeButton.current?.focus();
-    return () => { document.body.style.overflow = previous; active?.focus(); };
+    return () => { document.body.style.overflow = previous; if (active?.isConnected) active.focus(); };
   }, []);
   useEffect(() => {
     if (!supabase) return;
@@ -80,6 +81,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [phoneName, setPhoneName] = useState("");
   const [personalOutlook, setPersonalOutlook] = useState(false);
   const [tab, setTab] = useState("panel");
+  const [clipboardVersion, setClipboardVersion] = useState(0);
   const [step, setStep] = useState(1);
   const [channel, setChannel] = useState("email");
   const stepTitle = useRef<HTMLHeadingElement>(null);
@@ -117,9 +119,11 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
   async function copy(value: string, label: string) {
+    setClipboardVersion((version) => version + 1);
     setError(""); setFeedback("");
     try { await navigator.clipboard.writeText(value); if (mounted.current) setFeedback(label); }
     catch { if (mounted.current) setError("O navegador bloqueou a cópia. Selecione e copie o texto na prévia ou baixe o arquivo."); }
+    finally { if (mounted.current) setClipboardVersion((version) => version + 1); }
   }
   function download(type: "eml" | "html") {
     if (!message) return;
@@ -202,7 +206,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
         <h4>Enviar o painel pelo Outlook</h4>
         {noPanel}
         <label>Conta do Outlook<select value={personalOutlook ? 'personal' : 'work'} onChange={(event) => setPersonalOutlook(event.target.value === 'personal')}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
-        <OutlookHandoff html={message.html} text={message.text} url={panelOutlook.value?.url ?? null} disabled={!!invalid || loading || !hasEmailPanel} />
+        <OutlookHandoff clipboardVersion={clipboardVersion} html={message.html} text={message.text} url={panelOutlook.value?.url ?? null} disabled={!!invalid || loading || !hasEmailPanel} />
         {panelOutlook.error && <p role="alert" className={styles.warning}>{panelOutlook.error}</p>}
         <div className={styles.fileOption}><div><strong>Prefere abrir um arquivo?</strong><p>O arquivo contém o painel completo. Abra no Outlook; no novo Outlook, pode ser necessário encaminhar a mensagem e revisar os destinatários.</p></div><button className="button secondary" disabled={!!invalid || loading} onClick={() => download('eml')}><Download size={17} /> Baixar e-mail (.eml)</button></div>
         <details className={styles.disclosure}><summary>Outras opções de e-mail</summary><div className={styles.actions}>

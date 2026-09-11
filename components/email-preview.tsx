@@ -9,9 +9,11 @@ export default function EmailPreview({ html }: { html: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const measure = useCallback(() => {
     const node = frame.current;
-    if (!node?.contentDocument) return;
+    // srcDoc navigation and unmount can briefly leave a document without a root.
+    const root = node?.contentDocument?.documentElement;
+    if (!node?.isConnected || !root) return;
     node.style.height = '1px';
-    node.style.height = `${Math.max(360, node.contentDocument.documentElement.scrollHeight)}px`;
+    node.style.height = `${Math.max(360, root.scrollHeight)}px`;
   }, []);
   useEffect(() => {
     const node = frame.current;

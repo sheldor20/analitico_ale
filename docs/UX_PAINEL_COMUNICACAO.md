@@ -35,3 +35,13 @@ Nova restrição valida apenas metadados opcionais `support` (texto de até 400 
 Testes adicionados: ordem/GAP/crescimento/meta zero, metadados antigos e inválidos, login responsivo, lista completa sem scroll interno, wizard e prévia sem scroll interno, cópia HTML real, falha da área de transferência, invalidar cópia anterior, exportação MIME e restauração de painel. Os testes de fluxo existentes foram adaptados às etapas sem remover verificações de isolamento, períodos, exportação, rascunhos ou logout.
 
 Resultados e versão da migração aplicada serão registrados na PR ao concluir as verificações. Testes de navegador usam dados sintéticos e não autenticam em caixas de Outlook nem enviam mensagens reais.
+
+
+## Conclusão da revisão antes do merge
+
+- Prévia HTML protege a medição quando o iframe ainda não tem raiz ou já foi desmontado. A altura final continua ajustada ao conteúdo, sem barra vertical interna.
+- O modal captura o botão de origem antes de mover o foco para a primeira etapa; fechar restaura esse foco.
+- Seleção vazia mostra travessão no cartão de GAP, como nos demais cartões. Divergência entre meta anual e distribuição mensal impede alegações de crescimento/atingimento.
+- Outras cópias do aplicativo invalidam o estado de painel copiado, antes e depois da operação assíncrona. Cópia/recorte nativos ou saída da janela também invalidam a indicação, sem ler a área de transferência.
+- O arquivo da migração foi alinhado ao registro já aplicado no Supabase: `20260911020542_portfolio_card_support.sql`. Apenas renomeado; nenhum SQL reaplicado. Verificação remota confirmou restrição validada, compatibilidade antiga/nova, rejeição de destaque inválido, seis políticas de sessão preservadas e nenhuma leitura anônima de rascunhos.
+- Testes anteriores preservados, com regressões adicionais de metas divergentes e sobrescrita da área de transferência.

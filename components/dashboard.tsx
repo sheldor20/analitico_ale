@@ -300,7 +300,8 @@ export default function Dashboard() {
   );
   const displayed: Analysis[] = sortAnalysis(filterDashboardRows(analyses, search, statusFilter), sortBy);
   const summary = summarize(displayed);
-  const variance = goalVariance(summary.actual, summary.target, summary.gap != null);
+  const hasGoalConflict = displayed.some((row) => row.annualConflict);
+  const variance = goalVariance(summary.actual, summary.target, summary.gap != null && !hasGoalConflict);
   const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(aggregate(filtered, effectiveSource === 'cadence' ? 'pa' : 'cooperative'), displayed, actualLevel);
   const leafSummary = summarize(visibleLeaves.map(row => analyze(row, { year: dataset?.year ?? config.year, month, period, uplift })));
   const scenarioFilters = { central, coop, source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
@@ -1281,10 +1282,10 @@ export default function Dashboard() {
                   <section className="kpi-grid" aria-label="Resultado do período">
                     <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
                     <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
-                      sub={displayed.length ? `${percent(summary.attainment)} da meta do período` : 'Nenhuma unidade na seleção'}
-                      icon={<BarChart3 size={20} />} accent progress={displayed.length ? summary.attainment : null} />
-                    <Kpi title={variance.label} value={money(variance.value)}
-                      sub={variance.kind === 'growth' ? (variance.ratio == null ? 'Meta zero · sem base percentual' : `${percent(variance.ratio)} acima da meta`) : variance.kind === 'unknown' ? 'Dados insuficientes para avaliar a meta' : effortLabel(summary.requiredDaily, summary.gap, money)}
+                      sub={hasGoalConflict ? 'Metas divergentes · confira a base' : displayed.length ? `${percent(summary.attainment)} da meta do período` : 'Nenhuma unidade na seleção'}
+                      icon={<BarChart3 size={20} />} accent progress={displayed.length && !hasGoalConflict ? summary.attainment : null} />
+                    <Kpi title={variance.label} value={displayed.length ? money(variance.value) : '—'}
+                      sub={variance.kind === 'growth' ? (variance.ratio == null ? 'Meta zero · sem base percentual' : `${percent(variance.ratio)} acima da meta`) : variance.kind === 'unknown' ? (hasGoalConflict ? 'Metas divergentes · confira a base' : 'Dados insuficientes para avaliar a meta') : effortLabel(summary.requiredDaily, summary.gap, money)}
                       icon={variance.kind === 'growth' ? <TrendingUp size={20} /> : <Flag size={20} />} growth={variance.kind === 'growth'} />
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
