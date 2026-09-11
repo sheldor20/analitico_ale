@@ -2,6 +2,11 @@
 // Production never imports this helper or grants approval on registration.
 export async function installAuthFixture(db) {
   await db.exec(`
+    do $$ begin
+      if not exists(select 1 from pg_roles where rolname='service_role') then
+        create role service_role;
+      end if;
+    end $$;
     alter table auth.users add column if not exists email_confirmed_at timestamptz default now();
     alter table auth.users add column if not exists is_anonymous boolean default false;
     alter table auth.users add column if not exists banned_until timestamptz;
