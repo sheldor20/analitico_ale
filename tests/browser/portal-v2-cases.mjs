@@ -38,7 +38,23 @@ export function registerPortalV2Tests({ test, expect, setup }) {
       await expect(page.getByRole('heading', { level: 1, name: 'Cadastro e metas' })).toBeFocused();
       await page.getByRole('button', { name: 'Visão geral', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Visão geral', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('button', { name: 'Sair', exact: true }).locator('span')).toBeVisible();
       await page.screenshot({ path: info.outputPath(`portal-v2-mobile-${width}.png`), fullPage: true });
+    }
+    expect(errors).toEqual([]);
+  });
+  test('portal v2: all six views retain focus and fit desktop and both mobile widths', async ({ page }, info) => {
+    const { errors } = await setup(page);
+    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas'];
+    for (const width of [1440,390,320]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+      for (const [index, name] of views.entries()) {
+        await page.getByRole('button', { name, exact: true }).click();
+        await expect(page.getByRole('heading', { name, level: 1, exact: true })).toBeFocused();
+        if (width !== 320) await page.screenshot({ path: info.outputPath(`view-${index}-${width}.png`), fullPage: true });
+        const bounds = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth }));
+        expect(bounds.width, `${name} at ${width}px`).toBeLessThanOrEqual(bounds.viewport + 1);
+      }
     }
     expect(errors).toEqual([]);
   });
@@ -50,7 +66,9 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     expect((await pending).status()).toBe(200);
     await expect(page).toHaveURL(/\/login$/);
     expect((await page.context().cookies()).filter(c => c.name.startsWith('sb-') && c.value)).toHaveLength(0);
-    await page.goBack(); await page.goto('/');
+    await page.goBack();
+    await expect(page.getByRole('region', { name: 'Resultado do período' })).toHaveCount(0);
+    await page.goto('/');
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('button', { name: 'Gerar e-mail / WhatsApp' })).toHaveCount(0);
   });
