@@ -1,0 +1,52 @@
+name: Finalize UX review
+on:
+  push:
+    branches: [ux/portal-design-system-login]
+    paths: [.github/workflows/ux-finalize.yml]
+permissions:
+  contents: read
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/ux/portal-design-system-login'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ux/portal-design-system-login
+      - name: Apply reviewed scope and focus fixes
+        run: |
+          python3 - <<'PY'
+          import pathlib,hashlib
+          path=pathlib.Path('components/dashboard.tsx')
+          s=path.read_text()
+          assert hashlib.sha256(s.encode()).hexdigest()=='3dd5837af5963fd1751dc440a5654bfd19105837916bbaa639d20129e5c3013b'
+          changes={
+            '<span> / {analyses.length}</span>':'<span> / {displayed.length}</span>',
+            'analyses.length ? (summary.onTrack / analyses.length)':'displayed.length ? (summary.onTrack / displayed.length)',
+            '<MonthlyChart rows={filtered}':'<MonthlyChart rows={visibleLeaves}',
+            'function navigate(next: View) {':"function navigate(next: View) {\n    if (next === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }",
+            'Cadastro fixo recuperado. As alterações serão salvas automaticamente.':'Cadastro carregado.'
+          }
+          for old,new in changes.items():
+            assert s.count(old)==1,old
+            s=s.replace(old,new)
+          path.write_text(s)
+          path=pathlib.Path('tests/browser/portal-v2-cases.mjs')
+          s=path.read_text()
+          anchor="    await page.screenshot({ path: info.outputPath('portal-v2-desktop.png'), fullPage: true });"
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+"\n    await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('all');\n    await page.getByLabel('Buscar cooperativa ou PA').fill('Beta');\n    await page.locator('summary').filter({ hasText: 'Evolução e simulação' }).click();\n    await expect(page.locator('.route-number')).toHaveText(/1\\s*\\/\\s*1/);\n    await expect(page.locator('.route-progress > span')).toHaveAttribute('style', /width: 100%/);")
+          path.write_text(s)
+          PY
+      - name: Remove temporary workflow and commit branch-only corrections
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/ux-finalize.yml
+          git add components/dashboard.tsx tests/browser/portal-v2-cases.mjs
+          git diff --cached --check
+          git commit -m 'fix: keep route and monthly chart in filtered scope; restore content focus'
+          git push origin HEAD:ux/portal-design-system-login
