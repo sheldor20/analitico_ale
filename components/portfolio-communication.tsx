@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Mail, MessageSquareText, Save, Trash2, X } from "lucide-react";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
@@ -14,6 +14,8 @@ import type { Dataset, Metric, RegistryEntity } from "@/lib/types";
 import WhatsappDashboard from "./whatsapp-dashboard";
 import { useMessageCustomization } from "./message-customization";
 import styles from "./portfolio-communication.module.css";
+import OutlookHandoff from "./outlook-handoff";
+import EmailPreview from "./email-preview";
 
 type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
 const errorText = (reason: unknown) => reason instanceof Error ? reason.message : "Não foi possível concluir a operação.";
@@ -29,12 +31,13 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const selected = entities.find((entry) => entry.id === entityId) ?? entities[0];
-  useEffect(() => {
+  // Capture the opener before descendant passive effects move focus into a step.
+  useLayoutEffect(() => {
     const previous = document.body.style.overflow;
     const active = document.activeElement as HTMLElement | null;
     document.body.style.overflow = "hidden";
     closeButton.current?.focus();
-    return () => { document.body.style.overflow = previous; active?.focus(); };
+    return () => { document.body.style.overflow = previous; if (active?.isConnected) active.focus(); };
   }, []);
   useEffect(() => {
     if (!supabase) return;
@@ -52,7 +55,7 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
       if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1)?.focus(); }
       else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
     }}>
-      <div className={styles.heading}><div><span className="section-label">COMUNICAÇÃO DA CARTEIRA</span><h2 id="portfolio-title">Do cenário à conversa</h2><p>Uma unidade por mensagem. Revise o painel, os destinatários e as próximas ações.</p></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
+      <div className={styles.heading}><div><span className="section-label">COMUNICAÇÃO DA CARTEIRA</span><h2 id="portfolio-title">Comunicar resultado</h2><p>Escolha os destinatários, revise o painel e prepare o envio.</p></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
       <div className={styles.filters}>
         <label>Unidade selecionada<select value={selected?.id ?? ""} onChange={(event) => setEntityId(event.target.value)}>{entities.map((entry) => <option key={entry.id} value={entry.id}>{KIND_LABELS[entry.kind]} {entry.kind === "pa" ? `${entry.cooperative} / ${entry.pa}` : entry.kind === "cooperative" ? entry.cooperative : entry.central} · {entry.name}</option>)}</select></label>
         <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
@@ -78,6 +81,12 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [phoneName, setPhoneName] = useState("");
   const [personalOutlook, setPersonalOutlook] = useState(false);
   const [tab, setTab] = useState("panel");
+  const [clipboardVersion, setClipboardVersion] = useState(0);
+  const [step, setStep] = useState(1);
+  const [channel, setChannel] = useState("email");
+  const stepTitle = useRef<HTMLHeadingElement>(null);
+  const navigate = (next: number) => { setStep(next); setFeedback(""); setError(""); };
+  useEffect(() => { stepTitle.current?.focus({ preventScroll: true }); stepTitle.current?.scrollIntoView({ block: "nearest" }); }, [step]);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,23 +113,17 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const report = reportResult.value;
   const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
   const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
-  const { message, whatsappMessage, editor: messageEditor, editError: templateError } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: periodTitle(period, month, dataset.year), baseMessage, baseWhatsapp });
+  const { message, whatsappMessage, editor: messageEditor, editError: templateError, hasEmailPanel, restoreEmailPanel } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: periodTitle(period, month, dataset.year), baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
+  const panelOutlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: "", personal: personalOutlook }) : null);
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
   async function copy(value: string, label: string) {
+    setClipboardVersion((version) => version + 1);
     setError(""); setFeedback("");
     try { await navigator.clipboard.writeText(value); if (mounted.current) setFeedback(label); }
     catch { if (mounted.current) setError("O navegador bloqueou a cópia. Selecione e copie o texto na prévia ou baixe o arquivo."); }
-  }
-  async function copyPanel() {
-    if (!message) return;
-    setError(""); setFeedback("");
-    try {
-      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") throw new Error("Clipboard indisponível");
-      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([message.html], { type: "text/html" }), "text/plain": new Blob([message.text], { type: "text/plain" }) })]);
-      if (mounted.current) setFeedback("Painel copiado com formatação. No Outlook, substitua o texto do corpo colando o painel e revise antes de enviar.");
-    } catch { if (mounted.current) setError("Não foi possível copiar o painel formatado. Use Baixar e-mail (.eml), Baixar painel HTML ou copie o texto."); }
+    finally { if (mounted.current) setClipboardVersion((version) => version + 1); }
   }
   function download(type: "eml" | "html") {
     if (!message) return;
@@ -145,67 +148,93 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   if (!report || !message || !whatsappMessage) return <p role="alert" className="message error">{reportResult.error || "Não foi possível gerar o cenário."}</p>;
   // A URL-size limitation must not disable the complete MIME export or persistence.
   const invalid = recipients.error || templateError;
+  const channelSelector = <fieldset className={styles.channels}><legend>Canal de comunicação</legend>
+    <label><input type="radio" name="communication-channel" value="email" checked={channel === 'email'} onChange={() => setChannel('email')} /> E-mail</label>
+    <label><input type="radio" name="communication-channel" value="whatsapp" checked={channel === 'whatsapp'} onChange={() => setChannel('whatsapp')} /> WhatsApp</label>
+  </fieldset>;
+  const noPanel = !hasEmailPanel && <div role="alert" className={styles.warning}>Seu modelo de e-mail contém somente texto, sem o painel de indicadores. <button type="button" className="button secondary" onClick={restoreEmailPanel}>Restaurar painel automático</button></div>;
   return <div className={styles.composer}>
-    <div className={styles.settings}>
-      <section className={styles.card} aria-label="Destinatários da unidade">
-        <h3>Responsáveis desta unidade</h3>
-        <p className="helper">{owner ? "Somente os contatos vinculados a esta unidade e ao ano selecionado. Não inclui responsáveis de outras unidades." : "Entre na conta para usar os responsáveis cadastrados e salvar rascunhos. O preenchimento manual continua disponível."}</p>
-        {loading && <p role="status">Carregando responsáveis…</p>}
-        {contactError && <p role="alert" className={styles.warning}>{contactError}</p>}
-        {!loading && owner && !contacts.length && !contactError && <p className="helper">Nenhum responsável cadastrado. Inclua em Base fixa → Responsáveis ou informe o contato abaixo.</p>}
-        <div className={styles.contacts}>{contacts.map((contact) => <label key={contact.id} className={styles.contact}><input type="checkbox" checked={contactIds.includes(contact.id)} onChange={(event) => setContactIds((ids) => event.target.checked ? [...ids, contact.id] : ids.filter((id) => id !== contact.id))} /><span><strong>{contact.name}</strong><small>{contact.jobTitle || "Cargo não informado"}</small><small>{contact.emails.length ? contact.emails.join("; ") : "Sem e-mail cadastrado"}</small></span></label>)}</div>
-        <label>E-mails adicionais<textarea rows={2} maxLength={10000} value={extraEmails} onChange={(event) => setExtraEmails(event.target.value)} placeholder="nome@empresa.com.br; outro@empresa.com.br" /></label>
-        <p className="helper">{recipients.value?.length ?? 0} destinatários únicos. Separe por ponto e vírgula ou linha. Revise quem receberá os dados da carteira.</p>
-        {invalid && <p role="alert" className={styles.warning}>{invalid}</p>}
-      </section>
-      <section className={styles.card}>
-        <h3>Personalizar a mensagem</h3>
-        {entity.kind !== "pa" && <label className={styles.contact}><input type="checkbox" checked={includeBoth} onChange={(event) => setIncludeBoth(event.target.checked)} /><span>Incluir Venda Nova e Arrecadação, separadamente</span></label>}
-        <label>Assunto<input maxLength={300} value={subject || message.subject} onChange={(event) => setSubject(event.target.value)} /></label>
-        <label>Abertura personalizada<textarea rows={3} value={intro} maxLength={2000} onChange={(event) => setIntro(event.target.value)} placeholder="Deixe vazio para usar a apresentação automática do cenário." /></label>
-        <label>Assinatura / orientação final<textarea rows={2} maxLength={1000} value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Seu nome e mensagem de encerramento" /></label>
-        <p className="helper">Os números são gerados pela análise. A abertura e a assinatura são aplicadas aos dois canais.</p>
-      </section>
-      {messageEditor}
-      <section className={styles.card}>
-        <h3>WhatsApp</h3>
-        <label>Responsável para o WhatsApp<select value={phoneContact} onChange={(event) => { const contact = contacts.find((entry) => entry.id === event.target.value); setPhoneContact(event.target.value); setPhone(contact?.whatsapp ?? ""); setPhoneName(contact?.name ?? ""); }}><option value="">Informar manualmente / escolher no WhatsApp</option>{contacts.filter((contact) => contact.whatsapp).map((contact) => <option value={contact.id} key={contact.id}>{contact.name} · {contact.whatsapp}</option>)}</select></label>
-        <label>Número com DDD<input type="tel" inputMode="tel" value={phone} maxLength={40} onChange={(event) => { setPhoneContact(""); setPhone(event.target.value); }} placeholder="(71) 99999-9999 ou +DDI" /></label>
-        <label>Nome para saudação no WhatsApp<input value={phoneName} maxLength={160} onChange={(event) => setPhoneName(event.target.value)} /></label>
-        <p className="helper">Número vazio permite escolher o destinatário no WhatsApp. Números brasileiros com DDD recebem o código 55.</p>
-        {whatsapp.error && <p role="alert" className={styles.warning}>{whatsapp.error}</p>}
-      </section>
-    </div>
-    <div className={styles.preview}>
-      <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[["panel", "Painel do e-mail"], ["email", "Texto do e-mail"], ["whatsapp", "Painel do WhatsApp"]].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? "primary" : "secondary"}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
-      {tab === "panel" ? <iframe className={styles.frame} title="Painel do e-mail da carteira" sandbox="" srcDoc={message.html} /> : tab === "email" ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><label className={styles.textPreview}>WhatsApp gerado<textarea rows={12} readOnly value={whatsappMessage.whatsapp} /></label></>}
-      <div className={styles.card}>
-        <h3>Preparar o envio</h3>
-        <label>Conta do Outlook<select value={personalOutlook ? "personal" : "work"} onChange={(event) => setPersonalOutlook(event.target.value === "personal")}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
-        <p className="helper">O link do Outlook abre assunto, destinatários e texto. Para enviar o dashboard, use Copiar painel e cole no corpo do e-mail, substituindo o texto, ou abra o arquivo .eml em um cliente compatível.</p>
-        {outlook.error && <p role="alert" className={styles.warning}>{outlook.error}</p>}
-        {outlook.value?.requiresPaste && <p className={styles.warning}>Este e-mail excede o tamanho seguro do link. Copie o texto ou o painel e cole no Outlook; o link levará somente assunto e destinatários, sem cortar a mensagem.</p>}
-        {whatsapp.value?.requiresPaste && <p className={styles.warning}>Este texto excede o tamanho seguro do link. Copie o WhatsApp completo e cole na conversa aberta; nenhuma parte será cortada.</p>}
-        {!recipients.value?.length && <p className="helper">Sem destinatários de e-mail: informe-os no Outlook antes de enviar.</p>}
-        <div className={styles.actions}>
-          <button className="button secondary" onClick={copyPanel}><Copy size={17} /> Copiar painel</button>
-          <button className="button secondary" onClick={() => copy(message.text, "Texto do e-mail copiado.")}><Copy size={17} /> Copiar e-mail</button>
-          {outlook.value && !invalid && !loading ? <a className="button primary" href={outlook.value.url} target="_blank" rel="noopener noreferrer"><Mail size={17} /> Abrir Outlook</a> : <button className="button primary" disabled><Mail size={17} /> Abrir Outlook</button>}
-          <button className="button secondary" disabled={!outlook.value || !!invalid || loading} onClick={() => outlook.value && copy(outlook.value.url, "Link do Outlook copiado. Ele contém os destinatários e pode conter os dados da carteira; compartilhe apenas com pessoas autorizadas.")}>Copiar link Outlook</button>
-          <button className="button primary" onClick={() => setTab("whatsapp")}><MessageSquareText size={17} /> Preparar painel para WhatsApp</button>
-          <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, "Texto adaptado para WhatsApp copiado.")}><Copy size={17} /> Copiar WhatsApp</button>
-          {whatsapp.value && !loading && !templateError ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button primary" disabled>Abrir WhatsApp</button>}
-          <button className="button secondary" disabled={!!invalid || loading} onClick={() => download("eml")}><Download size={17} /> Baixar e-mail (.eml)</button>
-          <button className="button secondary" onClick={() => download("html")}><Download size={17} /> Baixar painel HTML</button>
-          <button className="button secondary" disabled={!owner || saving || loading || !!invalid || !!whatsapp.error} onClick={save}><Save size={17} /> {saving ? "Salvando…" : "Salvar rascunho"}</button>
-        </div>
-        <p className="helper">Abrir WhatsApp leva apenas o texto. Para enviar o dashboard, use Preparar painel para WhatsApp e compartilhe ou anexe a imagem.</p>
-        <p className="helper">Nenhuma mensagem é enviada automaticamente. Abrir um canal ou salvar um rascunho não confirma envio nem entrega. Os links podem conter dados da carteira.</p>
-        {feedback && <p className="message success" role="status">{feedback}</p>}
-        {error && <p className="message error" role="alert">{error}</p>}
+    <nav className={styles.steps} aria-label="Etapas da comunicação">
+      {['Destinatários', 'Revisar painel', 'Preparar envio'].map((label, index) => <button key={label} type="button" aria-current={step === index + 1 ? 'step' : undefined} onClick={() => navigate(index + 1)}><span>{index + 1}</span>{label}</button>)}
+    </nav>
+    <section hidden={step !== 1} className={styles.stepContent} aria-label="Configurar mensagem">
+      <h3 tabIndex={-1} ref={step === 1 ? stepTitle : null}>Quem vai receber?</h3>
+      {step === 1 && channelSelector}
+      <div className={styles.setupGrid}>
+        <section className={styles.card} aria-label="Destinatários da unidade" hidden={channel !== 'email'}>
+          <h4>Destinatários do e-mail</h4>
+          {loading && <p role="status">Carregando responsáveis…</p>}
+          {contactError && <p role="alert" className={styles.warning}>{contactError}</p>}
+          {!loading && !contacts.length && !contactError && <p className="helper">Informe os e-mails abaixo ou cadastre responsáveis em Cadastro e metas.</p>}
+          <div className={styles.contacts}>{contacts.map((contact) => <label key={contact.id} className={styles.contact}><input type="checkbox" checked={contactIds.includes(contact.id)} onChange={(event) => setContactIds((ids) => event.target.checked ? [...ids, contact.id] : ids.filter((id) => id !== contact.id))} /><span><strong>{contact.name}</strong><small>{contact.emails.length ? contact.emails.join('; ') : 'Sem e-mail cadastrado'}</small></span></label>)}</div>
+          <label>E-mails adicionais<textarea rows={2} maxLength={10000} value={extraEmails} onChange={(event) => setExtraEmails(event.target.value)} placeholder="nome@empresa.com.br; outro@empresa.com.br" /></label>
+          <p className="helper">{recipients.value?.length ?? 0} destinatários · separados por ponto e vírgula.</p>
+          {recipients.error && <p role="alert" className={styles.warning}>{recipients.error}</p>}
+        </section>
+        <section className={styles.card} hidden={channel !== 'whatsapp'}>
+          <h4>Destinatário do WhatsApp</h4>
+          <label>Responsável para o WhatsApp<select value={phoneContact} onChange={(event) => { const contact = contacts.find((entry) => entry.id === event.target.value); setPhoneContact(event.target.value); setPhone(contact?.whatsapp ?? ''); setPhoneName(contact?.name ?? ''); }}><option value="">Informar manualmente / escolher no WhatsApp</option>{contacts.filter((contact) => contact.whatsapp).map((contact) => <option value={contact.id} key={contact.id}>{contact.name} · {contact.whatsapp}</option>)}</select></label>
+          <label>Número com DDD<input type="tel" inputMode="tel" value={phone} maxLength={40} onChange={(event) => { setPhoneContact(''); setPhone(event.target.value); }} placeholder="(71) 99999-9999 ou +DDI" /></label>
+          <label>Nome para saudação no WhatsApp<input value={phoneName} maxLength={160} onChange={(event) => setPhoneName(event.target.value)} /></label>
+          <p className="helper">Número vazio: escolha o destinatário no WhatsApp.</p>
+          {whatsapp.error && <p role="alert" className={styles.warning}>{whatsapp.error}</p>}
+        </section>
+        <section className={styles.card}>
+          <h4>Mensagem</h4>
+          <label>Assunto<input maxLength={300} value={subject || message.subject} onChange={(event) => setSubject(event.target.value)} /></label>
+          {entity.kind !== 'pa' && <label className={styles.contact}><input type="checkbox" checked={includeBoth} onChange={(event) => setIncludeBoth(event.target.checked)} /><span>Incluir Venda Nova e Arrecadação, separadamente</span></label>}
+          <details className={styles.disclosure}><summary>Personalizar abertura e assinatura</summary>
+            <label>Abertura personalizada<textarea rows={3} value={intro} maxLength={2000} onChange={(event) => setIntro(event.target.value)} placeholder="Opcional" /></label>
+            <label>Assinatura / orientação final<textarea rows={2} maxLength={1000} value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Seu nome e mensagem de encerramento" /></label>
+          </details>
+        </section>
       </div>
-      {drafts.length > 0 && <section className={styles.card}><h3>Rascunhos salvos desta unidade</h3><p className="helper">Últimos 10. Os textos abaixo preservam o cenário da data de gravação; não são atualizados automaticamente.</p>{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString("pt-BR")} · {draft.subject}</summary><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label>{draft.whatsapp_dashboard && <SavedDashboard draft={draft} />}<div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, "Texto do rascunho copiado.")}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, "WhatsApp do rascunho copiado.")}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm("Excluir este rascunho salvo?")) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</section>}
-    </div>
+      <details className={styles.disclosure}><summary>Editar textos e modelos avançados</summary>{messageEditor}</details>
+      {noPanel}
+    </section>
+    <section hidden={step !== 2} className={styles.stepContent} aria-label="Revisão da comunicação">
+      <h3 tabIndex={-1} ref={step === 2 ? stepTitle : null}>Confira antes de compartilhar</h3>
+      <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[['panel', 'Painel do e-mail'], ['email', 'Texto do e-mail'], ['whatsapp', 'Painel do WhatsApp']].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? 'primary' : 'secondary'}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
+      {noPanel}
+      {step === 2 && (tab === 'panel' ? <EmailPreview html={message.html} /> : tab === 'email' ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><details className={styles.disclosure}><summary>Ver texto do WhatsApp</summary><label>WhatsApp gerado<textarea rows={10} readOnly value={whatsappMessage.whatsapp} /></label></details></>)}
+    </section>
+    <section hidden={step !== 3} className={styles.stepContent} aria-label="Preparação do envio">
+      <h3 tabIndex={-1} ref={step === 3 ? stepTitle : null}>Pronto para compartilhar</h3>
+      {step === 3 && channelSelector}
+      <p className={styles.deliverySummary}><strong>{entity.name}</strong> · {report.periodLabel}<br />{channel === 'email' ? `${recipients.value?.length ?? 0} destinatários: ${recipients.value?.join('; ') || 'informe no Outlook antes de enviar'}` : phoneName || 'Destinatário escolhido no WhatsApp'}</p>
+      <div hidden={channel !== 'email'} className={styles.card}>
+        <h4>Enviar o painel pelo Outlook</h4>
+        {noPanel}
+        <label>Conta do Outlook<select value={personalOutlook ? 'personal' : 'work'} onChange={(event) => setPersonalOutlook(event.target.value === 'personal')}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
+        <OutlookHandoff clipboardVersion={clipboardVersion} html={message.html} text={message.text} url={panelOutlook.value?.url ?? null} disabled={!!invalid || loading || !hasEmailPanel} />
+        {panelOutlook.error && <p role="alert" className={styles.warning}>{panelOutlook.error}</p>}
+        <div className={styles.fileOption}><div><strong>Prefere abrir um arquivo?</strong><p>O arquivo contém o painel completo. Abra no Outlook; no novo Outlook, pode ser necessário encaminhar a mensagem e revisar os destinatários.</p></div><button className="button secondary" disabled={!!invalid || loading} onClick={() => download('eml')}><Download size={17} /> Baixar e-mail (.eml)</button></div>
+        <details className={styles.disclosure}><summary>Outras opções de e-mail</summary><div className={styles.actions}>
+          <button className="button secondary" onClick={() => copy(message.text, 'Texto do e-mail copiado.')}><Copy size={17} /> Copiar e-mail</button>
+          {outlook.value && !invalid && !loading ? <a className="button secondary" href={outlook.value.url} target="_blank" rel="noopener noreferrer">Abrir Outlook somente texto</a> : <button className="button secondary" disabled>Abrir Outlook somente texto</button>}
+          <button className="button secondary" onClick={() => download('html')}><Download size={17} /> Baixar painel HTML</button>
+        </div>{outlook.value?.requiresPaste && <p className={styles.warning}>Texto maior que o limite do link. Cole a mensagem completa no Outlook ou use o arquivo .eml.</p>}</details>
+      </div>
+      {step === 3 && channel === 'whatsapp' && <div className={styles.card}><h4>Enviar pelo WhatsApp</h4>
+        <WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading || !!templateError || !!whatsapp.error} />
+        <details className={styles.disclosure}><summary>Enviar somente texto</summary><div className={styles.actions}>
+          <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, 'Texto adaptado para WhatsApp copiado.')}><Copy size={17} /> Copiar WhatsApp</button>
+          {whatsapp.value && !loading && !templateError ? <a className="button secondary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button secondary" disabled>Abrir WhatsApp</button>}
+        </div>{whatsapp.value?.requiresPaste && <p className={styles.warning}>Texto maior que o limite do link. Copie a mensagem completa e cole na conversa.</p>}</details>
+      </div>}
+      {invalid && <p role="alert" className={styles.warning}>{invalid}</p>}
+      <p className="helper">Revise o destinatário no aplicativo. Nada é enviado automaticamente.</p>
+      {feedback && <p className="message success" role="status">{feedback}</p>}
+      {error && <p className="message error" role="alert">{error}</p>}
+      <details className={styles.disclosure}><summary>Rascunhos salvos desta unidade ({drafts.length})</summary>{!drafts.length && <p>Nenhum rascunho salvo.</p>}{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString('pt-BR')} · {draft.subject}</summary><p className="helper">Cenário da data de gravação; não atualizado automaticamente.</p><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label>{draft.whatsapp_dashboard && <SavedDashboard draft={draft} />}<div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, 'Texto do rascunho copiado.')}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, 'WhatsApp do rascunho copiado.')}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm('Excluir este rascunho salvo?')) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</details>
+    </section>
+    <footer className={styles.stepFooter}>
+      <span>Etapa {step} de 3</span>
+      <div className={styles.actions}>
+        {step > 1 && <button className="button secondary" onClick={() => navigate(step - 1)}>Voltar</button>}
+        {step < 3 ? <button className="button primary" onClick={() => { if (step === 1) setTab(channel === 'email' ? 'panel' : 'whatsapp'); navigate(step + 1); }}>{step === 1 ? 'Revisar painel' : 'Preparar envio'}</button> : <button className="button secondary" disabled={!owner || saving || loading || !!invalid || !!whatsapp.error} onClick={save}><Save size={17} />{saving ? 'Salvando…' : 'Salvar rascunho'}</button>}
+      </div>
+    </footer>
   </div>;
 }
 

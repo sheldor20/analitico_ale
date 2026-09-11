@@ -1,3 +1,4 @@
+import { step, whatsappDelivery } from './composer-navigation.mjs';
 import { readFile } from 'node:fs/promises';
 
 export function registerPeriodTests({test,expect,setup,composer}) {
@@ -52,14 +53,18 @@ export function registerPeriodTests({test,expect,setup,composer}) {
     expect(csv).toContain('2º trimestre · 2026');expect(file.suggestedFilename()).toContain('quarter');
     await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
     const dialog=composer(page);await expect(select(dialog,'Trimestre')).toHaveValue('2');
+    await step(dialog, 2);
     const frame=page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     await expect(frame.locator('body')).toContainText('2º trimestre · 2026');
+    await whatsappDelivery(dialog);
     expect(new URL(await dialog.getByRole('link',{name:'Abrir WhatsApp',exact:true}).getAttribute('href')).searchParams.get('text')).toContain('2º trimestre · 2026');
+    await step(dialog, 2);
     await select(dialog,'Período da mensagem').selectOption('semester');await select(dialog,'Semestre').selectOption('2');
     await expect(frame.locator('body')).toContainText('2º semestre · 2026');
     await select(dialog,'Período da mensagem').selectOption('month');await select(dialog,'Mês de referência').selectOption('1');
     await select(dialog,'Período da mensagem').selectOption('ytd');
     await expect(frame.locator('body')).toContainText('Acumulado · JAN–SET/2026');
+    await step(dialog, 3);
     await dialog.getByRole('button',{name:'Salvar rascunho',exact:true}).click();
     await expect.poll(()=>writes.length).toBe(1);
     expect(writes[0].report.month).toBe(8);expect(writes[0].report.period).toBe('ytd');

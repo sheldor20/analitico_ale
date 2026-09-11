@@ -29,8 +29,8 @@ export default function LoginForm({ configured }: { configured: boolean }) {
   return <main className={styles.page}>
     <section className={styles.intro} aria-label="Gestão Comercial Sicoob">
       <img className={styles.logo} src="/brand/sicoob-logo-light.svg" alt="Sicoob" width="174" height="50" />
-      <div><p className={styles.eyebrow}>BAHIA & NORDESTE</p><h1>Gestão comercial.<br />Acesso restrito.</h1><p className={styles.summary}>Metas e resultados das centrais Bahia e Nordeste.</p></div>
-      <p className={styles.foot}>GESTÃO COMERCIAL</p>
+      <div><p className={styles.eyebrow}>BAHIA & NORDESTE</p><h1>Sua carteira.<br /> Mais resultados.</h1><p className={styles.summary}>Metas e resultados das centrais Bahia e Nordeste.</p></div>
+      <p className={styles.foot}>BAHIA · NORDESTE</p>
     </section>
     <section className={styles.panel} aria-labelledby="login-title">
       <div className={styles.card}><div className={styles.icon}><LockKeyhole size={25} aria-hidden="true" /></div>

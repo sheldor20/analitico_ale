@@ -19,7 +19,7 @@ test('dashboard migration preserves legacy drafts, validates v2 and retains RLS 
     const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
     const latest = files.find((f) => f.endsWith('_portfolio_dashboard_presentation.sql'));
     assert.ok(latest,'versioned migration must be committed');
-    for (const f of files.filter((f) => f !== latest)) await db.exec(await readFile(new URL(f,dir),'utf8'));
+    for (const f of files.filter((f) => f < latest)) await db.exec(await readFile(new URL(f,dir),'utf8'));
     await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${A}',false);`);
     const dataset = portfolioFixture();
     const report = buildPortfolioReport({dataset,entity:unit(dataset,'cooperative:1002:3017'),month:7,period:'month'});
@@ -27,13 +27,21 @@ test('dashboard migration preserves legacy drafts, validates v2 and retains RLS 
     const args = [JSON.stringify(report),message.subject,message.text,message.html,message.whatsapp];
     const insert = `insert into public.commercial_communication_drafts(owner_id,year,entity_id,entity_kind,report,subject,email_body,email_html,whatsapp_body) values(auth.uid(),2026,'cooperative:1002:3017','cooperative',$1,$2,$3,$4,$5) returning *`;
     const legacy = (await db.query(insert,args)).rows[0];
-    await db.exec('reset role'); await db.exec(await readFile(new URL(latest,dir),'utf8'));
+    await db.exec('reset role'); for (const f of files.filter((f) => f >= latest)) await db.exec(await readFile(new URL(f,dir),'utf8'));
     await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${A}',false);`);
     const old = (await db.query('select * from public.commercial_communication_drafts')).rows[0];
     assert.equal(old.email_body,legacy.email_body); assert.equal(old.presentation_version,1); assert.equal(old.whatsapp_dashboard,null);
     const v2 = `insert into public.commercial_communication_drafts(owner_id,year,entity_id,entity_kind,report,subject,email_body,email_html,whatsapp_body,presentation_version,whatsapp_dashboard) values(auth.uid(),2026,'cooperative:1002:3017','cooperative',$1,$2,$3,$4,$5,2,$6) returning *`;
     const row = (await db.query(v2,[...args,JSON.stringify(message.dashboard)])).rows[0];
     assert.deepEqual(row.whatsapp_dashboard,message.dashboard);
+    const legacyCards = structuredClone(message.dashboard);
+    for (const block of legacyCards.blocks.filter((b) => b.type === 'cards')) for (const item of block.items) { delete item.support; delete item.accent; }
+    await db.query(v2,[...args,JSON.stringify(legacyCards)]);
+    for (const change of [{ support: null },{ support: 'a'.repeat(401) },{ support: [] },{ accent: 'true' },{ accent: 1 },{ accent: null }]) {
+      const bad = structuredClone(message.dashboard); Object.assign(bad.blocks.find((b) => b.type === 'cards').items[0],change);
+      await assert.rejects(() => db.query(v2,[...args,JSON.stringify(bad)]),/commercial_dashboard_card_metadata_check/);
+    }
+
     for (const bad of [{...message.dashboard,period:'annual'}, {...message.dashboard,entityId:'central:2007'}, {...message.dashboard,blocks:[{type:'unknown'}]}, {...message.dashboard,notes:null}]) await assert.rejects(() => db.query(v2,[...args,JSON.stringify(bad)]),/check constraint/);
     await assert.rejects(() => db.query("update public.commercial_communication_drafts set presentation_version=1"),/permission denied/);
     await db.exec(`select set_config('request.jwt.claim.sub','${B}',false)`);
