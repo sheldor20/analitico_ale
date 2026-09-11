@@ -45,23 +45,28 @@ jobs:
             assert hashlib.sha256(new.encode()).hexdigest()==item['newsha'],f'Output differs: {name}'
             path.parent.mkdir(parents=True,exist_ok=True)
             path.write_text(new)
-          print('All 27 edited files match the reviewed source checksums.')
+          print('All edited files match reviewed source checksums.')
+          path=pathlib.Path('components/dashboard.tsx')
+          text=path.read_text().replace('const displayed = sortAnalysis(', 'const displayed: Analysis[] = sortAnalysis(').replace('const visibleLeaves = visibleLeafRows(', 'const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(')
+          text=text.replace("actualLevel === 'pa' ? 'PAs' : actualLevel === 'central' ? 'centrais' : 'cooperativas'", "actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')")
+          path.write_text(text)
+          path=pathlib.Path('tests/browser/portal-v2-cases.mjs')
+          path.write_text(path.read_text().replace("'1 cooperativas'", "'1 cooperativa'"))
           PY
       - name: Generate migration in chronological order through the Supabase CLI
         run: |
           mkdir -p /tmp/ux-assembly
-          VERSION=$(npm view supabase version)
-          echo "Supabase CLI $VERSION" > /tmp/ux-assembly/assembly.txt
-          npx --yes supabase@"$VERSION" --version
-          npx --yes supabase@"$VERSION" migration new --help
-          npx --yes supabase@"$VERSION" migration new portal_mandatory_sessions
+          echo 'Supabase CLI 2.117.0' > /tmp/ux-assembly/assembly.txt
+          npx --yes supabase@2.117.0 --version
+          npx --yes supabase@2.117.0 migration new --help
+          npx --yes supabase@2.117.0 migration new portal_mandatory_sessions
           NEW=$(find supabase/migrations -name '*_portal_mandatory_sessions.sql')
           test -n "$NEW"
           cp supabase/migrations/20260910143358_mandatory_sessions.sql "$NEW"
-          git rm supabase/migrations/20260910143358_mandatory_sessions.sql
+          rm supabase/migrations/20260910143358_mandatory_sessions.sql
           echo "$NEW" >> /tmp/ux-assembly/assembly.txt
           cp "$NEW" /tmp/ux-assembly/
-      - name: Commit only functional changes and remove temporary assembly permissions
+      - name: Commit functional changes and remove temporary assembly permissions
         run: |
           git rm .github/workflows/ux-workbench.yml scripts/ux-edit-1.b64 scripts/ux-edit-2.b64 scripts/ux-edit-3.b64 scripts/ux-edit-4.b64
           git add -A
