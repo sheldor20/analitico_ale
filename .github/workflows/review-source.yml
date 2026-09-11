@@ -1,0 +1,20 @@
+name: Review source
+on:
+  push:
+    branches: [fix/ux-paineis-outlook-comunicacao]
+    paths: [.github/workflows/review-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive HEAD | gzip > /tmp/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-source
+          path: /tmp/source.tar.gz
+          retention-days: 1
