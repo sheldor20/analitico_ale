@@ -1,0 +1,36 @@
+name: Finalize PR13 review
+on:
+  push:
+    branches: [fix/ux-paineis-outlook-comunicacao]
+    paths: [.github/workflows/pr13-finalize.yml]
+permissions:
+  contents: read
+jobs:
+  finalize:
+    if: github.ref == 'refs/heads/fix/ux-paineis-outlook-comunicacao'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ux-paineis-outlook-comunicacao
+      - name: Apply checked corrections and remove temporary files
+        run: |
+          python3 scripts/finalize-pr13.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm scripts/finalize-pr13.py .github/workflows/pr13-finalize.yml
+          git add components/email-preview.tsx components/portfolio-communication.tsx components/outlook-handoff.tsx components/dashboard.tsx tests/browser/followup-cases.mjs docs/UX_PAINEL_COMUNICACAO.md supabase/migrations/
+          git diff --cached --check
+          git commit -m 'fix: preview lifecycle, modal focus, variance conflicts and stale Outlook clipboard'
+          git push origin HEAD:fix/ux-paineis-outlook-comunicacao
+          mkdir -p /tmp/pr13-finalized
+          git rev-parse HEAD > /tmp/pr13-finalized/head.txt
+          git archive HEAD | gzip > /tmp/pr13-finalized/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr13-finalized-source
+          path: /tmp/pr13-finalized
+          retention-days: 1
