@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PortfolioCommunication from "@/components/portfolio-communication";
-import { Building2, Check, Info, LoaderCircle, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Building2, CalendarDays, Check, Info, LoaderCircle, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
 import { deleteEntity, distributeAmount, entityId as registryEntityId, getPlanRow, initializeRegistry, upsertEntity, upsertPlanRow } from "@/lib/registry.mjs";
 import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "@/lib/types";
@@ -19,6 +19,9 @@ type RegistryManagerProps = {
   userId: string;
   onChange: (next: Dataset) => Promise<void>;
   busy?: boolean;
+  initialAgenda?: { entityId: string; date: string; request: number };
+  onDirtyChange?: (dirty: boolean) => void;
+  onSavingChange?: (saving: boolean) => void;
 };
 type EntityDraft = {
   kind: RegistryEntity["kind"];
@@ -73,10 +76,13 @@ function defaultCutoff(dataset: Dataset, metric: Metric, kind: RegistryEntity["k
   return dataset.year === today.getFullYear() ? today.toISOString().slice(0, 10) : `${dataset.year}-${dataset.year < today.getFullYear() ? "12-31" : "01-31"}`;
 }
 
-export default function RegistryManager({ dataset, userId, onChange, busy = false }: RegistryManagerProps) {
+export default function RegistryManager({ dataset, userId, onChange, busy = false, initialAgenda, onDirtyChange, onSavingChange }: RegistryManagerProps) {
   const normalized = useMemo(() => initializeRegistry(dataset) as Dataset, [dataset]);
   const entities = normalized.registry?.entities ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(entities[0]?.id ?? null);
+  const requestedAgenda = initialAgenda && initialAgenda.date.startsWith(`${dataset.year}-`) && /^\d{4}-\d{2}-\d{2}$/.test(initialAgenda.date) && entities.some((entity) => entity.id === initialAgenda.entityId) ? initialAgenda : null;
+  const requestKey = requestedAgenda ? `${userId}:${dataset.year}:${requestedAgenda.entityId}:${requestedAgenda.date}:${requestedAgenda.request}` : "";
+  const appliedRequest = useRef(requestKey);
+  const [selectedId, setSelectedId] = useState<string | null>(requestedAgenda?.entityId ?? entities[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
   const [centralFilter, setCentralFilter] = useState("all");
@@ -89,11 +95,12 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "contacts" | "agenda" | "targets">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "contacts" | "agenda" | "targets">(requestedAgenda ? "agenda" : "profile");
   const [relationshipDirty, setRelationshipDirty] = useState(false);
   const [agendaRevision, setAgendaRevision] = useState(0);
   const [agendaSaving, setAgendaSaving] = useState(false);
-  const [agendaFocus, setAgendaFocus] = useState<{ date: string; request: number } | null>(null);
+  const [agendaFocus, setAgendaFocus] = useState<{ date: string; request: number } | null>(requestedAgenda ? { date: requestedAgenda.date, request: requestedAgenda.request } : null);
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
   const refreshAgenda = useCallback(() => setAgendaRevision((value) => value + 1), []);
   const [identityLocked, setIdentityLocked] = useState(false);
   const locked = busy || saving || agendaSaving;
@@ -117,6 +124,22 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   useEffect(() => {
     if (selectedId && !entities.some((entity) => entity.id === selectedId)) setSelectedId(entities[0]?.id ?? null);
   }, [entities, selectedId]);
+  useEffect(() => {
+    onDirtyChange?.(relationshipDirty || entityForm !== null);
+    return () => onDirtyChange?.(false);
+  }, [relationshipDirty, entityForm, onDirtyChange]);
+  useEffect(() => {
+    onSavingChange?.(saving || agendaSaving);
+    return () => onSavingChange?.(false);
+  }, [saving, agendaSaving, onSavingChange]);
+  useEffect(() => {
+    if (!requestedAgenda || !requestKey || requestKey === appliedRequest.current || locked || relationshipDirty || entityForm !== null) return;
+    appliedRequest.current = requestKey;
+    setSelectedId(requestedAgenda.entityId); setActiveTab("agenda");
+    setAgendaFocus((current) => ({ date: requestedAgenda.date, request: (current?.request ?? 0) + 1 }));
+    setDeleting(false); setShowCommunication(false); setCalendarExpanded(false);
+    setQuery(""); setKindFilter("all"); setCentralFilter("all"); setCooperativeFilter("all");
+  }, [requestedAgenda, requestKey, locked, relationshipDirty, entityForm]);
 
   function clearFeedback() { setError(""); setNotice(""); }
   function leaveRelationshipForm() {
@@ -133,7 +156,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
     setShowCommunication(false); setSelectedId(entity.id); setEntityForm(null); setDeleting(false);
     setQuery(""); setKindFilter("all"); setCentralFilter("all"); setCooperativeFilter("all");
     setAgendaFocus((current) => ({ date: zonedDateTimeInput(appointment.startsAt, appointment.timezone).slice(0, 10), request: (current?.request ?? 0) + 1 }));
-    setActiveTab("agenda"); clearFeedback();
+    setActiveTab("agenda"); setCalendarExpanded(false); clearFeedback();
   }
   function startCreate() {
     if (!leaveRelationshipForm()) return;
@@ -188,7 +211,10 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   }
 
   return <section className="registry-manager" aria-label={`Cadastro e metas de ${dataset.year}`}>
-    <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} />
+    <details className={profileStyles.agendaDisclosure} aria-label="Agenda das unidades" open={calendarExpanded} onToggle={(event) => setCalendarExpanded(event.currentTarget.open)}>
+      <summary><CalendarDays size={19} aria-hidden="true" /><strong>Agenda das unidades</strong><span>{calendarExpanded ? "Recolher calendário" : "Abrir calendário"}</span></summary>
+      {calendarExpanded && <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} />}
+    </details>
     <div className="panel-heading">
       <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
       <button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button>

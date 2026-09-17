@@ -1,6 +1,7 @@
 import { step, disclosure, customize } from './composer-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { money } from '../../lib/analytics.mjs';
 
 export function registerDashboardTests({ setup, composer, selectAugust }) {
   async function open(page) {
@@ -80,6 +81,64 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
       const bounds = await frame.locator('body').evaluate(node => ({ content: node.ownerDocument.documentElement.scrollWidth, viewport: node.ownerDocument.defaultView.innerWidth }));
       expect(bounds.content).toBeLessThanOrEqual(bounds.viewport + 1);
       await frame.locator('body').screenshot({ path: info.outputPath(`compact-email-mobile-${width}.png`) });
+    }
+    expect(errors).toEqual([]);
+  });
+
+  test('currency layout: large and negative amounts remain exact on one line in email and PNG', async ({ page }, info) => {
+    await page.addInitScript(() => {
+      window.__currencyDraws = [];
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (value, x, y, ...args) {
+        window.__currencyDraws.push({ value: String(value), x, y, width: this.measureText(String(value)).width });
+        return fillText.call(this, value, x, y, ...args);
+      };
+    });
+    const target = 9279000;
+    const { errors } = await setup(page, dataset => ({ ...dataset, rows: dataset.rows.map(row => row.source === 'base' && row.central === '1002' && row.metric === 'VN'
+      ? { ...row, targets: Array(12).fill(target), annualTarget: target * 12, actuals: row.actuals.map(value => value == null ? null : row.cooperative === '3017' ? 186000000 : -186000000) } : row) }));
+    await page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true }).click();
+    const dialog = composer(page);
+    const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
+    for (const [cooperative, actual] of [['3017', 186000000], ['3025', -186000000]]) {
+      await dialog.getByLabel('Unidade selecionada').selectOption(`cooperative:1002:${cooperative}`);
+      await selectAugust(dialog);
+      await step(dialog, 2);
+      await dialog.getByRole('button', { name: 'Painel do e-mail', exact: true }).click();
+      const primary = frame.locator('table[data-layout="metric-cards"][data-columns="3"]').first();
+      await expect(primary.locator('.metric-value')).toHaveCount(3);
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+        const displayed = await primary.locator('.metric-value').evaluateAll(nodes => nodes.map(node => node.textContent));
+        expect(displayed[0]).toBe(money(target));
+        expect(displayed[1]).toBe(money(actual));
+        if (width === 1440) {
+          const cells = await primary.locator('td[data-metric]').evaluateAll(nodes => nodes.map(node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y }; }));
+          expect(new Set(cells.map(cell => cell.y)).size).toBe(1);
+          expect(cells[0].x).toBeLessThan(cells[1].x); expect(cells[1].x).toBeLessThan(cells[2].x);
+        }
+        const geometry = await frame.locator('.metric-value').evaluateAll(nodes => nodes.map(node => {
+          const range = node.ownerDocument.createRange(); range.selectNodeContents(node);
+          const lines = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
+          return { text: node.textContent, lines: lines.length, width: node.clientWidth, scroll: node.scrollWidth };
+        }));
+        for (const value of geometry) {
+          expect(value.lines, `${value.text} at ${width}px`).toBe(1);
+          expect(value.scroll, `${value.text} at ${width}px`).toBeLessThanOrEqual(value.width + 1);
+        }
+        const bounds = await frame.locator('body').evaluate(node => ({ content: node.ownerDocument.documentElement.scrollWidth, viewport: node.ownerDocument.defaultView.innerWidth }));
+        expect(bounds.content).toBeLessThanOrEqual(bounds.viewport + 1);
+        if (cooperative === '3017' && width !== 320 || cooperative === '3025' && width === 320) await frame.locator('body').screenshot({ path: info.outputPath(`currency-${cooperative}-${width}.png`) });
+      }
+      await page.evaluate(() => { window.__currencyDraws = []; });
+      await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+      await expect(dialog.getByRole('img', { name: /Dashboard Mensal/ })).toBeVisible();
+      const draws = await page.evaluate(() => window.__currencyDraws);
+      for (const expected of [money(target), money(actual)].map(value => value.replace(/\s/g, ' '))) {
+        const amount = draws.find(draw => draw.value === expected);
+        expect(amount, `complete currency string ${expected}`).toBeTruthy();
+        expect(amount.width).toBeLessThanOrEqual(284);
+      }
     }
     expect(errors).toEqual([]);
   });

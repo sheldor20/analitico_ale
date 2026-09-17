@@ -71,7 +71,7 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
     ] });
     await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
     await page.locator('.registry-list').getByRole('button', { name: /Cooperativa Alfa/ }).click();
-    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await page.locator('[aria-label="Seções da ficha"]').getByRole('button', { name: 'Agenda', exact: true }).click();
     const agenda = page.getByRole('region', { name: 'Agenda de Cooperativa Alfa', exact: true });
     await expect(agenda.getByRole('heading', { name: 'Nenhum compromisso neste mês', exact: true })).toBeVisible();
     await agenda.getByRole('button', { name: 'Novo compromisso', exact: true }).click();
@@ -114,14 +114,14 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath('relationship-calendar-mobile.png'), fullPage: true });
     await page.locator('.registry-list').getByRole('button', { name: /Cooperativa Beta/ }).click();
-    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await page.locator('[aria-label="Seções da ficha"]').getByRole('button', { name: 'Agenda', exact: true }).click();
     const betaAgenda = page.getByRole('region', { name: 'Agenda de Cooperativa Beta', exact: true });
     await expect(betaAgenda.getByText('Agenda da cooperativa Beta', { exact: true })).toBeVisible();
     await expect(betaAgenda.getByText('Treinamento prestamista revisado', { exact: true })).toHaveCount(0);
     await page.reload();
     await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
     await page.locator('.registry-list').getByRole('button', { name: /Cooperativa Alfa/ }).click();
-    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await page.locator('[aria-label="Seções da ficha"]').getByRole('button', { name: 'Agenda', exact: true }).click();
     await expect(revised.getByText('Concluído', { exact: true })).toBeVisible();
     expect(relationshipReads.filter(read => read.table === 'commercial_entity_appointments').every(read => read.filters.owner_id === `eq.${owner}` && read.filters.workspace_year === 'eq.2026')).toBe(true);
     expect(errors).toEqual([]);

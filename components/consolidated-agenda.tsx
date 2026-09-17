@@ -5,11 +5,13 @@ import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink, MapPin, 
 import { APPOINTMENT_KINDS, APPOINTMENT_STATUSES, TIMEZONES, calendarDays, zonedDateTimeInput } from '@/lib/relationship.mjs';
 import { prepareAgendaEntries, selectAgendaEntries } from '@/lib/consolidated-agenda.mjs';
 import { listWorkspaceAppointments, type EntityAppointment } from '@/lib/relationship-store';
+import { defaultAgendaMonth, reconcileAgendaMonth } from '@/lib/calendar-clock.mjs';
+import { useCalendarToday } from '@/lib/use-calendar-today';
 import type { RegistryEntity } from '@/lib/types';
 import styles from './consolidated-agenda.module.css';
 
 type Props = { entities: RegistryEntity[]; year: number; userId: string; refreshKey: number; onOpenEntity: (entity: RegistryEntity, appointment: EntityAppointment) => void; disabled?: boolean };
-type Filters = { scope: string; month: string; date: string; central: string; kind: string; status: string };
+type Filters = { scope: string; month: string; date: string; central: string; kind: string; status: string; followCurrentMonth: boolean };
 type Loaded = { key: string; rows: EntityAppointment[]; error: string };
 const monthLabel = (value: string) => new Date(`${value}-01T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const dateLabel = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
@@ -17,11 +19,12 @@ const shiftMonth = (value: string, by: number) => { const date = new Date(`${val
 const emptyRows: EntityAppointment[] = [];
 
 export default function ConsolidatedAgenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = false }: Props) {
-  const today = zonedDateTimeInput(new Date().toISOString()).slice(0, 10);
+  const today = useCalendarToday();
+  const todayInYear = today.startsWith(`${year}-`);
   const scope = `${userId}:${year}`;
-  const defaults: Filters = { scope, month: today.startsWith(`${year}-`) ? today.slice(0, 7) : `${year}-01`, date: '', central: 'all', kind: 'all', status: 'scheduled' };
+  const defaults: Filters = { scope, month: defaultAgendaMonth(year, today), date: '', central: 'all', kind: 'all', status: 'scheduled', followCurrentMonth: true };
   const [selection, setSelection] = useState<Filters>(defaults);
-  const filters = selection.scope === scope ? selection : defaults;
+  const filters = reconcileAgendaMonth(selection.scope === scope ? selection : defaults, year, today);
   const [retry, setRetry] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const requestKey = `${scope}:${refreshKey}:${retry}`;
@@ -29,6 +32,12 @@ export default function ConsolidatedAgenda({ entities, year, userId, refreshKey,
   const rows = !loading && !loaded?.error ? loaded?.rows ?? emptyRows : emptyRows;
   const loadError = !loading ? loaded?.error : '';
   const update = (change: Partial<Filters>) => setSelection({ ...filters, ...change, scope });
+
+  useEffect(() => {
+    setSelection((previous) => previous.scope === scope ? reconcileAgendaMonth(previous, year, today) : {
+      scope, month: defaultAgendaMonth(year, today), date: '', central: 'all', kind: 'all', status: 'scheduled', followCurrentMonth: true,
+    });
+  }, [scope, year, today]);
 
   useEffect(() => {
     let active = true;
@@ -51,10 +60,19 @@ export default function ConsolidatedAgenda({ entities, year, userId, refreshKey,
   }, [entities, prepared.entries]);
   const central = filters.central === 'all' || centralOptions.some(([code]) => code === filters.central) ? filters.central : 'all';
   const agenda = useMemo(() => selectAgendaEntries(prepared.entries, { ...filters, central }), [prepared.entries, filters, central]);
+  const dayEntries = useMemo(() => {
+    const result = new Map<string, EntityAppointment[]>();
+    for (const entry of agenda.monthEntries) for (const day of entry.days) {
+      const events = result.get(day) ?? [];
+      if (events.length < 2) events.push(entry.appointment);
+      result.set(day, events);
+    }
+    return result;
+  }, [agenda.monthEntries]);
   const days = calendarDays(filters.month);
   const error = loadError || prepared.error;
   const locked = disabled || loading;
-  const showMonth = (month: string) => update({ month, date: '' });
+  const showMonth = (month: string) => update({ month, date: '', followCurrentMonth: false });
   const countLabel = (count: number) => `${count} ${count === 1 ? 'compromisso' : 'compromissos'}`;
 
   return <section className={styles.section} aria-label="Agenda consolidada" aria-busy={loading}>
@@ -66,10 +84,23 @@ export default function ConsolidatedAgenda({ entities, year, userId, refreshKey,
     </div>
     {error ? <div className={styles.error} role="alert"><p>{error}</p><button type="button" className="button secondary" disabled={disabled} onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div> : <>
       <div className={styles.calendar}>
-        <div className={styles.monthNavigation}><button type="button" className="button quiet" aria-label="Mês anterior da agenda" disabled={disabled || filters.month === `${year}-01`} onClick={() => showMonth(shiftMonth(filters.month, -1))}><ChevronLeft size={18} aria-hidden="true" /></button><label className={styles.monthPicker}><span className={styles.srOnly}>Mês da agenda</span><select aria-label="Mês da agenda" value={filters.month} disabled={disabled} onChange={(event) => showMonth(event.target.value)}>{Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, '0')}`).map((month) => <option value={month} key={month}>{monthLabel(month)}</option>)}</select></label><button type="button" className="button quiet" aria-label="Próximo mês da agenda" disabled={disabled || filters.month === `${year}-12`} onClick={() => showMonth(shiftMonth(filters.month, 1))}><ChevronRight size={18} aria-hidden="true" /></button></div>
-        <table className={styles.calendarTable} aria-label="Calendário consolidado"><thead><tr>{[['Seg', 'Segunda-feira'], ['Ter', 'Terça-feira'], ['Qua', 'Quarta-feira'], ['Qui', 'Quinta-feira'], ['Sex', 'Sexta-feira'], ['Sáb', 'Sábado'], ['Dom', 'Domingo']].map(([short, name]) => <th key={short} scope="col"><abbr title={name}>{short}</abbr></th>)}</tr></thead><tbody>{Array.from({ length: 6 }, (_, week) => <tr key={week}>{days.slice(week * 7, week * 7 + 7).map((day) => <td key={day.date}><button type="button" className={styles.day} data-outside={!day.inMonth} data-today={today === day.date} aria-label={`${dateLabel(day.date)}: ${countLabel(agenda.counts[day.date] ?? 0)}`} aria-pressed={filters.date === day.date} disabled={locked || !day.date.startsWith(`${year}-`)} onClick={() => update({ date: day.date, month: day.date.slice(0, 7) })}><span>{day.day}</span>{!!agenda.counts[day.date] && <span className={styles.count} aria-hidden="true">{agenda.counts[day.date]}</span>}</button></td>)}</tr>)}</tbody></table>
+        <div className={styles.monthNavigation}>
+          <button type="button" className="button quiet" aria-label="Mês anterior da agenda" disabled={disabled || filters.month === `${year}-01`} onClick={() => showMonth(shiftMonth(filters.month, -1))}><ChevronLeft size={18} aria-hidden="true" /></button>
+          <label className={styles.monthPicker}><span className={styles.srOnly}>Mês da agenda</span><select aria-label="Mês da agenda" value={filters.month} disabled={disabled} onChange={(event) => showMonth(event.target.value)}>{Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, '0')}`).map((month) => <option value={month} key={month}>{monthLabel(month)}</option>)}</select></label>
+          <button type="button" className="button quiet" aria-label="Próximo mês da agenda" disabled={disabled || filters.month === `${year}-12`} onClick={() => showMonth(shiftMonth(filters.month, 1))}><ChevronRight size={18} aria-hidden="true" /></button>
+          <button type="button" className={`button secondary ${styles.todayButton}`} disabled={disabled || !todayInYear} title={todayInYear ? 'Voltar ao mês atual' : `Hoje pertence a ${today.slice(0, 4)}. Altere o ano do cadastro para consultar.`} onClick={() => update({ month: today.slice(0, 7), date: '', followCurrentMonth: true })}>Hoje</button>
+        </div>
+        <table className={styles.calendarTable} aria-label="Calendário consolidado">
+          <thead><tr>{[['Seg', 'Segunda-feira'], ['Ter', 'Terça-feira'], ['Qua', 'Quarta-feira'], ['Qui', 'Quinta-feira'], ['Sex', 'Sexta-feira'], ['Sáb', 'Sábado'], ['Dom', 'Domingo']].map(([short, name]) => <th key={short} scope="col"><abbr title={name}>{short}</abbr></th>)}</tr></thead>
+          <tbody>{Array.from({ length: 6 }, (_, week) => <tr key={week}>{days.slice(week * 7, week * 7 + 7).map((day) => <td key={day.date}>
+            <button type="button" className={styles.day} data-outside={!day.inMonth} data-today={today === day.date} aria-current={today === day.date ? 'date' : undefined} aria-label={`${dateLabel(day.date)}: ${countLabel(agenda.counts[day.date] ?? 0)}`} aria-pressed={filters.date === day.date} disabled={locked || !day.date.startsWith(`${year}-`)} onClick={() => update({ date: day.date, month: day.date.slice(0, 7), followCurrentMonth: false })}>
+              <span className={styles.dayTop}><span className={styles.dayNumber}>{day.day}</span>{!!agenda.counts[day.date] && <span className={styles.count} aria-hidden="true">{agenda.counts[day.date]}</span>}</span>
+              {day.inMonth && <span className={styles.dayPreview} aria-hidden="true">{(dayEntries.get(day.date) ?? []).map((appointment) => <span key={appointment.id} title={appointment.title}><strong>{zonedDateTimeInput(appointment.startsAt, appointment.timezone).slice(0, 10) === day.date ? zonedDateTimeInput(appointment.startsAt, appointment.timezone).slice(11) : 'Continua'}</strong> {appointment.title}</span>)}{(agenda.counts[day.date] ?? 0) > 2 && <small>+{(agenda.counts[day.date] ?? 0) - 2} compromissos</small>}</span>}
+            </button>
+          </td>)}</tr>)}</tbody>
+        </table>
       </div>
-      <p className={styles.calendarHelp}>Compromissos de vários dias aparecem em cada dia ocupado. Horários no fuso indicado em cada compromisso.</p>
+      <div className={styles.calendarLegend}><span><i aria-hidden="true" />Hoje · {dateLabel(today)}{!todayInYear && ` de ${today.slice(0, 4)}`}</span><p>Horários no fuso de cada compromisso.</p></div>
       {loading ? <p className={styles.loading} role="status">Carregando agenda consolidada…</p> : <>
         <div className={styles.listHeading}><div><h3>{filters.date ? `Agenda de ${dateLabel(filters.date)}` : 'Compromissos do mês'}</h3><p aria-live="polite">{countLabel(agenda.visible.length)}{filters.date ? ` neste dia · ${countLabel(agenda.monthEntries.length)} no mês` : ' no período selecionado'}</p></div>{filters.date && <button type="button" className="button secondary" onClick={() => update({ date: '' })}>Ver mês inteiro</button>}</div>
         <div className={styles.appointments}>{agenda.visible.map(({ appointment, entity, hierarchy }) => <article key={appointment.id} className={styles.appointment}>

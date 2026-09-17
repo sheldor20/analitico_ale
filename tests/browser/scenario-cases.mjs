@@ -36,7 +36,9 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
       const filtered=year?rows.filter(row=>`eq.${row.year}`===year):rows;
       await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify((route.request().headers().accept||'').includes('vnd.pgrst.object')?filtered[0]||null:filtered)});
     });
+    await page.locator('summary').filter({hasText:'Gerenciar anos'}).click();
     await page.getByRole('button',{name:'Recarregar cadastro salvo',exact:true}).click();
+    await page.locator('summary').filter({hasText:'Gerenciar anos'}).click();
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('ytd');
     await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');

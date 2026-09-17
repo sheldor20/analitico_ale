@@ -5,6 +5,7 @@ import { CalendarDays, Check, ChevronLeft, ChevronRight, Info, LoaderCircle, Pen
 import { APPOINTMENT_KINDS, APPOINTMENT_STATUSES, TIMEZONES, calendarDays, zonedDateTimeISO, zonedDateTimeInput } from "@/lib/relationship.mjs";
 import { deleteEntityAppointment, listEntityAppointments, saveEntityAppointment, type AppointmentInput, type EntityAppointment } from "@/lib/relationship-store";
 import type { RegistryEntity } from "@/lib/types";
+import { useCalendarToday } from "@/lib/use-calendar-today";
 import styles from "./entity-profile.module.css";
 
 type Draft = AppointmentInput & { startLocal: string; endLocal: string };
@@ -13,7 +14,7 @@ const dateLabel = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDate
 const shiftMonth = (month: string, by: number) => { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
 
 export default function EntityAgenda({ entity, year, userId, disabled = false, initialDate, onDirtyChange, onAppointmentsChange, onSavingChange }: { entity: RegistryEntity; year: number; userId: string; disabled?: boolean; initialDate?: string; onDirtyChange?: (dirty: boolean) => void; onAppointmentsChange?: () => void; onSavingChange?: (saving: boolean) => void }) {
-  const today = zonedDateTimeInput(new Date().toISOString()).slice(0, 10);
+  const today = useCalendarToday();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const focusDate = initialDate?.startsWith(`${year}-`) ? initialDate : "";
   const [month, setMonth] = useState(focusDate ? focusDate.slice(0, 7) : today.startsWith(`${year}-`) ? today.slice(0, 7) : `${year}-01`);

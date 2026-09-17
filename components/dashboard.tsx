@@ -48,6 +48,9 @@ import {
 } from "@/lib/analytics.mjs";
 import { buildPartialCommunication, buildDecisionInsights } from "@/lib/communication.mjs";
 import RegistryManager from "@/components/registry-manager";
+import ConsolidatedAgenda from "@/components/consolidated-agenda";
+import { zonedDateTimeInput } from "@/lib/relationship.mjs";
+import type { EntityAppointment } from "@/lib/relationship-store";
 import GoalAlerts from "@/components/goal-alerts";
 import { buildMonthlyGoalAlerts, defaultGoalAlertMonth } from '@/lib/goal-alerts.mjs';
 import PortfolioCommunication from "@/components/portfolio-communication";
@@ -57,7 +60,7 @@ import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-st
 import { supabase } from "@/lib/supabase";
 import { sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
 import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
-import type { ActionState, DataRow, Dataset, ImportConfig } from "@/lib/types";
+import type { ActionState, DataRow, Dataset, ImportConfig, RegistryEntity } from "@/lib/types";
 import "./dashboard-ux.css";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
@@ -103,11 +106,13 @@ export default function Dashboard() {
     [group, setGroup] = useState("all");
   const { period, month, setPeriod, setMonth } = usePeriodSelection();
   const [level, setLevel] = useState("cooperative"),
-    [search, setSearch] = useState(""),
-    [page, setPage] = useState(0);
+    [search, setSearch] = useState("");
   const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
   const [workspaces, setWorkspaces] = useState<{id:string;year:number;revision:number;updatedAt:string}[]>([]);
   const [historical, setHistorical] = useState(false);
+  const [registryDirty, setRegistryDirty] = useState(false);
+  const [registrySaving, setRegistrySaving] = useState(false);
+  const [agendaRequest, setAgendaRequest] = useState<{ owner: string; year: number; entityId: string; date: string; request: number } | null>(null);
   const achievedMonth = useMemo(() => dataset ? defaultGoalAlertMonth(dataset) : 0, [dataset]);
   const monthlyAchievements = useMemo(() => dataset ? buildMonthlyGoalAlerts(dataset, achievedMonth) : [], [dataset, achievedMonth]);
   const [importMode, setImportMode] = useState("production");
@@ -195,22 +200,6 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [user, datasetId]);
   useEffect(() => {
-    setPage(0);
-  }, [
-    view,
-    source,
-    metric,
-    central,
-    coop,
-    group,
-    period,
-    month,
-    search,
-    level,
-    sortBy,
-    statusFilter,
-  ]);
-  useEffect(() => {
     if (!selected && !showImport && !showCommunication) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -237,7 +226,7 @@ export default function Dashboard() {
         setWorkspaceRevision(saved.revision);
         setConfig(initializeRegistry(saved.dataset).config);
         setHistorical(false);
-        setNotice("Cadastro carregado.");
+
       }
     }).catch((e) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setBusy(""); });
@@ -256,18 +245,21 @@ export default function Dashboard() {
       ),
     [dataset, effectiveSource, effectiveMetric],
   );
-  const cooperatives = useMemo(
-    () =>
-      [
-        ...new Map(
-          sourceRows
-            .filter((r) => central === "all" || r.central === central)
-            .filter((r) => r.cooperative)
-            .map((r) => [`${r.central}:${r.cooperative}`, `${r.cooperative} · ${r.cooperativeName}`]),
-        ).entries(),
-      ].sort((a, b) => a[1].localeCompare(b[1])),
-    [sourceRows, central],
-  );
+  const cooperatives = useMemo(() => {
+    const names = new Map<string, string>();
+    const rows = view === "audit" ? dataset?.rows ?? [] : sourceRows;
+    for (const row of rows) if (row.cooperative && (central === "all" || row.central === central))
+      names.set(`${row.central}:${row.cooperative}`, `${row.cooperative} · ${row.cooperativeName}`);
+    if (view === "audit") {
+      for (const entity of dataset?.registry?.entities ?? []) if (entity.kind === "cooperative" && (central === "all" || entity.central === central))
+        names.set(`${entity.central}:${entity.cooperative}`, `${entity.cooperative} · ${entity.name}`);
+      for (const issue of dataset?.issues ?? []) if (issue.central && issue.cooperative && (central === "all" || issue.central === central)) {
+        const key = `${issue.central}:${issue.cooperative}`;
+        if (!names.has(key)) names.set(key, `${issue.cooperative} · Central ${issue.central}`);
+      }
+    }
+    return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [sourceRows, central, dataset, view]);
   const groups = [...new Set(sourceRows.map((r) => r.group))].sort();
   const filtered = useMemo(
     () =>
@@ -323,9 +315,9 @@ export default function Dashboard() {
         selectedCoop ? selectedCoop[1] : `Cooperativa ${coop}`,
       );
     }
-    if (group !== "all") labels.push(`Grupo ${group}`);
+    if (view !== "audit" && group !== "all") labels.push(`Grupo ${group}`);
     return labels.length ? labels.join(" · ") : "Todas as centrais da seleção";
-  }, [central, coop, group, cooperatives, centralOptions]);
+  }, [central, coop, group, cooperatives, centralOptions, view]);
   const communicationDraft = useMemo(() => {
     if (
       !cutoff ||
@@ -358,19 +350,29 @@ export default function Dashboard() {
     group,
     uplift,
   ]);
-  const [auditKind, setAuditKind] = useState("all");
+  const [auditKind, setAuditKind] = useState("data");
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
       (central === "all" || !i.central || i.central === central) &&
       (coop === "all" || !i.cooperative || `${i.central}:${i.cooperative}` === coop),
   );
+  const visibleAudits = audits.filter(i => auditKind === "all" || (auditKind === "method" ? i.kind === "method" : i.kind !== "method"));
+  const activeAgendaRequest = agendaRequest && agendaRequest.owner === user?.id && agendaRequest?.year === dataset?.year ? agendaRequest : undefined;
   useEffect(() => {
+    if (view === "registry" && activeAgendaRequest) return;
     headingRef.current?.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'instant' });
-  }, [view]);
+  }, [view, activeAgendaRequest]);
+  function canLeaveRegistry() {
+    if (registrySaving) return false;
+    if (registryDirty && !window.confirm("Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
+    setRegistryDirty(false); return true;
+  }
   function navigate(next: View) {
+    if (next !== view && !canLeaveRegistry()) return false;
+    setAgendaRequest(null);
     if (next === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
-    if (next === "registry" && !dataset) setDataset(createEmptyDataset(config.year));
+    if ((next === "registry" || next === "agenda") && !dataset) setDataset(createEmptyDataset(config.year));
     setView(next);
     setExpandedPaKey("");
     setSearch("");
@@ -383,6 +385,11 @@ export default function Dashboard() {
       setSource("base");
       setGroup("all");
     }
+    return true;
+  }
+  function openAgendaEntity(entity: RegistryEntity, appointment: EntityAppointment) {
+    if (!dataset || !user || historical || !navigate("registry")) return;
+    setAgendaRequest({ owner: user.id, year: dataset.year, entityId: entity.id, date: zonedDateTimeInput(appointment.startsAt, appointment.timezone).slice(0, 10), request: Date.now() });
   }
   function resetFilters() {
     setCentral("all");
@@ -396,6 +403,8 @@ export default function Dashboard() {
     void listWorkspaces(owner).then((items) => { if (activeOwner.current === owner) setWorkspaces(items); }).catch(() => {});
   }
   async function openWorkspace(year: number) {
+    if (!canLeaveRegistry()) return;
+    setAgendaRequest(null);
     if (!Number.isInteger(year) || year < 2020 || year > 2100) { setError("Informe um ano entre 2020 e 2100."); return; }
     setBusy("Abrindo cadastro anual…"); setError("");
     const owner = user?.id ?? null;
@@ -800,9 +809,6 @@ export default function Dashboard() {
   </>;
   const importPanel = (
     <>
-      <div className="section-label">
-        <FileSpreadsheet size={19} /> IMPORTAR PLANILHAS
-      </div>
       <h2>Importar planilhas</h2>
       <p className="muted">
         Escolha o objetivo do envio e as planilhas.
@@ -895,8 +901,7 @@ export default function Dashboard() {
         </label>
       </div>
       <p className="helper">
-        Preencha apenas os cortes das fontes enviadas. Para mês fechado, informe
-        o último dia do mês. O sistema mantém metas fixas, unidades ausentes e demais períodos. Corrija metas e realizados em Cadastro e metas.
+        Informe a posição apenas das fontes enviadas. Para um mês fechado, use o último dia do mês.
       </p>
       <button
         className="button primary wide"
@@ -921,7 +926,7 @@ export default function Dashboard() {
           <img className="brand-logo" src="/brand/sicoob-logo-light.svg" alt="Sicoob" width="152" height="36" />
           <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
-        <PortalNavigation view={view} disabled={!!busy} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
+        <PortalNavigation view={view} disabled={!!busy || registrySaving} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
         <div className="sidebar-foot">
           <div className="central-label">BAHIA & NORDESTE</div>
           <div className="session-state">
@@ -978,10 +983,9 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
-        <main id="conteudo" className="workspace-content" tabIndex={-1}>
+        <main id="conteudo" className={`workspace-content view-${view}`} tabIndex={-1}>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PERFORMANCE COMERCIAL</div>
               <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
               <p>
                 {dataset || view === "imports" ? VIEW_DESCRIPTIONS[view] : "Escolha uma base para começar."}
@@ -1036,25 +1040,22 @@ export default function Dashboard() {
             </div>
           )}
           {historical && dataset && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
-          {dataset && !historical && <div className="workspace-toolbar">
-            <label>Ano do cadastro <select value={dataset.year} disabled={!!busy} onChange={(e) => openWorkspace(Number(e.target.value))}>
+          {dataset && !historical && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
+            <label>Ano <select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy} onChange={(e) => openWorkspace(Number(e.target.value))}>
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
             <details className="year-management"><summary>Gerenciar anos</summary><div>            <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
             <label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event => setRequestedYear(Number(event.target.value))} /></label><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(requestedYear)}>Abrir ano</button>
+            {user && <button className="button secondary" disabled={!!busy || registrySaving} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
 </div></details>
-            {user && <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
-            <span className="muted">{user && workspaceRevision ? `Salvo · revisão ${workspaceRevision}` : "Dados nesta sessão"}</span>
+            <span className="muted">{user && workspaceRevision ? "Cadastro salvo" : "Dados nesta sessão"}</span>
           </div>}
-          {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
-            <BellRing size={23} aria-hidden="true" />
-            <div><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong><p>Centrais, cooperativas e PAs com produção registrada a partir de 100% da meta mensal.</p></div>
-            <button className="button secondary" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={17} /></button>
-          </aside>}
           {view === "alerts" && dataset && user ? (
             <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
+          ) : view === "agenda" && dataset && user ? (
+            historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} disabled={!!busy} />
           ) : view === "registry" && dataset ? (
-            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/>
           ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
@@ -1100,8 +1101,8 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <FilterPanel description={`${metricName(effectiveMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
-                <label>
+              <FilterPanel description={view === "audit" ? scopeLabel : `${metricName(effectiveMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
+                {view !== "audit" && <><label>
                   Fonte
                   <select
                     value={effectiveSource}
@@ -1142,6 +1143,7 @@ export default function Dashboard() {
                     </select>
                   </label>
                 )}
+                </>}
                 <label>
                   Central
                   <select
@@ -1173,13 +1175,13 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </label>
-                <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
-                  onPeriodChange={setPeriod} onMonthChange={setMonth} />
+                {view !== "audit" && <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
+                  onPeriodChange={setPeriod} onMonthChange={setMonth} />}
               </FilterPanel>
-              <div className="position-line">
+              {view !== "audit" && <div className="position-line">
                 <span>
                   <span className="position-dot" />
-                  Posição da fonte:{" "}
+                  Dados até:{" "}
                   <strong>
                     {cutoff ? cutoffs.length > 1 ? `${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])} · cortes diferentes` : shortDate(cutoff) : displayed.length ? "não importada" : "sem unidades na seleção"}
                   </strong>
@@ -1190,7 +1192,7 @@ export default function Dashboard() {
                     ? "Metas próprias da cadência · não somadas às cooperativas"
                     : "Consolidado das cooperativas · sem dupla contagem dos PAs"}
                 </span>
-              </div>
+              </div>}
               {uplift > 0 && view !== "audit" && <div className="simulation-banner"><span>Simulação de ritmo +{uplift}% ativa · somente projeções</span><button className="button quiet" onClick={() => setUplift(0)}>Limpar simulação</button></div>}
               {view === "audit" ? (
                 <>
@@ -1203,13 +1205,13 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <span className="pill neutral">
-                        {audits.length} registros
+                        {visibleAudits.length} avisos
                       </span>
                     </div>
                     <div className="audit-list">
                       <label className="audit-kind">Tipo de aviso<select value={auditKind} onChange={e => setAuditKind(e.target.value)}><option value="all">Todos os avisos</option><option value="data">Dados e importação</option><option value="method">Critérios de cálculo</option></select></label>
-                      {!audits.filter(i => auditKind === 'all' || (auditKind === 'method' ? i.kind === 'method' : i.kind !== 'method')).length && <p className="empty">Nenhum aviso nesta seleção.</p>}
-                      {audits.filter(i => auditKind === 'all' || (auditKind === 'method' ? i.kind === 'method' : i.kind !== 'method')).map((i, n) => (
+                      {!visibleAudits.length && <p className="empty">Nenhum aviso nesta seleção.</p>}
+                      {visibleAudits.map((i, n) => (
                         <div key={n}>
                           <Info size={18} />
                           <p>{i.message}</p>
@@ -1289,6 +1291,10 @@ export default function Dashboard() {
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                   </section>
+                  {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
+                    <BellRing size={19} aria-hidden="true" /><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong>
+                    <button className="button quiet" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={16} /></button>
+                  </aside>}
                   {view === 'overview' && <div className="result-help-row">
                     <details className="reading-guide"><summary>Como ler estes números</summary><dl>
                       <div><dt>Meta</dt><dd>O valor que a unidade precisa alcançar no período escolhido.</dd></div>
@@ -1297,7 +1303,7 @@ export default function Dashboard() {
                       <div><dt>GAP / crescimento</dt><dd>O valor que falta para a meta ou que já ficou acima dela.</dd></div>
                       <div><dt>Projeção</dt><dd>Uma estimativa de fechamento. Não representa produção já realizada.</dd></div>
                     </dl></details>
-                    <button className="button secondary" onClick={() => navigate('alerts')}><BellRing size={17} />Ver metas atingidas no mês</button>
+
                   </div>}
                   {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
                     <Info size={17} aria-hidden="true" /><span><strong>GAP somado: {money(leafSummary.individualGap)}.</strong> A superação de uma unidade não cobre a meta das demais.</span>
@@ -1321,7 +1327,6 @@ export default function Dashboard() {
                       {!displayed.length && <p className="empty">Nenhuma ação corresponde aos filtros.</p>}
                       <div className="action-list">
                         {displayed
-                          .slice(page * 12, page * 12 + 12)
                           .map((r, i) => {
                             const a = actionFor(r);
                             return (
@@ -1331,15 +1336,16 @@ export default function Dashboard() {
                                 onClick={() => setSelected(r)}
                               >
                                 <span className="rank">
-                                  {page * 12 + i + 1}
+                                  {i + 1}
                                 </span>
                                 <div>
                                   <div className="action-title">
                                     <strong>{r.name}</strong>
                                     <Pill>
-                                      {actions[r.key]?.status ?? a.priority}
+                                      {a.priority}
                                     </Pill>
                                   </div>
+                                  <span className="task-state">Tarefa: {actions[r.key]?.status ?? "Não iniciada"}</span>
                                   <p>Falta para a meta: {money(r.gap)}{r.requiredDaily != null ? ` · Necessário: ${money(r.requiredDaily)}/dia útil` : ""}</p>
                                   <small>
                                     {r.cooperative}
@@ -1356,11 +1362,7 @@ export default function Dashboard() {
                             );
                           })}
                       </div>
-                      <Pagination
-                        page={page}
-                        setPage={setPage}
-                        total={displayed.length}
-                      />
+                      <p className="action-count">{displayed.length} unidades exibidas</p>
                     </section>
                   ) : (
                     <>
@@ -1477,7 +1479,7 @@ export default function Dashboard() {
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
-                        <div className="pagination">{displayed.length} unidades exibidas · exportação inclui a seleção completa</div>
+                        <div className="pagination">{displayed.length} unidades exibidas</div>
                       </section>
                       {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
@@ -1836,47 +1838,6 @@ function FileSlot({
   );
 }
 
-function Pagination({
-  page,
-  setPage,
-  total,
-}: {
-  page: number;
-  setPage: (p: number) => void;
-  total: number;
-}) {
-  const last = Math.max(0, Math.ceil(total / 12) - 1);
-  return (
-    <div className="pagination">
-      <span>
-        {total
-          ? `${page * 12 + 1}–${Math.min(total, (page + 1) * 12)} de ${total} registros`
-          : "0 registros"}
-      </span>
-      <div>
-        <button
-          className="icon-button"
-          aria-label="Página anterior"
-          disabled={page === 0}
-          onClick={() => setPage(page - 1)}
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <span>
-          {page + 1} / {last + 1}
-        </span>
-        <button
-          className="icon-button"
-          aria-label="Próxima página"
-          disabled={page >= last}
-          onClick={() => setPage(page + 1)}
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-    </div>
-  );
-}
 function Modal({
   children,
   title,

@@ -53,7 +53,7 @@ test('optional projection occupies a compact lower row without moving the three 
   assert.equal((html.match(/data-metric=/g) || []).length, 4);
 });
 
-test('large money values fit or wrap within each PNG card and are preserved completely', () => {
+test('exceptionally large money values receive wider cards and remain one complete PNG command', () => {
   const values = ['R$ 999.999.999.999,99', 'R$ 1.234.567.890.123.456,78', 'R$ 234.567.890.123.456,79'];
   const dashboard = model(primary.map((card, index) => ({ ...card, value: values[index] })));
   const layout = dashboardImageLayout(dashboard, measure);
@@ -61,7 +61,8 @@ test('large money values fit or wrap within each PNG card and are preserved comp
     const valueCommands = layout.commands.filter((command) => command.type === 'text' && command.bold && command.x >= rectangle.x && command.x < rectangle.x + rectangle.width && command.y >= rectangle.y && command.y < rectangle.y + rectangle.height && command.fill === (index === 1 ? '#ffffff' : '#003641'));
     // The realized support is bold too; monetary chunks precede it and use the fitted value size.
     const amountCommands = valueCommands.filter((command) => command.size <= 36 && command.size >= 26 && !command.value.includes('da meta'));
-    assert.equal(amountCommands.map((command) => command.value).join('').replace(/\s/g, ''), values[index].replace(/\s/g, ''));
+    assert.equal(amountCommands.length, 1, 'a monetary value must never split into currency, integer or cents fragments');
+    assert.equal(amountCommands[0].value, values[index]);
     for (const command of layout.commands.filter((item) => item.type === 'text' && item.x >= rectangle.x && item.x < rectangle.x + rectangle.width && item.y >= rectangle.y && item.y < rectangle.y + rectangle.height)) {
       measure.font = `${command.bold ? '700' : '400'} ${command.size}px Arial`;
       assert.ok(command.x + measure.measureText(command.value).width <= rectangle.x + rectangle.width - 17, `Text crosses card ${index + 1}: ${command.value}`);
@@ -70,7 +71,39 @@ test('large money values fit or wrap within each PNG card and are preserved comp
   }
   const html = renderDashboardHtml(dashboard);
   for (const value of values) assert.ok(html.includes(value));
-  assert.match(html, /overflow-wrap:anywhere/);
+  for (const element of html.matchAll(/<strong class="metric-value" data-money="true" style="([^"]*)">/g)) {
+    assert.match(element[1], /white-space:nowrap/);
+    assert.match(element[1], /word-break:normal/);
+    assert.doesNotMatch(element[1], /break-word|anywhere/);
+  }
+});
+
+test('annual millions, hundreds of millions and negative values stay on one line without losing cents', () => {
+  for (const values of [
+    ['R$ 9.279.000,00', 'R$ 8.391.422,37', 'R$ 887.577,63'],
+    ['R$ 927.900.000,00', 'R$ 839.142.237,12', 'R$ 88.757.762,88'],
+    ['R$ 927.900.000,00', '-R$ 12.945.213,17', 'R$ 940.845.213,17'],
+  ]) {
+    const dashboard = model(primary.map((card, index) => ({ ...card, value: values[index] })));
+    dashboard.period = 'annual'; dashboard.periodLabel = 'Anual · 2026';
+    dashboard.blocks[0].items[0].label = 'Meta anual';
+    const before = structuredClone(dashboard), layout = dashboardImageLayout(dashboard, measure);
+    const rectangles = cards(layout);
+    assert.equal(rectangles.length, 3);
+    assert.equal(new Set(rectangles.map((rectangle) => rectangle.y)).size, 1, 'these business amounts should fit side by side');
+    for (const [index, value] of values.entries()) {
+      const commands = layout.commands.filter((command) => command.type === 'text' && command.value === value);
+      assert.equal(commands.length, 1, `expected entire value ${value} in one draw`);
+      const command = commands[0]; measure.font = `700 ${command.size}px Arial`;
+      assert.ok(command.x + measure.measureText(command.value).width <= rectangles[index].x + rectangles[index].width - 17);
+    }
+    const html = renderDashboardHtml(dashboard);
+    assert.match(html, /data-columns="3"/);
+    assert.equal((html.match(/data-money="true"/g) || []).length, 3);
+    for (const value of values) assert.ok(html.includes(`>${value}</strong>`));
+    assert.doesNotMatch(html, /\.metric-value\{font-size:20px!important\}/, 'mobile must not replace the fitted font with a fixed one');
+    assert.deepEqual(dashboard, before);
+  }
 });
 
 test('legacy one and two card snapshots render without invented variance or changed metadata', () => {

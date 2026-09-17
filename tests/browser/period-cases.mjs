@@ -38,6 +38,9 @@ export function registerPeriodTests({test,expect,setup,composer}) {
     await page.getByRole('button',{name:'Plano de ação',exact:true}).click();
     await expect(select(page,'Trimestre')).toHaveValue('1');
     await page.getByRole('button',{name:'Conferência da base',exact:true}).click();
+    await expect(select(page,'Trimestre')).toHaveCount(0);
+    await expect(select(page,'Cooperativa')).toHaveValue('1002:3017');
+    await page.getByRole('button',{name:'Plano de ação',exact:true}).click();
     await expect(select(page,'Trimestre')).toHaveValue('1');
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);

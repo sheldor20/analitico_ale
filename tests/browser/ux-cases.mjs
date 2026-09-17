@@ -1,10 +1,19 @@
 import { portfolioFixture } from '../portfolio-fixture.mjs';
+import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 export function registerUxTests({test,expect,setup,owner,created}) {
  test('UX: primary data comes before optional panels; PAs toggle by keyboard and selected unit',async({page},testInfo)=>{
   const {errors}=await setup(page);
+  await page.setViewportSize({width:1440,height:900});
+  await expect(page.getByText('Cadastro carregado.',{exact:true})).toHaveCount(0);
+  const metrics = page.getByRole('region',{name:'Resultado do período',exact:true});
+  expect((await metrics.boundingBox()).y).toBeLessThan(520);
+  const years = page.locator('details').filter({has:page.locator('summary').filter({hasText:'Gerenciar anos'})});
+  await expect(years.getByRole('button',{name:'Recarregar cadastro salvo',exact:true})).toBeHidden();
+  await years.locator('summary').click();
+  await expect(years.getByRole('button',{name:'Recarregar cadastro salvo',exact:true})).toBeEnabled();
+  await years.locator('summary').click();
   await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
   await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
-  await page.getByRole('button',{name:'Fechar mensagem',exact:true}).click();
   await expect(page.getByRole('heading',{level:1,name:'Visão geral',exact:true})).toBeVisible();
   const result=page.getByRole('region',{name:'Resultado do período',exact:true}),list=page.getByRole('region',{name:'Lista de unidades',exact:true});
   expect((await result.boundingBox()).y).toBeLessThan((await list.boundingBox()).y);
@@ -28,7 +37,14 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   expect(errors).toEqual([]);
  });
  test('UX: actions and audit exclude unrelated comparisons; hidden simulation stays explicit',async({page},testInfo)=>{
-  const {errors}=await setup(page);
+  const {errors}=await setup(page, dataset => {
+    for (let index=1;index<=13;index++) {
+      const cooperative=String(4000+index);
+      dataset=upsertEntity(dataset,{kind:'cooperative',central:'1002',cooperative,name:`Cooperativa adicional ${index}`});
+      dataset=upsertPlanRow(dataset,{entityId:`cooperative:1002:${cooperative}`,metric:'VN',targets:Array(12).fill(100),annualTarget:1200,actuals:[...Array(8).fill(50),null,null,null,null],cutoff:'2026-08-31'});
+    }
+    return dataset;
+  });
   await page.locator('summary').filter({hasText:'Evolução e simulação'}).click();
   await page.getByLabel('Simular aumento de ritmo').focus();
   await page.keyboard.press('Home');
@@ -39,6 +55,10 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await page.getByRole('button',{name:'Limpar simulação',exact:true}).click();
   await page.getByRole('button',{name:'Plano de ação',exact:true}).click();
   await expect(page.getByRole('region',{name:'Lista de ações',exact:true})).toBeVisible();
+  await expect(page.locator('.action-card')).toHaveCount(16);
+  const laterAction=page.locator('.action-card').filter({has:page.getByText('Cooperativa adicional 13',{exact:true})});
+  await laterAction.scrollIntoViewIfNeeded();await expect(laterAction).toBeVisible();
+  await expect(laterAction).toContainText('Tarefa: Não iniciada');
   await expect(page.getByRole('region',{name:'Comparativo entre anos',exact:true})).toHaveCount(0);
   await expect(page.getByRole('region',{name:'Resumo da rede filtrada',exact:true})).toHaveCount(0);
   await page.getByRole('combobox',{name:'Ordenar análise',exact:true}).selectOption('production');
@@ -61,7 +81,9 @@ export function registerUxTests({test,expect,setup,owner,created}) {
     const rows=datasets.filter(value=>!year||`eq.${value.year}`===year).map((dataset,index)=>({id:`00000000-0000-0000-0000-00000000001${index}`,owner_id:owner,year:dataset.year,revision:1,updated_at:created,dataset}));
     await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify((route.request().headers().accept||'').includes('vnd.pgrst.object')?rows[0]||null:rows)});
   });
+  await page.locator('summary').filter({hasText:'Gerenciar anos'}).click();
   await page.getByRole('button',{name:'Recarregar cadastro salvo',exact:true}).click();
+  await page.locator('summary').filter({hasText:'Gerenciar anos'}).click();
   await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
   await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');
   expect(historicalReads).toBe(0);
