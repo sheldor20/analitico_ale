@@ -815,13 +815,13 @@ export default function Dashboard() {
       </p>
       <label className="import-mode">Objetivo deste envio
         <select value={importMode} onChange={(e) => { setImportMode(e.target.value); if (e.target.value === "history") { const year = (dataset?.year ?? new Date().getFullYear()) - 1; setConfig({ ...config, year, vnCutoff: `${year}-12-31`, arCutoff: `${year}-12-31`, cadenceCutoff: `${year}-12-31`, paTargetMode: "source" }); } }}>
-          <option value="production">Atualizar produção · preservar metas cadastradas</option>
-          <option value="fixed">Cadastrar base fixa · unidades e metas</option>
-          <option value="history">Base e produção de outro ano · comparativo histórico</option>
+          <option value="production">Atualizar produção</option>
+          <option value="fixed">Cadastrar unidades e metas</option>
+          <option value="history">Importar outro ano</option>
         </select>
       </label>
       {importMode === "history" && <p className="helper">As metas, a produção e as unidades serão guardadas somente no ano informado. Confirme os cortes; não use 31/12 se a base ainda for parcial. Novas cooperativas e PAs não serão incluídos retroativamente em outros anos.</p>}
-      <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha · preservar histórico</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
+      <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
       <div className="source-upload-grid">
         <FileSlot
           id="base-file"
@@ -854,6 +854,7 @@ export default function Dashboard() {
       <div className="import-guidance">
         <Info size={18} />
         <span>
+          {importMode === "production" && "Metas cadastradas são mantidas. "}
           {importMode === "fixed" ? "Importa unidades, metas e realizados disponíveis. Preserva cadastros existentes." : "Confirme a posição de cada fonte. Valores enviados substituem a produção mensal correspondente; meses vazios e fontes não enviadas são preservados."}
         </span>
       </div>

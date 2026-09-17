@@ -12,8 +12,8 @@
 .workspace-content .eyebrow {display:none}
 .workspace-content .page-heading-actions {flex-wrap:wrap}
 .workspace-content .workspace-toolbar {padding:0;margin-bottom:16px;align-items:center;background:transparent;border:0;border-radius:0;gap:12px}
-.workspace-content .workspace-toolbar>label {flex-direction:row;align-items:center;gap:10px;min-width:0;white-space:nowrap}
-.workspace-content .workspace-toolbar>label>select {width:90px;min-height:38px}
+.workspace-content .workspace-toolbar>label {display:flex;flex-direction:row;align-items:center;gap:10px;min-width:0;white-space:nowrap}
+.workspace-content .workspace-toolbar>label>select {width:112px;min-height:38px;flex-shrink:0}
 .workspace-content .workspace-toolbar>.button {min-height:38px;font-size:13px}
 .workspace-content .workspace-toolbar>span {padding:0;font-size:13px;margin-left:auto}
 .year-management {position:relative;font-size:13px}
@@ -154,6 +154,7 @@
 .workspace-content .action-count { padding-top:16px; font-size:14px; color:var(--muted); }
 .workspace-content.view-audit .filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .workspace-content .table-panel .numeric { white-space:nowrap; }
+.workspace-content .audit-list { max-height:none; overflow:visible; }
 @media(min-width:1101px) { .sidebar nav { gap:0; }.sidebar .nav-group+.nav-group { margin-top:32px; } }
 @media(max-width:720px) {
   .workspace-content .page-heading-actions { gap:8px; }
