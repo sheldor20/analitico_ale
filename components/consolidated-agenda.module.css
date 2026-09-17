@@ -53,3 +53,4 @@
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media(max-width:760px) { .section{padding:16px;gap:16px}.filters{grid-template-columns:1fr 1fr}.filters>label:first-child{grid-column:1/-1}.appointments{grid-template-columns:1fr}.day{min-height:62px}.heading h2{font-size:1.4rem} }
 @media(max-width:420px) { .section{padding:12px}.filters{grid-template-columns:1fr}.filters>label:first-child{grid-column:auto}.monthNavigation{padding:8px;gap:5px}.monthPicker select{font-size:16px;padding:8px 4px}.day{min-height:56px;font-size:.87rem}.calendarTable th{font-size:.74rem}.appointment{padding:14px}.section :global(.button){font-size:.87rem}.heading>button{width:100%;justify-content:center} }
+@media(max-width:420px) { .monthNavigation{flex-wrap:wrap}.monthPicker{order:-1;width:100%} }

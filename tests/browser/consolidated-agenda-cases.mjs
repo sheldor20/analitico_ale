@@ -145,21 +145,22 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
 
   test('consolidated agenda: failed read is recoverable and retry keeps owner/year isolation', async ({ page }) => {
     const { errors } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
-    let failed = false;
+    let allowRecovery = false;
     const requestScopes = [];
     await page.route('http://127.0.0.1:4600/rest/v1/commercial_entity_appointments**', async route => {
       if (route.request().method() !== 'GET') return route.fallback();
       const url = new URL(route.request().url());
       if (url.searchParams.has('entity_id')) return route.fallback();
       requestScopes.push({ owner: url.searchParams.get('owner_id'), year: url.searchParams.get('workspace_year') });
-      if (failed) return route.fallback();
-      failed = true;
+      // Keep the outage through PostgREST's automatic retries until the user retries.
+      if (allowRecovery) return route.fallback();
       return route.fulfill({ status: 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ message: 'Agenda indisponível no teste' }) });
     });
     await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
     const agenda = consolidated(page);
     await expect(agenda.getByRole('alert')).toBeVisible();
     await expect(agenda.getByRole('article')).toHaveCount(0);
+    allowRecovery = true;
     await agenda.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
     await expect(agenda.getByRole('article')).toHaveCount(5);
     await expect(agenda.getByRole('alert')).toHaveCount(0);
