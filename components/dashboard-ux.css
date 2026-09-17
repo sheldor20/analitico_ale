@@ -157,9 +157,11 @@
 @media(min-width:1101px) { .sidebar nav { gap:0; }.sidebar .nav-group+.nav-group { margin-top:32px; } }
 @media(max-width:720px) {
   .workspace-content .page-heading-actions { gap:8px; }
+  .workspace-content .workspace-toolbar { position:relative; }
   .workspace-content .workspace-toolbar>span { margin-left:auto; font-size:12px; }
+  .workspace-content .year-management { position:static; }
   .workspace-content .year-management>summary { padding-inline:4px; }
-  .workspace-content .year-management>div { left:0; right:auto; width:min(280px,calc(100vw - 48px)); transform:translateX(-100px); }
+  .workspace-content .year-management>div { top:100%; left:0; right:auto; width:min(280px,100%); transform:none; }
   .workspace-content .filters { grid-template-columns:1fr; }
   .workspace-content.view-audit .filters { grid-template-columns:1fr; }
   .workspace-content .filter-panel-heading { padding-block:2px; }

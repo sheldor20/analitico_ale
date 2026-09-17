@@ -12,6 +12,14 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await years.locator('summary').click();
   await expect(years.getByRole('button',{name:'Recarregar cadastro salvo',exact:true})).toBeEnabled();
   await years.locator('summary').click();
+  await page.setViewportSize({width:320,height:844});
+  await years.locator('summary').click();
+  await expect(years.getByRole('button',{name:'Recarregar cadastro salvo',exact:true})).toBeVisible();
+  const yearMenu = await years.locator(':scope > div').boundingBox();
+  expect(yearMenu.x).toBeGreaterThanOrEqual(0);expect(yearMenu.x+yearMenu.width).toBeLessThanOrEqual(320);
+  expect(yearMenu.y).toBeGreaterThanOrEqual(0);expect(yearMenu.y+yearMenu.height).toBeLessThanOrEqual(844);
+  await years.locator('summary').click();
+  await page.setViewportSize({width:1440,height:900});
   await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
   await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
   await expect(page.getByRole('heading',{level:1,name:'Visão geral',exact:true})).toBeVisible();
