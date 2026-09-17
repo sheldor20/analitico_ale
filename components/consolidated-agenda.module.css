@@ -1,0 +1,55 @@
+.section { display:grid; gap:20px; min-width:0; padding:22px; border:1px solid var(--line); border-radius:var(--radius-md,16px); background:var(--surface); margin-bottom:24px; }
+.heading,.listHeading,.cardHeading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; min-width:0; }
+.heading>div,.listHeading>div,.cardHeading>div { min-width:0; }
+.heading h2 { margin:8px 0; font-size:1.55rem; letter-spacing:-.025em; }
+.heading p,.listHeading p { margin:0; color:var(--muted); line-height:1.5; font-size:.95rem; }
+.eyebrow { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:.86rem; font-weight:650; }
+.filters { display:grid; grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,1fr)); gap:14px; }
+.filters label { display:grid; gap:7px; min-width:0; font-size:.94rem; font-weight:650; }
+.filters select,.monthPicker select { width:100%; min-width:0; max-width:100%; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px 12px; font:inherit; font-size:1rem; min-height:44px; }
+.calendar { width:100%; min-width:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.monthNavigation { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px; background:var(--surface-subtle,var(--bg)); }
+.monthNavigation>button { flex:0 0 44px; width:44px; height:44px; padding:0!important; display:grid; place-items:center; }
+.monthPicker { min-width:0; width:min(280px,100%); }
+.monthPicker select { text-transform:capitalize; font-weight:650; }
+.calendarTable { width:100%; table-layout:fixed; border-collapse:collapse; margin:0; }
+.calendarTable th { width:14.285%; padding:12px 2px; font-size:.82rem; text-align:center; font-weight:650; color:var(--muted); }
+.calendarTable abbr { text-decoration:none; }
+.calendarTable td { padding:0; border-top:1px solid var(--line); vertical-align:top; }
+.calendarTable td:first-child,.calendarTable td:last-child { padding:0; }
+.calendarTable th:first-child,.calendarTable th:last-child { padding-inline:2px; }
+.day { width:100%; min-width:0; min-height:70px; border:0; border-radius:0; padding:9px 2px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; background:var(--surface); color:var(--ink); font:inherit; font-size:.95rem; }
+.day[data-outside=true] { color:var(--muted); background:var(--surface-subtle,var(--bg)); }
+.day[aria-pressed=true] { background:var(--green-light); box-shadow:inset 0 0 0 2px var(--sicoob-turquoise); }
+.day[data-today=true]>span:first-child { font-weight:800; text-decoration:underline; text-underline-offset:4px; }
+.day:disabled { opacity:.5; cursor:default; }
+.count { display:grid; place-items:center; min-width:20px; height:20px; padding:0 4px; border-radius:12px; color:var(--on-dark,#fff); background:var(--sicoob-dark); font-size:.74rem; font-weight:650; }
+.calendarHelp { margin:-8px 0 0; color:var(--muted); font-size:.86rem; line-height:1.5; }
+.listHeading h3 { margin:0 0 6px; font-size:1.16rem; }
+.appointments { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; min-width:0; }
+.appointment { display:flex; flex-direction:column; gap:14px; min-width:0; padding:18px; border:1px solid var(--line); border-radius:12px; }
+.cardHeading h4 { margin:6px 0 0; font-size:1.07rem; line-height:1.4; overflow-wrap:anywhere; }
+.kind { color:var(--muted); font-size:.84rem; font-weight:650; }
+.status { flex-shrink:0; border-radius:20px; color:var(--sicoob-dark); background:var(--green-light); padding:5px 10px; font-size:.81rem; font-weight:700; }
+.status[data-status=completed] { background:#edf3da; }
+.status[data-status=cancelled] { color:var(--muted); background:var(--surface-subtle,var(--bg)); }
+.unit { display:grid; gap:5px; overflow-wrap:anywhere; line-height:1.4; }
+.unit strong { font-size:.95rem; }
+.unit span,.date small { display:block; color:var(--muted); font-size:.86rem; }
+.date,.location { display:flex; gap:8px; align-items:flex-start; margin:0; font-size:.94rem; line-height:1.6; overflow-wrap:anywhere; }
+.date svg,.location svg { flex:0 0 16px; width:16px; height:16px; margin-top:4px; }
+.date>span,.location>span { min-width:0; }
+.date small { margin-top:4px; }
+.cardActions { margin-top:auto; }
+.section :global(.button) { min-height:44px; max-width:100%; white-space:normal; line-height:1.4; font-size:.93rem; }
+.section :global(.button) svg { flex:0 0 16px; width:16px; height:16px; }
+.section :is(button,select):focus-visible { outline:3px solid var(--focus-ring,var(--sicoob-turquoise)); outline-offset:2px; }
+.missing,.loading { margin:0; color:var(--muted); font-size:.94rem; line-height:1.5; }
+.error { display:grid; justify-items:start; gap:12px; padding:16px; border-left:3px solid var(--warning,#93611c); background:var(--surface-subtle,var(--bg)); border-radius:10px; }
+.error p { margin:0; line-height:1.5; }
+.empty { display:grid; justify-items:center; gap:10px; padding:24px 12px; text-align:center; color:var(--muted); border:1px dashed var(--line); border-radius:12px; }
+.empty h4,.empty p { margin:0; line-height:1.5; }
+.empty h4 { color:var(--ink); }
+.srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:760px) { .section{padding:16px;gap:16px}.filters{grid-template-columns:1fr 1fr}.filters>label:first-child{grid-column:1/-1}.appointments{grid-template-columns:1fr}.day{min-height:62px}.heading h2{font-size:1.4rem} }
+@media(max-width:420px) { .section{padding:12px}.filters{grid-template-columns:1fr}.filters>label:first-child{grid-column:auto}.monthNavigation{padding:8px;gap:5px}.monthPicker select{font-size:16px;padding:8px 4px}.day{min-height:56px;font-size:.87rem}.calendarTable th{font-size:.74rem}.appointment{padding:14px}.section :global(.button){font-size:.87rem}.heading>button{width:100%;justify-content:center} }

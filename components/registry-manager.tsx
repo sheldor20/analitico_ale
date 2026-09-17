@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import PortfolioCommunication from "@/components/portfolio-communication";
 import { Building2, Check, Info, LoaderCircle, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
@@ -9,8 +9,9 @@ import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "@/l
 import ResponsibleManager from "@/components/responsible-manager";
 import EntityProfile from "@/components/entity-profile";
 import EntityAgenda from "@/components/entity-agenda";
-import { relationshipHierarchy } from "@/lib/relationship.mjs";
-import { hasEntityRelationships } from "@/lib/relationship-store";
+import ConsolidatedAgenda from "@/components/consolidated-agenda";
+import { relationshipHierarchy, zonedDateTimeInput } from "@/lib/relationship.mjs";
+import { hasEntityRelationships, type EntityAppointment } from "@/lib/relationship-store";
 import profileStyles from "./entity-profile.module.css";
 
 type RegistryManagerProps = {
@@ -90,8 +91,12 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   const [notice, setNotice] = useState("");
   const [activeTab, setActiveTab] = useState<"profile" | "contacts" | "agenda" | "targets">("profile");
   const [relationshipDirty, setRelationshipDirty] = useState(false);
+  const [agendaRevision, setAgendaRevision] = useState(0);
+  const [agendaSaving, setAgendaSaving] = useState(false);
+  const [agendaFocus, setAgendaFocus] = useState<{ date: string; request: number } | null>(null);
+  const refreshAgenda = useCallback(() => setAgendaRevision((value) => value + 1), []);
   const [identityLocked, setIdentityLocked] = useState(false);
-  const locked = busy || saving;
+  const locked = busy || saving || agendaSaving;
   const selected = entities.find((entity) => entity.id === selectedId) ?? null;
   const hierarchy = selected ? relationshipHierarchy(entities, selected) : { parents: [], children: [] };
   const effectiveMetric = selected?.kind === "pa" ? "VN" : metric;
@@ -115,13 +120,20 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
 
   function clearFeedback() { setError(""); setNotice(""); }
   function leaveRelationshipForm() {
-    if (relationshipDirty && !window.confirm("Há alterações não salvas nesta ficha ou agenda. Deseja sair sem salvar?")) return false;
+    if ((relationshipDirty || entityForm !== null) && !window.confirm("Há alterações não salvas no cadastro, ficha, contatos, agenda ou metas. Deseja sair sem salvar?")) return false;
     setRelationshipDirty(false); return true;
   }
   function selectEntity(entity: RegistryEntity) {
     if (!leaveRelationshipForm()) return;
     setShowCommunication(false);
-    setSelectedId(entity.id); setEntityForm(null); setDeleting(false); setActiveTab("profile"); clearFeedback();
+    setSelectedId(entity.id); setEntityForm(null); setDeleting(false); setActiveTab("profile"); setAgendaFocus(null); clearFeedback();
+  }
+  function openEntityAgenda(entity: RegistryEntity, appointment: EntityAppointment) {
+    if (locked || !leaveRelationshipForm()) return;
+    setShowCommunication(false); setSelectedId(entity.id); setEntityForm(null); setDeleting(false);
+    setQuery(""); setKindFilter("all"); setCentralFilter("all"); setCooperativeFilter("all");
+    setAgendaFocus((current) => ({ date: zonedDateTimeInput(appointment.startsAt, appointment.timezone).slice(0, 10), request: (current?.request ?? 0) + 1 }));
+    setActiveTab("agenda"); clearFeedback();
   }
   function startCreate() {
     if (!leaveRelationshipForm()) return;
@@ -176,6 +188,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   }
 
   return <section className="registry-manager" aria-label={`Cadastro e metas de ${dataset.year}`}>
+    <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} />
     <div className="panel-heading">
       <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
       <button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button>
@@ -225,10 +238,10 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
               {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3><p className={profileStyles.muted}>Abra uma ficha para ver contatos, carteira e agenda.</p></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
               <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} onDirtyChange={setRelationshipDirty} />
             </div>}
-            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked} />}
-            {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} onDirtyChange={setRelationshipDirty} />}
+            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked} onDirtyChange={setRelationshipDirty} />}
+            {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}:${agendaFocus?.request ?? 0}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} initialDate={agendaFocus?.date} onDirtyChange={setRelationshipDirty} onAppointmentsChange={refreshAgenda} onSavingChange={setAgendaSaving} />}
             {activeTab === "targets" && <><label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
-            <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onSave={async (input) => {
+            <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onDirtyChange={setRelationshipDirty} onSave={async (input) => {
               clearFeedback();
               await persist(upsertPlanRow(normalized, { entityId: selected.id, metric: effectiveMetric, ...input }) as Dataset, "Metas e produção salvas. Todos os períodos e acumulados foram atualizados.");
             }} /></>}
@@ -241,8 +254,8 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
 }
 
 type PlanValues = Pick<PlanRowInput, "annualTarget" | "targets" | "actuals" | "cutoff">;
-function PlanEditor({ dataset, entity, metric, row, busy, centralChildren, onSave }: {
-  dataset: Dataset; entity: RegistryEntity; metric: Metric; row: DataRow | null; busy: boolean; centralChildren: number; onSave: (input: PlanValues) => Promise<void>;
+function PlanEditor({ dataset, entity, metric, row, busy, centralChildren, onDirtyChange, onSave }: {
+  dataset: Dataset; entity: RegistryEntity; metric: Metric; row: DataRow | null; busy: boolean; centralChildren: number; onDirtyChange: (dirty: boolean) => void; onSave: (input: PlanValues) => Promise<void>;
 }) {
   const policy = entity.kind === "pa" ? paTargetForGroup(entity.group) : null;
   const initialTargets: (number | null)[] = row?.targets ?? Array(12).fill(policy?.monthly ?? null);
@@ -253,6 +266,7 @@ function PlanEditor({ dataset, entity, metric, row, busy, centralChildren, onSav
   const [cutoff, setCutoff] = useState(row?.cutoff?.slice(0, 10) || defaultCutoff(dataset, metric, entity.kind));
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => {
     const currentPolicy = entity.kind === "pa" ? paTargetForGroup(entity.group) : null;
     setAnnual(formatInput(row?.annualTarget ?? (row ? null : currentPolicy?.annual)));

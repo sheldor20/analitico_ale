@@ -54,6 +54,32 @@ export async function listEntityAppointments(year: number, entityId: string, exp
   if (error) throw new Error(error.message);
   return ((data ?? []) as AppointmentRow[]).map(appointment);
 }
+/** All annual appointments, including central, cooperative and PA entries.
+ * Page by immutable UUID so edits to event dates do not shift later pages.
+ * An empty page ends traversal, even when the API caps results below our limit.
+ */
+export async function listWorkspaceAppointments(year: number, expectedOwner: string): Promise<EntityAppointment[]> {
+  if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new Error("Ano do cadastro inválido.");
+  const owner = await ownerId(expectedOwner);
+  const rows: EntityAppointment[] = [];
+  let cursor = "";
+  for (;;) {
+    let query = db().from("commercial_entity_appointments").select(APPOINTMENT_COLUMNS)
+      .eq("owner_id", owner).eq("workspace_year", year).order("id", { ascending: true }).limit(500);
+    if (cursor) query = query.gt("id", cursor);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as AppointmentRow[];
+    if (!page.length) break;
+    const next = page[page.length - 1].id;
+    if (!next || next <= cursor) throw new Error("Não foi possível carregar a agenda completa. Atualize a página e tente novamente.");
+    rows.push(...page.map(appointment));
+    cursor = next;
+  }
+  // Do not publish another account's in-flight calendar after switching sessions.
+  await ownerId(expectedOwner);
+  return rows.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || left.id.localeCompare(right.id));
+}
 export async function saveEntityAppointment(year: number, entity: RegistryEntity, input: AppointmentInput, expectedOwner: string, id?: string): Promise<EntityAppointment> {
   const clean = validateAppointment(input, year); const owner = await ownerId(expectedOwner);
   const payload = { title: clean.title, kind: clean.kind, starts_at: clean.startsAt, ends_at: clean.endsAt, timezone: clean.timezone, location: clean.location, notes: clean.notes, status: clean.status };

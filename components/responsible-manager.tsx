@@ -14,7 +14,7 @@ import type { RegistryEntity } from "@/lib/types";
 const EMPTY: ResponsibleContactInput = { name: "", jobTitle: "", teams: "", whatsapp: "", emails: [""] };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Não foi possível salvar o responsável.";
 
-export default function ResponsibleManager({ entity, year, disabled = false }: { entity: RegistryEntity; year: number; disabled?: boolean }) {
+export default function ResponsibleManager({ entity, year, disabled = false, onDirtyChange }: { entity: RegistryEntity; year: number; disabled?: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const [contacts, setContacts] = useState<ResponsibleContact[]>([]);
   const [form, setForm] = useState<ResponsibleContactInput | null>(null);
   const [editingId, setEditingId] = useState<string | undefined>();
@@ -23,6 +23,7 @@ export default function ResponsibleManager({ entity, year, disabled = false }: {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const locked = disabled || saving;
+  useEffect(() => { onDirtyChange?.(form !== null); }, [form, onDirtyChange]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1054,7 +1054,7 @@ export default function Dashboard() {
           {view === "alerts" && dataset && user ? (
             <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
           ) : view === "registry" && dataset ? (
-            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={user?.id ?? 'session'} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
           ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
