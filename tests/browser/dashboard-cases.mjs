@@ -12,6 +12,78 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible();
     return { ...state, dialog };
   }
+  test('compact dashboard: three main cards share one row in HTML and PNG, with projection below', async ({ page }, info) => {
+    await page.addInitScript(() => {
+      window.__compactText = [];
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (value, x, y, ...args) {
+        window.__compactText.push({ text: String(value), x, y });
+        return fillText.call(this, value, x, y, ...args);
+      };
+    });
+    const { dialog, errors } = await open(page);
+    await step(dialog, 2);
+    const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
+    const primary = frame.locator('table[data-layout="metric-cards"][data-columns="3"]').first();
+    const expectedLabels = ['Meta do período', 'Realizado informado', 'GAP para a meta'];
+    const cells = primary.locator('td[data-metric]');
+    await expect(cells).toHaveCount(3);
+    async function assertHtmlRow() {
+      const geometry = await cells.evaluateAll(items => items.map(item => { const box = item.getBoundingClientRect(); return { label: item.getAttribute('data-metric'), x: box.x, y: box.y, width: box.width, height: box.height }; }));
+      expect(geometry.map(cell => cell.label)).toEqual(expectedLabels);
+      expect(Math.max(...geometry.map(cell => cell.y)) - Math.min(...geometry.map(cell => cell.y))).toBeLessThan(1);
+      expect(Math.max(...geometry.map(cell => cell.height)) - Math.min(...geometry.map(cell => cell.height))).toBeLessThan(1);
+      expect(geometry[0].x).toBeLessThan(geometry[1].x);
+      expect(geometry[1].x).toBeLessThan(geometry[2].x);
+      return geometry;
+    }
+    const plain = await assertHtmlRow();
+    await expect(frame.locator('[data-columns="1"]')).toHaveCount(0);
+    const projection = dialog.getByRole('checkbox', { name: /Incluir projeção de fechamento/ });
+    await projection.check();
+    const projected = frame.locator('td[data-metric="Fechamento apurado"]').first();
+    await expect(projected).toBeVisible();
+    await assertHtmlRow();
+    expect(await projected.evaluate(node => node.getBoundingClientRect().y)).toBeGreaterThan(plain[0].y + plain[0].height);
+    await frame.locator('body').screenshot({ path: info.outputPath('compact-email-desktop.png') });
+    await projection.uncheck();
+    await page.evaluate(() => { window.__compactText = []; });
+    await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+    const image = dialog.getByRole('img', { name: /Dashboard Mensal/ });
+    await expect(image).toBeVisible();
+    async function pngLabels() {
+      return page.evaluate(labels => labels.map(label => window.__compactText.find(item => item.text === label)), expectedLabels);
+    }
+    const png = await pngLabels();
+    expect(png.every(Boolean)).toBe(true);
+    expect(new Set(png.map(item => item.y)).size).toBe(1);
+    expect(png[0].x).toBeLessThan(png[1].x);
+    expect(png[1].x).toBeLessThan(png[2].x);
+    await page.evaluate(() => { window.__compactText = []; });
+    const previousSource = await image.getAttribute('src');
+    await projection.check();
+    await expect(image).not.toHaveAttribute('src', previousSource);
+    await expect(image).toBeVisible();
+    const pngWithProjection = await pngLabels();
+    expect(pngWithProjection.every(Boolean)).toBe(true);
+    expect(new Set(pngWithProjection.map(item => item.y)).size).toBe(1);
+    const projectedText = await page.evaluate(() => window.__compactText.find(item => item.text.startsWith('Fechamento')));
+    expect(projectedText).toBeTruthy();
+    expect(projectedText.y).toBeGreaterThan(pngWithProjection[0].y);
+    const downloadEvent = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Baixar painel WhatsApp (PNG)', exact: true }).click();
+    await (await downloadEvent).saveAs(info.outputPath('compact-whatsapp-dashboard.png'));
+    await dialog.getByRole('button', { name: 'Painel do e-mail', exact: true }).click();
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      const bounds = await frame.locator('body').evaluate(node => ({ content: node.ownerDocument.documentElement.scrollWidth, viewport: node.ownerDocument.defaultView.innerWidth }));
+      expect(bounds.content).toBeLessThanOrEqual(bounds.viewport + 1);
+      await frame.locator('body').screenshot({ path: info.outputPath(`compact-email-mobile-${width}.png`) });
+    }
+    expect(errors).toEqual([]);
+  });
+
   test('selected period leads dashboard and annual cards replace duplicated evolution', async ({ page }, info) => {
     const { dialog, errors } = await open(page);
     await dialog.getByLabel('Incluir Venda Nova e Arrecadação, separadamente').check();

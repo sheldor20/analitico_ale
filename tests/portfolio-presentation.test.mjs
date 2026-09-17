@@ -28,7 +28,9 @@ for (const period of ['daily','month','quarter','semester','ytd','annual']) {
     for (const block of cards) for (const card of block.items) {
       assert.ok(layout.commands.some((c) => c.type === 'text' && c.value === card.value.replace(/\s/g, ' ')));
     }
-    assert.match(output.html, /colspan="2" width="100%"/);
+    const rows = [...output.html.matchAll(/<table data-layout="metric-cards" data-columns="3"[^>]*><tr>([\s\S]*?)<\/tr><\/table>/g)];
+    assert.equal(rows.length, cards.length);
+    assert.ok(rows.every((row) => (row[1].match(/data-metric=/g) || []).length === 3));
   });
 }
 test('annual scenario uses full-year figures and keeps both current metrics before the annual cards', () => {
@@ -63,7 +65,7 @@ test('projection opt-in adds it to current and annual cards, both text channels 
     assert.deepEqual(card.items, cards[index].items.slice(0, 3));
   }
   const rendered = dashboardImageLayout(shown.dashboard, measure).commands.map((c) => c.value ?? '').join('\n');
-  assert.match(rendered, /Projeção de fechamento/);
+  assert.match(rendered, /Projeção de\s+fechamento/);
   const email = buildEmailFile({ ...shown, recipients: ['ana@example.com'] });
   const encoded = email.split('Content-Transfer-Encoding: base64\r\n\r\n').slice(1).map((part) => part.split('\r\n--portfolio_alternative_v1')[0].replace(/\r\n/g, ''));
   assert.equal(Buffer.from(encoded[1], 'base64').toString('utf8'), shown.html);

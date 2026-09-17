@@ -41,6 +41,11 @@ test('individual presentation mirrors the actual achievement, month, hierarchy a
   assert.equal(cards[1].label, 'Realizado');
   assert.equal(cards[1].accent, true);
   assert.equal(cards[1].support, '150% da meta');
+  assert.equal(cards.length, 3);
+  assert.equal(cards[2].label, 'Crescimento sobre a meta');
+  assert.equal(cards[2].value, money(50));
+  assert.equal(cards[2].support, '50% acima da meta');
+  assert.ok(output.text.includes(`Crescimento sobre a meta: ${money(50)}`));
 });
 
 test('PA zero and AR keep their correct scope and metric without inheriting another hierarchy', () => {
@@ -53,6 +58,19 @@ test('PA zero and AR keep their correct scope and metric without inheriting anot
     assert.match(value, /Arrecadação/);
     assert.doesNotMatch(value, /Venda nova/);
   }
+});
+
+test('exactly met goals show zero GAP while every bulk row keeps its own growth figure', () => {
+  const met = sample({ actual: 1200, attainment: 1 });
+  const individual = buildGoalAlertPresentation(met);
+  const third = individual.dashboard.blocks.find((block) => block.type === 'cards').items[2];
+  assert.equal(third.label, 'GAP para a meta');
+  assert.equal(third.value, money(0));
+  assert.equal(third.support, 'Meta do mês atingida');
+  const bulk = buildGoalAlertsDashboard([sample(), met], { year: 2026, month: 7 });
+  const cards = bulk.blocks.filter((block) => block.type === 'cards');
+  assert.deepEqual(cards.map((block) => block.items[2].value), [money(300), money(0)]);
+  assert.deepEqual(cards.map((block) => block.items.length), [3, 3]);
 });
 
 test('partial and mixed cutoffs are explicit and never rewritten as a completed month', () => {

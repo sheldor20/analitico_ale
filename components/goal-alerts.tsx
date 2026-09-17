@@ -9,6 +9,7 @@ import { listResponsibleContacts, type ResponsibleContact } from '@/lib/contact-
 import { buildWhatsappLink, recipientsForContacts, whatsappNumber } from '@/lib/portfolio-communication.mjs';
 import type { Dataset } from '@/lib/types';
 import styles from './goal-alerts.module.css';
+import { filterGoalAlerts, goalAlertFilterOptions } from '@/lib/goal-alert-filters.mjs';
 import { buildGoalAlertPresentation, buildGoalAlertsDashboard } from '@/lib/goal-alert-presentation.mjs';
 import DashboardImageCopy from './dashboard-image-copy';
 import GoalAlertOutlook from './goal-alert-outlook';
@@ -28,6 +29,19 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [kind, setKind] = useState('all');
+  const hierarchyScope = `${userId}:${dataset.year}`;
+  const [hierarchy, setHierarchy] = useState({ scope: hierarchyScope, central: 'all', cooperative: 'all' });
+  const hierarchyOptions = useMemo(() => goalAlertFilterOptions(dataset), [dataset]);
+  const selectedHierarchy = hierarchy.scope === hierarchyScope ? hierarchy : { central: 'all', cooperative: 'all' };
+  const central = hierarchyOptions.centrals.some((item) => item.value === selectedHierarchy.central) ? selectedHierarchy.central : 'all';
+  const cooperativeOptions = hierarchyOptions.cooperatives.filter((item) => central === 'all' || item.central === central);
+  const cooperative = kind !== 'central' && cooperativeOptions.some((item) => item.value === selectedHierarchy.cooperative) ? selectedHierarchy.cooperative : 'all';
+  const centralOption = hierarchyOptions.centrals.find((item) => item.value === central);
+  const cooperativeOption = cooperativeOptions.find((item) => item.value === cooperative);
+  const selectionLabel = [kind === 'all' ? 'Todas as unidades' : kind === 'pa' ? 'PAs' : kind === 'cooperative' ? 'Cooperativas' : 'Centrais',
+    centralOption ? `Central ${centralOption.central} · ${centralOption.name}` : cooperativeOption ? `Central ${cooperativeOption.central}` : 'Todas as centrais',
+    ...(cooperativeOption ? [`Cooperativa ${cooperativeOption.cooperative} · ${cooperativeOption.name}`] : []),
+  ].join(' / ');
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const [emailPanel, setEmailPanel] = useState<{ view: string; key: string } | null>(null);
   const invalidateClipboard = () => setClipboardVersion((value) => value + 1);
@@ -35,10 +49,11 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   const [contactPanel, setContactPanel] = useState<{ scope: string; key: string; contacts: ResponsibleContact[]; selected: string } | null>(null);
   const states = saved.scope === scope ? saved.rows : [];
   const stateMap = new Map(states.map((state) => [state.alertKey, state]));
-  const newCount = alerts.filter((alert) => !stateMap.get(alert.key)?.readAt).length;
-  const visible = alerts.filter((alert) => (kind === 'all' || alert.entity.kind === kind) && (!onlyNew || !stateMap.get(alert.key)?.readAt));
+  const scopedAlerts = filterGoalAlerts(alerts, { kind, central, cooperative });
+  const newCount = scopedAlerts.filter((alert) => !stateMap.get(alert.key)?.readAt).length;
+  const visible = scopedAlerts.filter((alert) => !onlyNew || !stateMap.get(alert.key)?.readAt);
   const visibleSnapshot = JSON.stringify(visible);
-  const exportView = `${scope}:${kind}:${onlyNew}:${visibleSnapshot}`;
+  const exportView = `${scope}:${kind}:${central}:${cooperative}:${onlyNew}:${visibleSnapshot}`;
 
   useEffect(() => {
     let active = true; contactRequest.current++; setLoading(true); setError(''); setContactPanel(null); setBusy('');
@@ -47,6 +62,23 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [scope, dataset.year, month, userId]);
+
+  function clearCommunication() {
+    contactRequest.current++; setContactPanel(null); setEmailPanel(null); setBusy(''); invalidateClipboard();
+  }
+  function changeCentral(value: string) {
+    clearCommunication(); setHierarchy({ scope: hierarchyScope, central: value, cooperative: 'all' });
+  }
+  function changeCooperative(value: string) {
+    clearCommunication(); setHierarchy({ scope: hierarchyScope, central, cooperative: value });
+  }
+  function changeKind(value: string) {
+    clearCommunication(); setKind(value);
+    if (value === 'central') setHierarchy({ scope: hierarchyScope, central, cooperative: 'all' });
+  }
+  function clearFilters() {
+    clearCommunication(); setHierarchy({ scope: hierarchyScope, central: 'all', cooperative: 'all' }); setKind('all'); setOnlyNew(false);
+  }
 
   async function mark(alert: GoalAlert, action: 'read' | 'notified') {
     const requestScope = scope; setBusy(alert.key); setError('');
@@ -72,9 +104,15 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
 
   return <section className={styles.section} aria-labelledby="goal-alerts-title">
     <div className={styles.heading}><div><span className={styles.eyebrow}><Bell size={17} aria-hidden="true" /> Reconhecimento de resultados</span><h2 id="goal-alerts-title">Metas atingidas no mês</h2><p>Centrais, cooperativas e PAs que já realizaram 100% ou mais da meta mensal.</p></div><label>Mês de referência<select aria-label="Mês de referência" value={month} onChange={(event) => setSelectedMonth({ year: dataset.year, month: Number(event.target.value) })}>{MONTHS.map((label: string, index: number) => <option key={label} value={index}>{label}/{dataset.year}</option>)}</select></label></div>
-    <div className={styles.summary}><Trophy size={24} aria-hidden="true" /><div><strong>{alerts.length} {alerts.length === 1 ? 'meta atingida' : 'metas atingidas'}</strong><span>{loading ? 'Carregando registros de leitura…' : `${newCount} para reconhecer`} · Venda nova e arrecadação</span></div><p>O alerta usa o realizado informado na base. Cada carteira e unidade aparece uma vez por mês.</p></div>
-    <div className={styles.filters}><label>Tipo de unidade<select aria-label="Tipo de unidade" value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">Todas as unidades</option><option value="central">Centrais</option><option value="cooperative">Cooperativas</option><option value="pa">PAs</option></select></label><label className={styles.checkbox}><input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} />Somente não lidas</label></div>
-    {!!visible.length && <div className={styles.exportToolbar}><p>{visible.length} {visible.length === 1 ? 'resultado no filtro' : 'resultados no filtro'} · A imagem reúne as unidades exibidas abaixo.</p><DashboardImageCopy key={scope} disabled={onlyNew && loading} snapshot={exportView} label="Copiar painel filtrado como imagem" filename={`metas-${dataset.year}-${month + 1}-${kind}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertsDashboard(visible, { year: dataset.year, month, kindLabel: kind === 'all' ? 'Todas as unidades' : kindLabel[kind as keyof typeof kindLabel] })} /></div>}
+    <div className={styles.summary}><Trophy size={24} aria-hidden="true" /><div><strong>{scopedAlerts.length} {scopedAlerts.length === 1 ? 'meta atingida' : 'metas atingidas'}</strong><span>{loading ? 'Carregando registros de leitura…' : `${newCount} para reconhecer`} · Venda nova e arrecadação</span></div><p>O alerta usa o realizado informado na base. O resumo acompanha os filtros de central, cooperativa e tipo de unidade.</p></div>
+    <div className={styles.filters}>
+      <label>Central<select aria-label="Central" value={central} onChange={(event) => changeCentral(event.target.value)}><option value="all">Todas as centrais</option>{hierarchyOptions.centrals.map((item) => <option key={item.value} value={item.value}>{item.central} · {item.name}</option>)}</select></label>
+      <label>Cooperativa<select aria-label="Cooperativa" value={cooperative} disabled={kind === 'central'} onChange={(event) => changeCooperative(event.target.value)}><option value="all">Todas as cooperativas</option>{cooperativeOptions.map((item) => <option key={item.value} value={item.value}>{item.central} / {item.cooperative} · {item.name}</option>)}</select></label>
+      <label>Tipo de unidade<select aria-label="Tipo de unidade" value={kind} onChange={(event) => changeKind(event.target.value)}><option value="all">Todas as unidades</option><option value="central">Centrais</option><option value="cooperative">Cooperativas</option><option value="pa">PAs</option></select></label>
+      <label className={styles.checkbox}><input type="checkbox" checked={onlyNew} onChange={(event) => { clearCommunication(); setOnlyNew(event.target.checked); }} />Somente não lidas</label>
+      <button type="button" className="button secondary" onClick={clearFilters} disabled={central === 'all' && cooperative === 'all' && kind === 'all' && !onlyNew}>Limpar filtros</button>
+    </div>
+    {!!visible.length && <div className={styles.exportToolbar}><p>{visible.length} {visible.length === 1 ? 'resultado no filtro' : 'resultados no filtro'} · A imagem reúne as unidades exibidas abaixo.</p><DashboardImageCopy key={scope} disabled={onlyNew && loading} snapshot={exportView} label="Copiar painel filtrado como imagem" filename={`metas-${dataset.year}-${month + 1}-${kind}-${central}-${cooperative === 'all' ? 'todas' : cooperative.replaceAll(':', '-')}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertsDashboard(visible, { year: dataset.year, month, kindLabel: selectionLabel })} /></div>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {!visible.length ? <div className={styles.empty}><Trophy size={30} aria-hidden="true" /><h3>{alerts.length ? 'Nenhum alerta neste filtro' : 'Nenhuma meta atingida neste mês'}</h3><p>{alerts.length ? 'Altere o filtro para consultar os demais resultados.' : 'Os alertas aparecem quando há meta mensal positiva, produção suficiente e dados completos para a unidade.'}</p></div> : <div className={styles.grid}>{visible.map((alert) => {
       const state = stateMap.get(alert.key);
