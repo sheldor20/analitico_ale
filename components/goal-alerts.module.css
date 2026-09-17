@@ -16,3 +16,17 @@
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }.actions button { min-height: 40px; }.contact { display: grid; gap: 12px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }.contact p { font-size: 14px; line-height: 1.5; color: var(--muted); margin: 0; }.send { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 10px; background: var(--sicoob-dark); color: white; text-decoration: none; font-weight: 600; text-align: center; }.send:focus-visible { outline: 3px solid var(--sicoob-turquoise); outline-offset: 3px; }
 .empty { display: grid; justify-items: center; gap: 10px; padding: 48px 24px; border: 1px solid var(--line); border-radius: 16px; text-align: center; color: var(--muted); background: white; }.empty h3 { color: var(--sicoob-dark); margin: 0; }.empty p { margin: 0; max-width: 580px; line-height: 1.5; }.error { padding: 14px 16px; color: #8b351b; background: #fff4ee; border-radius: 10px; margin: 0; }
 @media(max-width:700px) { .heading { align-items: stretch; flex-direction: column; gap: 18px; }.summary { flex-wrap: wrap; padding: 18px; }.summary p { margin: 0; max-width: none; }.filters { flex-wrap: wrap; }.card { padding: 18px; }.amount strong { font-size: 31px; } }
+
+.exportToolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.exportToolbar > p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.imageAction { display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.imageAction button { justify-self: start; max-width: 100%; white-space: normal; }
+.feedback { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.emailPanel { display: grid; gap: 14px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); min-width: 0; }
+.emailPanel > *, .emailPanel label { min-width: 0; }
+.emailHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.emailHeading h4 { margin: 0; font-size: 18px; color: var(--sicoob-dark); }
+.emailSubject { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.emailPanel textarea { width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; line-height: 1.5; background: white; color: var(--ink); }
+.emailPanel button, .emailPanel a { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@media(max-width:700px) { .emailPanel input, .emailPanel select, .emailPanel textarea { font-size: 16px; } }

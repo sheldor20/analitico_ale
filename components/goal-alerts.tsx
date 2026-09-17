@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, Check, MessageCircle, Trophy } from 'lucide-react';
+import { Bell, Check, Mail, MessageCircle, Trophy } from 'lucide-react';
 import { money, percent, MONTHS } from '@/lib/analytics.mjs';
 import { buildMonthlyGoalAlerts, defaultGoalAlertMonth, goalAchievementMessage, type GoalAlert } from '@/lib/goal-alerts.mjs';
 import { listGoalAlertStates, saveGoalAlertState, type GoalAlertState } from '@/lib/goal-alert-store';
@@ -9,6 +9,9 @@ import { listResponsibleContacts, type ResponsibleContact } from '@/lib/contact-
 import { buildWhatsappLink, recipientsForContacts, whatsappNumber } from '@/lib/portfolio-communication.mjs';
 import type { Dataset } from '@/lib/types';
 import styles from './goal-alerts.module.css';
+import { buildGoalAlertPresentation, buildGoalAlertsDashboard } from '@/lib/goal-alert-presentation.mjs';
+import DashboardImageCopy from './dashboard-image-copy';
+import GoalAlertOutlook from './goal-alert-outlook';
 
 const kindLabel = { central: 'Central', cooperative: 'Cooperativa', pa: 'PA' };
 const date = (value: string) => value.split('-').reverse().join('/');
@@ -19,20 +22,26 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   const alerts = useMemo(() => buildMonthlyGoalAlerts(dataset, month), [dataset, month]);
   const scope = `${userId}:${dataset.year}:${month}`;
   const scopeRef = useRef(scope); scopeRef.current = scope;
+  const contactRequest = useRef(0);
   const [saved, setSaved] = useState<{ scope: string; rows: GoalAlertState[] }>({ scope: '', rows: [] });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [kind, setKind] = useState('all');
+  const [clipboardVersion, setClipboardVersion] = useState(0);
+  const [emailPanel, setEmailPanel] = useState<{ view: string; key: string } | null>(null);
+  const invalidateClipboard = () => setClipboardVersion((value) => value + 1);
   const [onlyNew, setOnlyNew] = useState(false);
   const [contactPanel, setContactPanel] = useState<{ scope: string; key: string; contacts: ResponsibleContact[]; selected: string } | null>(null);
   const states = saved.scope === scope ? saved.rows : [];
   const stateMap = new Map(states.map((state) => [state.alertKey, state]));
   const newCount = alerts.filter((alert) => !stateMap.get(alert.key)?.readAt).length;
   const visible = alerts.filter((alert) => (kind === 'all' || alert.entity.kind === kind) && (!onlyNew || !stateMap.get(alert.key)?.readAt));
+  const visibleSnapshot = JSON.stringify(visible);
+  const exportView = `${scope}:${kind}:${onlyNew}:${visibleSnapshot}`;
 
   useEffect(() => {
-    let active = true; setLoading(true); setError(''); setContactPanel(null); setBusy('');
+    let active = true; contactRequest.current++; setLoading(true); setError(''); setContactPanel(null); setBusy('');
     listGoalAlertStates(dataset.year, month, userId).then((rows) => { if (active) setSaved({ scope, rows }); })
       .catch(() => { if (active) setError('Não foi possível carregar os registros de leitura. Os resultados abaixo continuam atualizados; tente recarregar a página.'); })
       .finally(() => { if (active) setLoading(false); });
@@ -49,22 +58,23 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   }
 
   async function prepareContact(alert: GoalAlert) {
-    const requestScope = scope; setBusy(alert.key); setError('');
+    const requestScope = scope; const requestId = ++contactRequest.current; setBusy(alert.key); setError(''); setEmailPanel(null);
     try {
       const savedContacts = await listResponsibleContacts(dataset.year, alert.entity.id);
       const contacts = recipientsForContacts(savedContacts, dataset.year, alert.entity).filter((contact: ResponsibleContact) => {
         if (contact.ownerId !== userId) return false;
         try { return !!whatsappNumber(contact.whatsapp); } catch { return false; }
       });
-      if (scopeRef.current === requestScope) setContactPanel({ scope: requestScope, key: alert.key, contacts, selected: contacts[0]?.id || '' });
-    } catch { if (scopeRef.current === requestScope) setError('Não foi possível carregar os responsáveis desta unidade. Confira a ficha cadastral.'); }
-    finally { if (scopeRef.current === requestScope) setBusy(''); }
+      if (scopeRef.current === requestScope && contactRequest.current === requestId) setContactPanel({ scope: requestScope, key: alert.key, contacts, selected: contacts[0]?.id || '' });
+    } catch { if (scopeRef.current === requestScope && contactRequest.current === requestId) setError('Não foi possível carregar os responsáveis desta unidade. Confira a ficha cadastral.'); }
+    finally { if (scopeRef.current === requestScope && contactRequest.current === requestId) setBusy(''); }
   }
 
   return <section className={styles.section} aria-labelledby="goal-alerts-title">
     <div className={styles.heading}><div><span className={styles.eyebrow}><Bell size={17} aria-hidden="true" /> Reconhecimento de resultados</span><h2 id="goal-alerts-title">Metas atingidas no mês</h2><p>Centrais, cooperativas e PAs que já realizaram 100% ou mais da meta mensal.</p></div><label>Mês de referência<select aria-label="Mês de referência" value={month} onChange={(event) => setSelectedMonth({ year: dataset.year, month: Number(event.target.value) })}>{MONTHS.map((label: string, index: number) => <option key={label} value={index}>{label}/{dataset.year}</option>)}</select></label></div>
     <div className={styles.summary}><Trophy size={24} aria-hidden="true" /><div><strong>{alerts.length} {alerts.length === 1 ? 'meta atingida' : 'metas atingidas'}</strong><span>{loading ? 'Carregando registros de leitura…' : `${newCount} para reconhecer`} · Venda nova e arrecadação</span></div><p>O alerta usa o realizado informado na base. Cada carteira e unidade aparece uma vez por mês.</p></div>
     <div className={styles.filters}><label>Tipo de unidade<select aria-label="Tipo de unidade" value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">Todas as unidades</option><option value="central">Centrais</option><option value="cooperative">Cooperativas</option><option value="pa">PAs</option></select></label><label className={styles.checkbox}><input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} />Somente não lidas</label></div>
+    {!!visible.length && <div className={styles.exportToolbar}><p>{visible.length} {visible.length === 1 ? 'resultado no filtro' : 'resultados no filtro'} · A imagem reúne as unidades exibidas abaixo.</p><DashboardImageCopy key={scope} disabled={onlyNew && loading} snapshot={exportView} label="Copiar painel filtrado como imagem" filename={`metas-${dataset.year}-${month + 1}-${kind}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertsDashboard(visible, { year: dataset.year, month, kindLabel: kind === 'all' ? 'Todas as unidades' : kindLabel[kind as keyof typeof kindLabel] })} /></div>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {!visible.length ? <div className={styles.empty}><Trophy size={30} aria-hidden="true" /><h3>{alerts.length ? 'Nenhum alerta neste filtro' : 'Nenhuma meta atingida neste mês'}</h3><p>{alerts.length ? 'Altere o filtro para consultar os demais resultados.' : 'Os alertas aparecem quando há meta mensal positiva, produção suficiente e dados completos para a unidade.'}</p></div> : <div className={styles.grid}>{visible.map((alert) => {
       const state = stateMap.get(alert.key);
@@ -77,7 +87,8 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
         <div className={styles.amount}><strong>{percent(alert.attainment)}</strong><span>da meta de {MONTHS[month]}/{dataset.year}</span></div>
         <dl><div><dt>Meta do mês</dt><dd>{money(alert.target)}</dd></div><div><dt>Realizado</dt><dd>{money(alert.actual)}</dd></div></dl>
         <p className={styles.cutoff}>Dados até {date(alert.cutoff)}{state?.notifiedAt && ` · Comunicação registrada em ${new Date(state.notifiedAt).toLocaleDateString('pt-BR')}`}</p>
-        <div className={styles.actions}>{!state?.readAt && <button className="button secondary" disabled={busy === alert.key || loading} onClick={() => mark(alert, 'read')}><Check size={16} />Marcar como lida</button>}<button className="button secondary" disabled={busy === alert.key} onClick={() => prepareContact(alert)}><MessageCircle size={16} />Preparar WhatsApp</button></div>
+        <div className={styles.actions}>{!state?.readAt && <button className="button secondary" disabled={busy === alert.key || loading} onClick={() => mark(alert, 'read')}><Check size={16} />Marcar como lida</button>}<button className="button secondary" disabled={busy === alert.key} onClick={() => prepareContact(alert)}><MessageCircle size={16} />Preparar WhatsApp</button><button type="button" className="button secondary" aria-expanded={emailPanel?.view === exportView && emailPanel.key === alert.key} onClick={() => { contactRequest.current++; setBusy(''); setContactPanel(null); setEmailPanel((current) => current?.view === exportView && current.key === alert.key ? null : { view: exportView, key: alert.key }); }}><Mail size={16} aria-hidden="true" />Preparar Outlook</button><DashboardImageCopy key={`${userId}:${alert.key}`} snapshot={JSON.stringify(alert)} filename={`meta-${alert.entity.id.replace(/[^a-zA-Z0-9_-]/g, '-')}-${alert.metric}-${alert.year}-${alert.month + 1}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertPresentation(alert).dashboard} /></div>
+        {emailPanel?.view === exportView && emailPanel.key === alert.key && <GoalAlertOutlook key={`${exportView}:${alert.key}`} alert={alert} userId={userId} clipboardVersion={clipboardVersion} notifiedAt={state?.notifiedAt} marking={busy === alert.key || loading} onMarkSent={() => void mark(alert, 'notified')} onClose={() => setEmailPanel(null)} />}
         {panel && <div className={styles.contact}>{panel.contacts.length ? <><label>Responsável da unidade<select aria-label="Responsável da unidade" value={panel.selected} onChange={(event) => setContactPanel({ ...panel, selected: event.target.value })}>{panel.contacts.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.whatsapp}</option>)}</select></label><p>A mensagem será aberta para você revisar e enviar no WhatsApp.</p><a className={styles.send} href={link} target="_blank" rel="noopener noreferrer">Abrir mensagem no WhatsApp</a><button className="button secondary" disabled={busy === alert.key || loading || !!state?.notifiedAt} onClick={() => mark(alert, 'notified')}>{state?.notifiedAt ? 'Comunicação registrada' : 'Já enviei: registrar comunicação'}</button></> : <p>Cadastre um responsável com WhatsApp válido na ficha desta unidade para preparar a mensagem.</p>}</div>}
       </article>;
     })}</div>}
