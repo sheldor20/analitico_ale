@@ -28,7 +28,7 @@ export function recipientsForContacts(contacts: ResponsibleContact[], year: numb
 export function normalizeRecipients(values: string | string[]): string[];
 export function whatsappNumber(value: string): string;
 export function buildPortfolioReport(options: { dataset: Dataset; entity: RegistryEntity; metric?: Metric; includeBoth?: boolean; month?: number; period?: string; uplift?: number }): PortfolioReport;
-export function renderPortfolioCommunication(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string }): PortfolioMessage;
+export function renderPortfolioCommunication(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string; showProjection?: boolean }): PortfolioMessage;
 export function buildOutlookLink(options: { recipients?: string[]; subject: string; body?: string; personal?: boolean }): { url: string; requiresPaste: boolean };
 export function buildWhatsappLink(options: { phone?: string; body?: string }): { url: string; requiresPaste: boolean };
 export function buildEmailFile(options: { recipients?: string[]; subject: string; text: string; html: string }): string;

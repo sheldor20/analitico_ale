@@ -29,6 +29,18 @@ A identidade Sicoob e as diretrizes para futuras melhorias estão em [docs/IDENT
 - Comunicação do cenário parcial pronta para revisar, copiar, baixar em texto e abrir no aplicativo de e-mail.
 - Exportação CSV da seleção, incluindo grupo e metas fixas dos PAs, com proteção contra interpretação de textos como fórmulas.
 - Login Supabase, histórico privado de importações e ações persistidas. Reimportar o mesmo conjunto não duplica resultados.
+- Fichas por central, cooperativa e PA, com navegação pela hierarquia, contatos, modalidade de capital do prestamista, tabelas/taxas e observações de arrecadação e venda nova.
+- Agenda mensal por unidade para visitas, treinamentos, reuniões e ligações, com horário/fuso, edição, conclusão e cancelamento.
+- Alertas de metas mensais atingidas pelo realizado, separados por unidade e carteira, com leitura persistida e mensagem de reconhecimento para o WhatsApp do responsável cadastrado.
+- Parciais com projeção opcional (desmarcada inicialmente), cenário anual em cartões e botão para copiar o painel como PNG; se a área de transferência estiver bloqueada, o arquivo pode ser baixado.
+
+### Fichas, agenda e reconhecimento
+
+Em **Cadastro e metas**, selecione uma central e abra as cooperativas ou PAs pelos vínculos da ficha. As abas **Ficha**, **Contatos**, **Agenda** e **Metas** separam cada tarefa. Informações de taxas são cadastrais: não modificam cálculos de metas ou produção. Para não perder relacionamentos, o sistema impede remover ou trocar o código de unidades com fichas ou compromissos salvos; remova esses vínculos antes de alterar a identidade.
+
+Em **Metas atingidas**, o mês inicial acompanha a última produção observada na base. O usuário pode consultar outro mês, filtrar o nível da unidade e marcar alertas como lidos. Resultados são recalculados após cada atualização; metas ausentes, metas zero e produção incompleta não geram conquistas. A preparação do WhatsApp abre uma mensagem para revisão. O envio acontece no WhatsApp, e o registro de comunicação é uma confirmação manual do usuário.
+
+Novas informações são isoladas por conta, ano e unidade. A agenda não envia convites e não sincroniza calendários externos.
 
 ## Executar
 
@@ -40,7 +52,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Sem configuração Supabase, o usuário pode importar e analisar dados na memória da sessão. A interface informa que salvar e autenticar ainda não estão configurados. Nenhum dado comercial de exemplo é embutido no aplicativo.
+O login é obrigatório. Sem configuração Supabase válida, o acesso aos dados permanece bloqueado. Nenhum dado comercial de exemplo é embutido no aplicativo.
 
 ## Vercel
 
@@ -64,6 +76,9 @@ Aplicar, em ordem, as migrations de `supabase/migrations` no projeto `psgfazlrhu
 - `commercial_imports`: snapshots imutáveis com JSON normalizado, ano, origens/linhas, cortes e fingerprint SHA-256. Índice único por usuário/fingerprint evita duplicações.
 - `commercial_imports.source_count`, `has_cooperative_base` e `has_pa_cadence`: colunas calculadas pelo banco para conferir quais fontes integram cada snapshot.
 - `commercial_actions`: acompanhamento por importação e chave da entidade, incluindo fonte e métrica. A chave estrangeira composta impede vincular ações à análise de outra pessoa.
+- `commercial_entity_profiles`: fichas anuais com modalidade de capital, tabelas de taxas com unidade/período/vigência e observações das carteiras.
+- `commercial_entity_appointments`: compromissos por unidade, com datas, fuso, tipo e situação.
+- `commercial_goal_alert_states`: leitura e confirmação manual de comunicação de cada meta mensal; o resultado é calculado a partir da base atual.
 - RLS obrigatória: cada usuário autenticado acessa apenas seus próprios registros. Anônimos não recebem privilégios. Não há chave administrativa no aplicativo.
 
 Disponibilize contas autorizadas pelo painel Authentication do Supabase. O aplicativo usa login com e-mail e senha; não oferece cadastro público. Cada conta possui seu próprio histórico. O compartilhamento entre contas não faz parte desta versão.
@@ -126,7 +141,7 @@ As projeções representam cenários de ritmo, sem garantia de resultado. Recome
 
 ## Privacidade e operação
 
-A leitura XLSX acontece no navegador. Com a conta conectada, o conjunto normalizado é enviado ao Supabase ao concluir uma importação ou salvar uma edição. Sem login, os dados ficam apenas em memória. Os arquivos originais não são publicados, enviados ao GitHub ou embutidos no deploy. O arquivo permanece sob controle do usuário; o snapshot guarda nomes de arquivos, abas e linhas para rastreabilidade.
+A leitura XLSX acontece no navegador após o login. O conjunto normalizado é enviado ao Supabase ao concluir uma importação ou salvar uma edição. Os arquivos originais não são publicados, enviados ao GitHub ou embutidos no deploy. O arquivo permanece sob controle do usuário; o snapshot guarda nomes de arquivos, abas e linhas para rastreabilidade.
 
 Não são usados localStorage/IndexedDB para dados comerciais; sem salvar, a análise é perdida ao recarregar/fechar a página. A sessão de autenticação é gerenciada pelo cliente oficial Supabase. Ao sair, dados e ações abertos são removidos da interface.
 

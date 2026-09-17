@@ -20,10 +20,10 @@ test('missing or invalid values never claim a delivered goal; zero target has no
   assert.deepEqual(goalVariance(50,0),{kind:'growth',label:'Crescimento sobre a meta',value:50,ratio:null});
   assert.equal(goalVariance(0,0).ratio,null);
 });
-test('HTML and image share four ordered cards, prominent realized and growth support', () => {
+test('HTML and image share ordered cards with optional projection, prominent realized and growth support', () => {
   const dataset=portfolioFixture();
   const report=buildPortfolioReport({dataset,entity:unit(dataset,'cooperative:1002:3025'),month:7,period:'month'});
-  const {dashboard,html}=renderPortfolioCommunication(report);
+  const {dashboard,html}=renderPortfolioCommunication(report,{showProjection:true});
   const cards=dashboard.blocks.find(b=>b.type==='cards').items;
   assert.deepEqual(cards.map(c=>c.label),['Meta do período','Realizado informado','Crescimento sobre a meta','Fechamento apurado']);
   assert.equal(cards[1].accent,true); assert.match(cards[1].support,/150%/); assert.match(cards[2].support,/50% acima da meta/);
