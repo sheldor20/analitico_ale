@@ -6,6 +6,7 @@ import { registerUxTests } from './ux-cases.mjs';
 import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
 import { registerRelationshipTests } from './relationship-cases.mjs';
+import { registerGoalExportTests } from './goal-export-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -251,3 +252,5 @@ registerPortalV2Tests({ test, expect, setup });
 registerFollowupTests({test,expect,setup,composer,selectAugust});
 
 registerRelationshipTests({ test, expect, setup, owner, created });
+
+registerGoalExportTests({ test, expect, setup, owner, created });

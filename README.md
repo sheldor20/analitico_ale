@@ -40,6 +40,10 @@ Em **Cadastro e metas**, selecione uma central e abra as cooperativas ou PAs pel
 
 Em **Metas atingidas**, o mês inicial acompanha a última produção observada na base. O usuário pode consultar outro mês, filtrar o nível da unidade e marcar alertas como lidos. Resultados são recalculados após cada atualização; metas ausentes, metas zero e produção incompleta não geram conquistas. A preparação do WhatsApp abre uma mensagem para revisão. O envio acontece no WhatsApp, e o registro de comunicação é uma confirmação manual do usuário.
 
+Na própria tela **Metas atingidas**, cada cartão oferece **Copiar painel como imagem** e **Preparar Outlook**, sem depender de WhatsApp cadastrado. O botão acima dos resultados copia as unidades do filtro atual. Imagens incluem somente os resultados e a identificação das unidades, sem os contatos ou o status interno de leitura; seleções extensas pedem um filtro menor ou a cópia individual, sem omitir resultados silenciosamente.
+
+**Preparar Outlook** carrega os e-mails da unidade e permite ajustar a lista para aquele envio. Copie o painel formatado, abra o link do Outlook e cole no corpo do e-mail; assunto e destinatários são preenchidos pelo link. Contas Microsoft 365 e Outlook.com são aceitas. Se a cópia for bloqueada, há download da imagem PNG ou do e-mail completo em `.eml`. Copiar, baixar ou abrir o Outlook não registra comunicação como enviada; essa confirmação continua manual. Essa melhoria usa as tabelas existentes de contatos e alertas, sem nova migração SQL.
+
 Novas informações são isoladas por conta, ano e unidade. A agenda não envia convites e não sincroniza calendários externos.
 
 ## Executar
