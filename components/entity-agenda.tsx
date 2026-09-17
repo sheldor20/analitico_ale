@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Info, LoaderCircle, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { APPOINTMENT_KINDS, APPOINTMENT_STATUSES, TIMEZONES, calendarDays, zonedDateTimeISO, zonedDateTimeInput } from "@/lib/relationship.mjs";
 import { deleteEntityAppointment, listEntityAppointments, saveEntityAppointment, type AppointmentInput, type EntityAppointment } from "@/lib/relationship-store";
@@ -12,10 +12,12 @@ const message = (reason: unknown) => reason instanceof Error ? reason.message : 
 const dateLabel = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", timeZone: "UTC" });
 const shiftMonth = (month: string, by: number) => { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
 
-export default function EntityAgenda({ entity, year, userId, disabled = false, onDirtyChange }: { entity: RegistryEntity; year: number; userId: string; disabled?: boolean; onDirtyChange?: (dirty: boolean) => void }) {
+export default function EntityAgenda({ entity, year, userId, disabled = false, initialDate, onDirtyChange, onAppointmentsChange, onSavingChange }: { entity: RegistryEntity; year: number; userId: string; disabled?: boolean; initialDate?: string; onDirtyChange?: (dirty: boolean) => void; onAppointmentsChange?: () => void; onSavingChange?: (saving: boolean) => void }) {
   const today = zonedDateTimeInput(new Date().toISOString()).slice(0, 10);
-  const [month, setMonth] = useState(today.startsWith(`${year}-`) ? today.slice(0, 7) : `${year}-01`);
-  const [date, setDate] = useState(""); const [status, setStatus] = useState("all");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const focusDate = initialDate?.startsWith(`${year}-`) ? initialDate : "";
+  const [month, setMonth] = useState(focusDate ? focusDate.slice(0, 7) : today.startsWith(`${year}-`) ? today.slice(0, 7) : `${year}-01`);
+  const [date, setDate] = useState(focusDate); const [status, setStatus] = useState("all");
   const [appointments, setAppointments] = useState<EntityAppointment[]>([]); const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<string>(); const [deletingId, setDeletingId] = useState<string>();
   const [loading, setLoading] = useState(true); const [loadFailed, setLoadFailed] = useState(false); const [saving, setSaving] = useState(false);
@@ -23,6 +25,8 @@ export default function EntityAgenda({ entity, year, userId, disabled = false, o
   const locked = disabled || saving || loading;
   useEffect(() => { let active = true; listEntityAppointments(year, entity.id, userId).then((rows) => { if (active) setAppointments(rows); }).catch((reason) => { if (active) { setError(message(reason)); setLoadFailed(true); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [entity.id, year, userId]);
   useEffect(() => { onDirtyChange?.(draft !== null); }, [draft, onDirtyChange]);
+  useEffect(() => { if (focusDate) headingRef.current?.focus(); }, [focusDate]);
+  useEffect(() => { onSavingChange?.(saving); return () => onSavingChange?.(false); }, [saving, onSavingChange]);
   const dayFor = (item: EntityAppointment) => zonedDateTimeInput(item.startsAt, item.timezone).slice(0, 10);
   const visible = appointments.filter((item) => (date ? dayFor(item) === date : dayFor(item).startsWith(month)) && (status === "all" || item.status === status));
   const counts = new Map<string, number>(); appointments.filter((item) => item.status !== "cancelled").forEach((item) => counts.set(dayFor(item), (counts.get(dayFor(item)) ?? 0) + 1));
@@ -30,11 +34,11 @@ export default function EntityAgenda({ entity, year, userId, disabled = false, o
   function startCreate() { const day = date || (today.startsWith(month) ? today : `${month}-01`); setEditingId(undefined); setDeletingId(undefined); setError(""); setNotice(""); setDraft({ title: "", kind: "visit", startsAt: "", endsAt: "", startLocal: `${day}T09:00`, endLocal: `${day}T10:00`, timezone: "America/Sao_Paulo", location: "", notes: "", status: "scheduled" }); }
   function startEdit(item: EntityAppointment) { setEditingId(item.id); setDeletingId(undefined); setError(""); setNotice(""); setDraft({ ...item, startLocal: zonedDateTimeInput(item.startsAt, item.timezone), endLocal: zonedDateTimeInput(item.endsAt, item.timezone) }); }
   function accept(saved: EntityAppointment) { setAppointments((current) => [...current.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.startsAt.localeCompare(b.startsAt))); }
-  async function submit(event: React.FormEvent) { event.preventDefault(); if (!draft) return; setSaving(true); setError(""); setNotice(""); try { const saved = await saveEntityAppointment(year, entity, { ...draft, startsAt: zonedDateTimeISO(draft.startLocal, draft.timezone), endsAt: zonedDateTimeISO(draft.endLocal, draft.timezone) }, userId, editingId); accept(saved); const day = dayFor(saved); setMonth(day.slice(0, 7)); setDate(day); setStatus("all"); setDraft(null); setEditingId(undefined); setNotice("Compromisso salvo na agenda."); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
-  async function updateStatus(item: EntityAppointment, next: AppointmentInput["status"]) { setSaving(true); setError(""); setNotice(""); try { accept(await saveEntityAppointment(year, entity, { ...item, status: next }, userId, item.id)); setNotice(`Compromisso ${next === "completed" ? "concluído" : next === "cancelled" ? "cancelado" : "reaberto"}.`); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
-  async function remove(id: string) { setSaving(true); setError(""); setNotice(""); try { await deleteEntityAppointment(year, entity.id, id, userId); setAppointments((current) => current.filter((item) => item.id !== id)); setDeletingId(undefined); setNotice("Compromisso excluído."); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
+  async function submit(event: React.FormEvent) { event.preventDefault(); if (!draft) return; setSaving(true); setError(""); setNotice(""); try { const saved = await saveEntityAppointment(year, entity, { ...draft, startsAt: zonedDateTimeISO(draft.startLocal, draft.timezone), endsAt: zonedDateTimeISO(draft.endLocal, draft.timezone) }, userId, editingId); accept(saved); const day = dayFor(saved); setMonth(day.slice(0, 7)); setDate(day); setStatus("all"); setDraft(null); setEditingId(undefined); setNotice("Compromisso salvo na agenda."); onAppointmentsChange?.(); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
+  async function updateStatus(item: EntityAppointment, next: AppointmentInput["status"]) { setSaving(true); setError(""); setNotice(""); try { accept(await saveEntityAppointment(year, entity, { ...item, status: next }, userId, item.id)); setNotice(`Compromisso ${next === "completed" ? "concluído" : next === "cancelled" ? "cancelado" : "reaberto"}.`); onAppointmentsChange?.(); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
+  async function remove(id: string) { setSaving(true); setError(""); setNotice(""); try { await deleteEntityAppointment(year, entity.id, id, userId); setAppointments((current) => current.filter((item) => item.id !== id)); setDeletingId(undefined); setNotice("Compromisso excluído."); onAppointmentsChange?.(); } catch (reason) { setError(message(reason)); } finally { setSaving(false); } }
   return <section className={styles.section} aria-label={`Agenda de ${entity.name}`}>
-    <div className={styles.heading}><div><h3>Agenda de relacionamento</h3><p>Visitas, treinamentos, reuniões e ligações desta unidade.</p></div>{!draft && <button type="button" className="button primary" disabled={locked || loadFailed} onClick={startCreate}><Plus size={17} /> Novo compromisso</button>}</div>
+    <div className={styles.heading}><div><h3 ref={headingRef} tabIndex={-1}>Agenda de relacionamento</h3><p>Visitas, treinamentos, reuniões e ligações desta unidade.</p></div>{!draft && <button type="button" className="button primary" disabled={locked || loadFailed} onClick={startCreate}><Plus size={17} /> Novo compromisso</button>}</div>
     {error && <div className="message error" role="alert"><Info size={17} />{error}</div>}{notice && <div className="message success" role="status"><Check size={17} />{notice}</div>}
     {loading ? <p className={styles.muted}><LoaderCircle size={17} className="spin" /> Carregando agenda…</p> : draft ? <form onSubmit={submit}><fieldset disabled={locked} className="registry-fieldset"><div className={styles.fieldgroup}><h4>{editingId ? "Editar compromisso" : "Novo compromisso"}</h4><div className={styles.grid}>
       <label className={styles.full}>Título do compromisso<input autoFocus required maxLength={160} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Ex.: Treinamento sobre seguro prestamista" /></label>

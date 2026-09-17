@@ -7,6 +7,7 @@ import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
 import { registerRelationshipTests } from './relationship-cases.mjs';
 import { registerGoalExportTests } from './goal-export-cases.mjs';
+import { registerConsolidatedAgendaTests } from './consolidated-agenda-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -65,11 +66,12 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
     if (relationshipRows) {
       const method = request.method();
       const isState = relationshipTable === 'commercial_goal_alert_states';
+      const isWorkspaceAgenda = relationshipTable === 'commercial_entity_appointments' && method === 'GET' && !url.searchParams.has('entity_id');
       const identityColumns = ['owner_id', 'workspace_year', 'entity_id'];
-      const matches = (entry) => [...url.searchParams].every(([column, filter]) => !filter.startsWith('eq.') || String(entry[column]) === filter.slice(3));
+      const matches = (entry) => [...url.searchParams].every(([column, filter]) => filter.startsWith('eq.') ? String(entry[column]) === filter.slice(3) : filter.startsWith('gt.') ? String(entry[column]) > filter.slice(3) : true);
       const response = (rows) => answer((request.headers().accept || '').includes('vnd.pgrst.object') ? rows[0] || null : rows);
       if (method !== 'POST') {
-        const required = method === 'HEAD' ? ['owner_id', 'workspace_year', 'central'] : isState ? (method === 'GET' ? ['owner_id', 'workspace_year', 'month'] : [...identityColumns, 'month', 'metric']) : identityColumns;
+        const required = method === 'HEAD' ? ['owner_id', 'workspace_year', 'central'] : isWorkspaceAgenda ? ['owner_id', 'workspace_year'] : isState ? (method === 'GET' ? ['owner_id', 'workspace_year', 'month'] : [...identityColumns, 'month', 'metric']) : identityColumns;
         for (const column of required) if (!url.searchParams.get(column)?.startsWith('eq.')) errors.push(`${relationshipTable}: missing ${column} scope`);
         if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push(`${relationshipTable}: incorrect owner scope`);
       }
@@ -79,7 +81,10 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
       }
       if (method === 'GET') {
         relationshipReads.push({ table: relationshipTable, filters: Object.fromEntries(url.searchParams) });
-        return response(relationshipRows.filter(matches));
+        const selected = relationshipRows.filter(matches);
+        if (url.searchParams.get('order') === 'id.asc') selected.sort((a, b) => a.id.localeCompare(b.id));
+        const limit = Number(url.searchParams.get('limit')) || selected.length;
+        return response(selected.slice(0, limit));
       }
       const payload = request.postDataJSON();
       relationshipWrites.push({ table: relationshipTable, method, payload });
@@ -254,3 +259,5 @@ registerFollowupTests({test,expect,setup,composer,selectAugust});
 registerRelationshipTests({ test, expect, setup, owner, created });
 
 registerGoalExportTests({ test, expect, setup, owner, created });
+
+registerConsolidatedAgendaTests({ test, expect, setup, owner, created });
