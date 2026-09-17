@@ -6,7 +6,7 @@ export default function MetricCard({ title, value, sub, icon, accent = false, gr
   const measurable = typeof progress === 'number' && Number.isFinite(progress);
   return <article className={`kpi panel ${accent ? 'accent' : ''} ${growth ? 'growth' : ''}`} aria-label={title}>
     <div className="kpi-heading"><span>{title}</span><span aria-hidden="true">{icon}</span></div>
-    <strong className="kpi-value">{value}</strong>
+    <strong className="kpi-value" style={{ fontSize: `clamp(14px, ${Math.min(12, 145 / Math.max(value.length, 1))}cqi, 34px)` }}>{value}</strong>
     <p>{sub}</p>
     {measurable && <div className="metric-progress" role="meter" aria-label="Atingimento da meta"
       aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, progress * 100))}

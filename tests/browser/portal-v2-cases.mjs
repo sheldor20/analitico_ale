@@ -29,6 +29,8 @@ export function registerPortalV2Tests({ test, expect, setup }) {
   test('portal v2: filters preserve values while collapsed and navigation works on small screens', async ({ page }, info) => {
     const { errors } = await setup(page);
     await page.getByRole('combobox', { name: 'Central', exact: true }).selectOption('1002');
+    await page.getByRole('combobox', { name: 'Período', exact: true }).selectOption('quarter');
+    await page.getByRole('combobox', { name: 'Trimestre', exact: true }).selectOption('2');
     const filters = page.getByRole('region', { name: 'Filtros da análise' });
     const toggle = filters.locator('button[aria-expanded]');
     await toggle.focus(); await page.keyboard.press('Enter');
@@ -43,6 +45,8 @@ export function registerPortalV2Tests({ test, expect, setup }) {
       await expect(page.getByRole('heading', { level: 1, name: 'Cadastro e metas' })).toBeFocused();
       await page.getByRole('button', { name: 'Visão geral', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Visão geral', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('combobox', { name: 'Central', exact: true })).toHaveValue('1002');
+      await expect(page.getByRole('combobox', { name: 'Trimestre', exact: true })).toHaveValue('2');
       await expect(page.getByRole('button', { name: 'Sair', exact: true }).locator('span')).toBeVisible();
       await page.screenshot({ path: info.outputPath(`portal-v2-mobile-${width}.png`), fullPage: true });
     }
@@ -50,11 +54,11 @@ export function registerPortalV2Tests({ test, expect, setup }) {
   });
   test('portal v2: all views retain focus and fit desktop and both mobile widths', async ({ page }, info) => {
     const { errors } = await setup(page);
-    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas','Metas atingidas'];
+    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas','Metas atingidas','Agenda'];
     for (const width of [1440,390,320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
       for (const [index, name] of views.entries()) {
-        await page.getByRole('button', { name, exact: true }).click();
+        await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name, exact: true }).click();
         await expect(page.getByRole('heading', { name, level: 1, exact: true })).toBeFocused();
         if (width !== 320) await page.screenshot({ path: info.outputPath(`view-${index}-${width}.png`), fullPage: true });
         const bounds = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth }));

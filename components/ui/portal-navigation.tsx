@@ -1,24 +1,25 @@
-import { BellRing, Building2, ClipboardList, History, LayoutDashboard, ShieldCheck } from 'lucide-react';
-export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts';
+import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, ShieldCheck } from 'lucide-react';
+export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda';
 export const VIEW_TITLES: Record<PortalView, string> = {
   overview: 'Visão geral', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
-  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas',
+  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda',
 };
 export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
-  overview: 'Veja quanto foi produzido, o que falta para a meta e quais unidades precisam de atenção.',
-  cadence: 'Acompanhe a produção de cada ponto de atendimento (PA) em relação à sua própria meta.',
-  actions: 'Transforme os resultados em tarefas com responsável, prazo e acompanhamento.',
-  audit: 'Confira os avisos da base antes de usar os resultados ou compartilhar uma parcial.',
-  imports: 'Importe a produção mais recente ou consulte uma análise já salva.',
-  registry: 'Abra a ficha da central, navegue pelas cooperativas e PAs e organize contatos, carteiras e agenda.',
-  alerts: 'Identifique quem atingiu a meta do mês e prepare uma mensagem de reconhecimento.',
+  overview: 'Metas e produção da carteira.',
+  cadence: 'Produção e metas por ponto de atendimento.',
+  actions: 'Prioridades, responsáveis e próximos passos.',
+  audit: 'Pendências de dados e critérios de cálculo.',
+  imports: 'Atualize a produção ou consulte análises salvas.',
+  registry: 'Unidades, contatos, carteira e metas anuais.',
+  alerts: 'Reconheça os resultados do mês.',
+  agenda: 'Programação das centrais, cooperativas e PAs.',
 };
 const groups = [
   { label: 'Acompanhamento', items: [
     { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList }, { id: 'alerts', icon: BellRing },
   ] },
   { label: 'Gestão da base', items: [
-    { id: 'audit', icon: ShieldCheck }, { id: 'imports', icon: History }, { id: 'registry', icon: Building2 },
+    { id: 'audit', icon: ShieldCheck }, { id: 'imports', icon: History }, { id: 'registry', icon: Building2 }, { id: 'agenda', icon: CalendarDays },
   ] },
 ] as const;
 export default function PortalNavigation({ view, disabled, issueCount, onNavigate }: {

@@ -25,11 +25,11 @@ export function PaTable({ dataset, filters, onSelect, expanded = false, onToggle
 export function NetworkSummary({ dataset, filters }: { dataset: Dataset; filters: ScenarioFilters }) {
   const model = useMemo(() => networkSummary(dataset, filters), [dataset, filters]);
   return <section className={`panel ${styles.network}`} aria-label="Resumo da rede filtrada">
-    <h2>Rede da seleção</h2><div className={styles.networkCounts}>
-      <div><strong>{model.cooperativeCount}</strong><span>Cooperativas<small>{model.cooperativeAchieved} na meta · {model.cooperativeUnknown} sem avaliação</small></span></div>
-      <div><strong>{model.paCount}</strong><span>PAs<small>{model.paAchieved} na meta · {model.paUnknown} sem avaliação</small></span></div>
+    <div className={styles.networkHeading}><h2>Rede da seleção</h2><details className={styles.networkMethod}><summary>Como é avaliada</summary><p>Meta atingida: realizado de pelo menos 100% no período. PAs usam a cadência de Venda Nova. Unidades sem dados suficientes ficam sem avaliação.</p></details></div><div className={styles.networkCounts}>
+      <div><strong>{model.cooperativeCount}</strong><span>Cooperativas<small>{model.cooperativeAchieved} na meta{model.cooperativeUnknown > 0 && ` · ${model.cooperativeUnknown} sem avaliação`}</small></span></div>
+      <div><strong>{model.paCount}</strong><span>PAs · Venda Nova<small>{model.paAchieved} na meta{model.paUnknown > 0 && ` · ${model.paUnknown} sem avaliação`}</small></span></div>
       {filters.coop === 'all' && <div><strong>{model.centralAchieved}<small>/{model.centralCount}</small></strong><span>Centrais na meta<small>{filters.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}</small></span></div>}
-    </div><p className="helper">Meta atingida = realizado ≥ 100% no período. PAs: cadência de Venda Nova.</p>
+    </div>
   </section>;
 }
 export function YearComparison({ dataset, filters, owner, years, sessionDatasets }: { dataset: Dataset; filters: ScenarioFilters; owner: string | null; years: number[]; sessionDatasets: Map<number, Dataset> }) {
@@ -51,7 +51,7 @@ export function YearComparison({ dataset, filters, owner, years, sessionDatasets
   }, [open, owner, selectedYear, key, sessionDatasets, dataset]);
   const prior = loaded?.key === key ? loaded.dataset : null;
   const comparison = useMemo(() => prior ? compareYears(dataset, prior, filters, commonOnly) : null, [dataset, prior, filters, commonOnly]);
-  return <section className={`panel ${styles.section}`} aria-label="Comparativo entre anos"><div className="panel-heading"><div><h2>Comparativo entre anos</h2><p>{periodTitle(filters.period, filters.month, dataset.year)} · mesmos meses fechados nos dois anos.</p></div><button className="button secondary" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-controls={contentId}>{open ? 'Fechar comparativo' : 'Comparar anos'}<ChevronDown size={16} className={open ? styles.rotated : undefined} /></button></div>
+  return <section className={`panel ${styles.section}`} aria-label="Comparativo entre anos"><div className="panel-heading"><div><h2>Comparativo entre anos</h2>{open && <p>{periodTitle(filters.period, filters.month, dataset.year)}</p>}</div><button className="button secondary" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-controls={contentId}>{open ? 'Fechar comparativo' : 'Comparar anos'}<ChevronDown size={16} className={open ? styles.rotated : undefined} /></button></div>
     <div id={contentId} hidden={!open}>{open && <><div className={styles.controls}><label>Comparar {dataset.year} com<select value={selectedYear ?? ''} onChange={event => setYear(Number(event.target.value))} disabled={!choices.length}>{!choices.length && <option value="">Nenhum outro ano cadastrado</option>}{choices.map(value => <option key={value} value={value}>{value}</option>)}</select></label><label className={styles.check}><input type="checkbox" checked={commonOnly} onChange={event => setCommonOnly(event.target.checked)} />Somente unidades presentes nos dois anos</label></div>
     {!choices.length ? <p>Use Importar base → Base e produção de outro ano. O cadastro atual não será sobrescrito.</p> : loaded?.key !== key ? <p role="status">Carregando o ano comparado…</p> : loaded.error ? <p role="alert">{loaded.error}</p> : !prior ? <p>Este ano não possui base salva. Importe a base e a produção histórica.</p> : comparison && <>
       <p className="helper">{comparison.available ? `Mesmos meses fechados: ${MONTHS[comparison.first]} a ${MONTHS[comparison.last]} em ambos os anos. Meses parciais não entram no cálculo.` : 'Não há mês fechado comum no período escolhido. Selecione outro período ou atualize as bases anuais.'} </p>

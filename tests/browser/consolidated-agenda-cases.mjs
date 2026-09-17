@@ -1,3 +1,4 @@
+const navigate = (page, name) => page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name, exact: true }).click();
 const consolidated = page => page.getByRole('region', { name: 'Agenda consolidada', exact: true });
 const appointmentCard = (page, title) => consolidated(page).getByRole('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 
@@ -27,7 +28,7 @@ function agendaSeed(owner, created) {
 export function registerConsolidatedAgendaTests({ test, expect, setup, owner, created }) {
   test('consolidated agenda: owner/year scoped calendar includes central, cooperatives and PA zero with activity, status and month filters', async ({ page }, info) => {
     const { errors, relationshipReads } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
-    await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
+    await navigate(page, 'Agenda');
     const agenda = consolidated(page);
     await expect(agenda.getByRole('combobox', { name: 'Situação da agenda', exact: true })).toHaveValue('scheduled');
     await expect(agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true })).toHaveValue('2026-09');
@@ -61,7 +62,15 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
     await expect(octoberUnit.getByRole('heading', { name: 'Agenda de relacionamento', exact: true })).toBeFocused();
     await expect(octoberUnit.getByRole('article').filter({ has: page.getByText('Visita outubro', { exact: true }) })).toBeVisible();
     await expect(octoberUnit.getByRole('heading', { name: '01 de outubro', exact: true })).toBeVisible();
-    await agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true }).selectOption('2026-09');
+    await expect(page.getByRole('heading', { level: 1, name: 'Cadastro e metas', exact: true })).toBeVisible();
+    await navigate(page, 'Agenda');
+    await agenda.getByRole('combobox', { name: 'Central da agenda', exact: true }).selectOption('all');
+    await agenda.getByRole('combobox', { name: 'Situação da agenda', exact: true }).selectOption('scheduled');
+    await agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true }).selectOption('2026-10');
+    await agenda.getByRole('button', { name: 'Hoje', exact: true }).click();
+    await expect(agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true })).toHaveValue('2026-09');
+    await expect(agenda.getByRole('button', { name: /^10 de setembro:/ })).toHaveAttribute('aria-current', 'date');
+    await expect(agenda.getByRole('article')).toHaveCount(5);
     await agenda.getByRole('combobox', { name: 'Situação da agenda', exact: true }).selectOption('scheduled');
     await agenda.getByRole('combobox', { name: 'Central da agenda', exact: true }).selectOption('2007');
     await expect(agenda.getByRole('article')).toHaveCount(2);
@@ -70,6 +79,16 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
     await page.setViewportSize({ width: 320, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await agenda.screenshot({ path: info.outputPath('consolidated-agenda-mobile-320.png') });
+    await agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true }).selectOption('2026-08');
+    await page.clock.setFixedTime(new Date('2026-10-01T03:00:00Z'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true })).toHaveValue('2026-08');
+    await agenda.getByRole('button', { name: 'Hoje', exact: true }).click();
+    await expect(agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true })).toHaveValue('2026-10');
+    await expect(agenda.getByRole('button', { name: /^1 de outubro:/ })).toHaveAttribute('aria-current', 'date');
+    await page.clock.setFixedTime(new Date('2026-11-01T03:00:00Z'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(agenda.getByRole('combobox', { name: 'Mês da agenda', exact: true })).toHaveValue('2026-11');
     const reads = relationshipReads.filter(read => read.table === 'commercial_entity_appointments' && !read.filters.entity_id);
     expect(reads.length).toBeGreaterThanOrEqual(2);
     expect(reads.every(read => read.filters.owner_id === `eq.${owner}` && read.filters.workspace_year === 'eq.2026')).toBe(true);
@@ -79,11 +98,16 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
 
   test('consolidated agenda: opening a scheduled event allows editing, completing and deleting with refreshed results', async ({ page }) => {
     const { errors, appointmentRows, relationshipReads } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
-    await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
+    await navigate(page, 'Agenda');
     const agenda = consolidated(page);
     await appointmentCard(page, 'Visita Cooperativa Alfa').getByRole('button', { name: 'Abrir agenda da unidade', exact: true }).click();
     const unit = page.getByRole('region', { name: 'Agenda de Cooperativa Alfa', exact: true });
     await expect(unit.getByRole('heading', { name: 'Agenda de relacionamento', exact: true })).toBeFocused();
+    const embedded = page.locator('details[aria-label="Agenda das unidades"]');
+    await expect(embedded).not.toHaveAttribute('open', '');
+    await expect(agenda).toHaveCount(0);
+    await embedded.locator('summary').click();
+    await expect(appointmentCard(page, 'Visita Cooperativa Alfa')).toBeVisible();
     const original = unit.getByRole('article').filter({ has: page.getByText('Visita Cooperativa Alfa', { exact: true }) });
     await expect(original).toBeVisible();
     await original.getByRole('button', { name: 'Editar', exact: true }).click();
@@ -117,8 +141,13 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
   });
 
   test('consolidated agenda: the shortcut preserves an unsaved registry draft unless leaving is confirmed', async ({ page }) => {
-    const { errors } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
-    await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
+    const { errors, relationshipReads } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
+    await navigate(page, 'Cadastro e metas');
+    const embedded = page.locator('details[aria-label="Agenda das unidades"]');
+    await expect(embedded.locator('summary')).toBeVisible();
+    await expect(consolidated(page)).toHaveCount(0);
+    expect(relationshipReads.filter(read => read.table === 'commercial_entity_appointments' && !read.filters.entity_id)).toHaveLength(0);
+    await embedded.locator('summary').click();
     const open = appointmentCard(page, 'Visita Cooperativa Alfa').getByRole('button', { name: 'Abrir agenda da unidade', exact: true });
     await expect(open).toBeEnabled();
     await page.getByRole('button', { name: 'Nova unidade', exact: true }).click();
@@ -156,7 +185,7 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
       if (allowRecovery) return route.fallback();
       return route.fulfill({ status: 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ message: 'Agenda indisponível no teste' }) });
     });
-    await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
+    await navigate(page, 'Agenda');
     const agenda = consolidated(page);
     await expect(agenda.getByRole('alert')).toBeVisible();
     await expect(agenda.getByRole('article')).toHaveCount(0);
