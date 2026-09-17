@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { installAuthFixture } from './auth-db-fixture.mjs';
 const A='00000000-0000-0000-0000-000000000001', B='00000000-0000-0000-0000-000000000002';
-const TABLES=['commercial_imports','commercial_actions','commercial_workspaces','commercial_entity_contacts','commercial_communication_drafts','commercial_message_templates'];
+const TABLES=['commercial_imports','commercial_actions','commercial_workspaces','commercial_entity_contacts','commercial_communication_drafts','commercial_message_templates','commercial_entity_profiles','commercial_entity_appointments','commercial_goal_alert_states'];
 test('security: real PostgreSQL RLS requires approval, verified email and active matching session on every business table', async () => {
   const db=new PGlite();
   try {
@@ -19,8 +19,14 @@ test('security: real PostgreSQL RLS requires approval, verified email and active
     const asUser=async(id=A,claims={})=>{ await db.exec('reset role; set role authenticated;'); await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[id,JSON.stringify(claims)]); };
     const allowed=async()=> (await db.query('select public.commercial_session_allowed() as allowed')).rows[0].allowed;
     await asUser(); assert.equal(await allowed(),true);
-    const dataset={version:2,year:2026,config:{year:2026},sources:[],rows:[],registry:{version:1,entities:[]}};
+    const dataset={version:2,year:2026,config:{year:2026},sources:[],rows:[],registry:{version:1,entities:[{id:'central:1002',kind:'central',central:'1002',name:'Central teste'}]}};
     await db.query('insert into public.commercial_workspaces(owner_id,year,dataset) values ($1,2026,$2)',[A,JSON.stringify(dataset)]);
+    const identity='owner_id,workspace_year,entity_id,entity_kind,central';
+    const values="auth.uid(),2026,'central:1002','central','1002'";
+    await db.exec(`insert into public.commercial_entity_profiles(${identity}) values(${values});
+      insert into public.commercial_entity_appointments(${identity},title,kind,starts_at,ends_at) values(${values},'Reunião','meeting','2026-09-25 12:00Z','2026-09-25 13:00Z');
+      insert into public.commercial_goal_alert_states(${identity},month,metric,alert_key) values(${values},9,'VN','2026:9:central:1002:VN');`);
+    for(const table of TABLES.slice(-3)) assert.equal((await db.query(`select * from public.${table}`)).rows.length,1,'New tables are readable with an approved active owner session');
     assert.equal((await db.query('select * from public.commercial_workspaces')).rows.length,1);
     await asUser(B); assert.equal(await allowed(),true);
     assert.equal((await db.query('select * from public.commercial_workspaces')).rows.length,0);

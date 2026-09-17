@@ -5,6 +5,7 @@ import { registerPeriodTests } from './period-cases.mjs';
 import { registerUxTests } from './ux-cases.mjs';
 import { registerScenarioTests } from "./scenario-cases.mjs";
 import { registerDashboardTests } from "./dashboard-cases.mjs";
+import { registerRelationshipTests } from './relationship-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -12,13 +13,24 @@ const owner = '00000000-0000-0000-0000-000000000001';
 const created = '2026-09-10T12:00:00Z';
 const user = { id: owner, aud: 'authenticated', role: 'authenticated', email: 'browser-test@example.com', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: created };
 function contact(entity, name, email, index) { return { id: `00000000-0000-0000-0000-${String(100 + index).padStart(12,'0')}`, owner_id: owner, workspace_year: 2026, entity_id: entity.id, entity_kind: entity.kind, central: entity.central, cooperative: entity.cooperative ?? null, pa: entity.pa ?? null, name, job_title: 'Gerente', teams: '', whatsapp: '(71) 99999-9999', emails: [email], created_at: created, updated_at: created }; }
-async function setup(page, transform = value => value) {
+async function setup(page, transform = value => value, relationshipSeed = {}) {
   await page.clock.setFixedTime(new Date("2026-09-10T15:00:00Z"));
   const dataset = transform(portfolioFixture());
   const errors = [];
   const writes = [];
   const drafts = [];
   const templates = new Map();
+  const relationshipWrites = [];
+  const relationshipReads = [];
+  const profileRows = structuredClone(relationshipSeed.profiles || []);
+  const appointmentRows = structuredClone(relationshipSeed.appointments || []);
+  const goalStateRows = structuredClone(relationshipSeed.goalStates || []);
+  const relationshipTables = {
+    commercial_entity_profiles: profileRows,
+    commercial_entity_appointments: appointmentRows,
+    commercial_goal_alert_states: goalStateRows,
+  };
+  let nextRelationshipId = 300;
   page.on('pageerror', (error) => errors.push(error.message));
   const names = { 'cooperative:1002:3017': ['Ana Teste', 'ana@example.com'], 'cooperative:1002:3025': ['Bruno Teste','bruno@example.com'], 'central:1002': ['Celia Teste','celia@example.com'], 'pa:1002:3017:0': ['Paula Teste','paula@example.com'] };
   const contacts = dataset.registry.entities.flatMap((entity, index) => names[entity.id] ? [contact(entity, ...names[entity.id], index)] : []);
@@ -47,7 +59,48 @@ async function setup(page, transform = value => value) {
       }
       return answer(templates.get(key) || null);
     }
-    if (url.pathname === '/rest/v1/commercial_entity_contacts') return answer(contacts.filter((entry) => `eq.${entry.entity_id}` === url.searchParams.get('entity_id')));
+    const relationshipTable = url.pathname.slice('/rest/v1/'.length);
+    const relationshipRows = relationshipTables[relationshipTable];
+    if (relationshipRows) {
+      const method = request.method();
+      const isState = relationshipTable === 'commercial_goal_alert_states';
+      const identityColumns = ['owner_id', 'workspace_year', 'entity_id'];
+      const matches = (entry) => [...url.searchParams].every(([column, filter]) => !filter.startsWith('eq.') || String(entry[column]) === filter.slice(3));
+      const response = (rows) => answer((request.headers().accept || '').includes('vnd.pgrst.object') ? rows[0] || null : rows);
+      if (method !== 'POST') {
+        const required = method === 'HEAD' ? ['owner_id', 'workspace_year', 'central'] : isState ? (method === 'GET' ? ['owner_id', 'workspace_year', 'month'] : [...identityColumns, 'month', 'metric']) : identityColumns;
+        for (const column of required) if (!url.searchParams.get(column)?.startsWith('eq.')) errors.push(`${relationshipTable}: missing ${column} scope`);
+        if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push(`${relationshipTable}: incorrect owner scope`);
+      }
+      if (method === 'HEAD') {
+        const count = relationshipRows.filter(matches).length;
+        return route.fulfill({ status: 200, headers: { ...headers, 'content-range': `0-${Math.max(0, count - 1)}/${count}`, 'access-control-expose-headers': 'content-range' }, body: '' });
+      }
+      if (method === 'GET') {
+        relationshipReads.push({ table: relationshipTable, filters: Object.fromEntries(url.searchParams) });
+        return response(relationshipRows.filter(matches));
+      }
+      const payload = request.postDataJSON();
+      relationshipWrites.push({ table: relationshipTable, method, payload });
+      if (method === 'POST') {
+        if (payload.owner_id !== owner) errors.push(`${relationshipTable}: incorrect write owner`);
+        const unique = isState ? [...identityColumns, 'month', 'metric'] : identityColumns;
+        const previous = relationshipTable === 'commercial_entity_appointments' ? undefined : relationshipRows.find(entry => unique.every(column => entry[column] === payload[column]));
+        const saved = { id: `00000000-0000-0000-0000-${String(nextRelationshipId++).padStart(12, '0')}`, created_at: created, updated_at: created, ...(isState ? { read_at: null, notified_at: null } : {}), ...previous, ...payload };
+        if (previous) relationshipRows.splice(relationshipRows.indexOf(previous), 1, saved); else relationshipRows.push(saved);
+        return response([saved]);
+      }
+      const selected = relationshipRows.filter(matches);
+      if (method === 'PATCH') {
+        selected.forEach(entry => Object.assign(entry, payload, { updated_at: created }));
+        return response(selected);
+      }
+      if (method === 'DELETE') {
+        selected.forEach(entry => relationshipRows.splice(relationshipRows.indexOf(entry), 1));
+        return answer([]);
+      }
+    }
+    if (url.pathname === '/rest/v1/commercial_entity_contacts') return answer(contacts.filter((entry) => ['owner_id', 'workspace_year', 'entity_id'].every(column => `eq.${entry[column]}` === url.searchParams.get(column))));
     if (url.pathname === '/rest/v1/commercial_communication_drafts') {
       if (request.method() === 'POST') {
         const payload = request.postDataJSON(); writes.push(payload);
@@ -66,7 +119,7 @@ async function setup(page, transform = value => value) {
   await login.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(login).toBeHidden();
   await expect(page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true })).toBeVisible();
-  return { errors, writes };
+  return { errors, writes, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
 async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
@@ -196,3 +249,5 @@ registerPeriodTests({ test, expect, setup, composer });
 registerPortalV2Tests({ test, expect, setup });
 
 registerFollowupTests({test,expect,setup,composer,selectAugust});
+
+registerRelationshipTests({ test, expect, setup, owner, created });

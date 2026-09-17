@@ -94,3 +94,44 @@
 .workspace-content .kpi.accent p { font-weight:600; }
 .workspace-content .kpi.growth .kpi-value { color:var(--green); }
 @media(max-width:720px) { .workspace-content .kpi-grid { grid-template-columns:1fr; } .workspace-content .kpi p { font-size:15px; } }
+
+/* A consistent reading scale across results, tasks, imports and registry. */
+.workspace-content .page-heading p { max-width:780px; font-size:16px; }
+.workspace-content .panel { border-color:var(--line); box-shadow:none; }
+.workspace-content .panel-heading h2 { font-size:21px; font-weight:650; }
+.workspace-content .panel-heading p { font-size:14px; line-height:1.6; max-width:680px; }
+.workspace-content .table-panel td { padding-block:18px; }
+.workspace-content .table-panel .numeric { font-size:16px; font-variant-numeric:tabular-nums; }
+.workspace-content .table-panel td:nth-child(3) { font-weight:700; color:var(--green-deep); }
+.workspace-content .entity-button strong { font-size:16px; line-height:1.35; }
+.workspace-content .entity-button small,.workspace-content .cell-note { font-size:13px; line-height:1.5; }
+.workspace-content .action-title strong { font-size:17px; }
+.workspace-content .action-panel .action-card p { font-size:15px; }
+.workspace-content .action-panel .action-card small { font-size:13px; }
+.workspace-content .history-list strong { font-size:16px; }
+.workspace-content .history-list small,.workspace-content .audit-list p { font-size:14px; line-height:1.6; }
+.workspace-content .registry-list { max-height:none; overflow:visible; }
+.workspace-content .registry-unit strong { font-size:16px; }
+.workspace-content .registry-unit small { font-size:13px; }
+.workspace-content .result-help-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:0 0 20px; }
+.workspace-content .result-help-row>.button { flex-shrink:0; }
+.reading-guide { min-width:0; flex:1; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); }
+.reading-guide summary { padding:13px 16px; cursor:pointer; font-size:14px; font-weight:600; }
+.reading-guide dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 24px; margin:0; padding:4px 16px 18px; }
+.reading-guide dt { font-weight:700; font-size:14px; }
+.reading-guide dd { margin:4px 0 0; font-size:14px; color:var(--muted); line-height:1.5; }
+.achievement-notice { display:flex; align-items:center; gap:16px; padding:18px 20px; background:var(--green-light); border:1px solid var(--line); border-left:4px solid var(--green); border-radius:var(--radius-md); margin-bottom:20px; }
+.achievement-notice>div { flex:1; min-width:0; }
+.achievement-notice strong { font-size:17px; }
+.achievement-notice p { color:var(--muted); font-size:14px; margin-top:3px; }
+@media(max-width:720px) {
+  .achievement-notice { flex-wrap:wrap; padding:16px; gap:10px; }
+  .achievement-notice>div { flex-basis:calc(100% - 40px); }
+  .achievement-notice>.button { width:100%; }
+  .workspace-content .page-heading p { font-size:15px; }
+  .workspace-content .result-help-row { flex-direction:column; gap:10px; }
+  .result-help-row>.reading-guide,.workspace-content .result-help-row>.button { width:100%; }
+  .reading-guide dl { grid-template-columns:1fr; }
+  .workspace-content .panel-heading h2 { font-size:20px; }
+  .workspace-content .table-panel td { padding-block:15px; }
+}

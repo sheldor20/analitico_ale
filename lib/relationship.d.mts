@@ -1,0 +1,14 @@
+import type { RegistryEntity } from "./types";
+import type { AppointmentInput, ProfileInput } from "./relationship-store";
+export const CAPITAL_MODALITIES: string[];
+export const APPOINTMENT_KINDS: Record<AppointmentInput["kind"], string>;
+export const APPOINTMENT_STATUSES: Record<AppointmentInput["status"], string>;
+export const RATE_UNITS: Record<ProfileInput["rateTables"][number]["unit"], string>;
+export const RATE_PERIODS: Record<ProfileInput["rateTables"][number]["period"], string>;
+export const TIMEZONES: Record<string, string>;
+export function validateProfile(input: ProfileInput): ProfileInput;
+export function validateAppointment(input: AppointmentInput, year: number): AppointmentInput;
+export function zonedDateTimeInput(iso: string, timezone?: string): string;
+export function zonedDateTimeISO(value: string, timezone?: string): string;
+export function relationshipHierarchy(entities: RegistryEntity[], selected: RegistryEntity): { parents: RegistryEntity[]; children: RegistryEntity[] };
+export function calendarDays(month: string): { date: string; day: number; inMonth: boolean }[];

@@ -7,6 +7,7 @@ import {
   ArrowDownToLine,
   ArrowRight,
   BarChart3,
+  BellRing,
   Building2,
   Check,
   CheckCircle2,
@@ -47,6 +48,8 @@ import {
 } from "@/lib/analytics.mjs";
 import { buildPartialCommunication, buildDecisionInsights } from "@/lib/communication.mjs";
 import RegistryManager from "@/components/registry-manager";
+import GoalAlerts from "@/components/goal-alerts";
+import { buildMonthlyGoalAlerts, defaultGoalAlertMonth } from '@/lib/goal-alerts.mjs';
 import PortfolioCommunication from "@/components/portfolio-communication";
 import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
@@ -59,7 +62,7 @@ import "./dashboard-ux.css";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
 
-import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/portal-navigation';
+import PortalNavigation, { VIEW_TITLES, VIEW_DESCRIPTIONS, type PortalView as View } from './ui/portal-navigation';
 import Kpi from './ui/metric-card';
 import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
@@ -105,6 +108,8 @@ export default function Dashboard() {
   const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
   const [workspaces, setWorkspaces] = useState<{id:string;year:number;revision:number;updatedAt:string}[]>([]);
   const [historical, setHistorical] = useState(false);
+  const achievedMonth = useMemo(() => dataset ? defaultGoalAlertMonth(dataset) : 0, [dataset]);
+  const monthlyAchievements = useMemo(() => dataset ? buildMonthlyGoalAlerts(dataset, achievedMonth) : [], [dataset, achievedMonth]);
   const [importMode, setImportMode] = useState("production");
   const [sortBy, setSortBy] = useState("gap");
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
@@ -936,15 +941,7 @@ export default function Dashboard() {
             <img className="mobile-brand" src="/brand/sicoob-logo.svg" alt="Sicoob" width="108" height="25" />
             Gestão comercial <span>/</span>{" "}
             <strong>
-              {view === "registry" ? "Cadastro e metas" : view === "cadence"
-                ? "PAs"
-                : view === "actions"
-                  ? "Plano de ação"
-                  : view === "audit"
-                    ? "Conferência"
-                    : view === "imports"
-                      ? "Importações"
-                      : "Visão geral"}
+              {VIEW_TITLES[view]}
             </strong>
           </div>
           <div className="top-actions">
@@ -987,13 +984,7 @@ export default function Dashboard() {
               <div className="eyebrow">PERFORMANCE COMERCIAL</div>
               <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
               <p>
-                {view === "registry" ? "Unidades, responsáveis, metas e produção." : view === "audit"
-                  ? "Pendências e critérios de cálculo."
-                  : view === "imports"
-                    ? "Atualização da produção e histórico de análises."
-                    : dataset
-                      ? `${effectiveSource === "cadence" ? "Cadência comercial dos PAs" : metricName(effectiveMetric)} · ${periodDescription}`
-                      : "Escolha uma base para começar."}
+                {dataset || view === "imports" ? VIEW_DESCRIPTIONS[view] : "Escolha uma base para começar."}
               </p>
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
@@ -1055,8 +1046,15 @@ export default function Dashboard() {
             {user && <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
             <span className="muted">{user && workspaceRevision ? `Salvo · revisão ${workspaceRevision}` : "Dados nesta sessão"}</span>
           </div>}
-          {view === "registry" && dataset ? (
-            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
+          {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
+            <BellRing size={23} aria-hidden="true" />
+            <div><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong><p>Centrais, cooperativas e PAs com produção registrada a partir de 100% da meta mensal.</p></div>
+            <button className="button secondary" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={17} /></button>
+          </aside>}
+          {view === "alerts" && dataset && user ? (
+            <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
+          ) : view === "registry" && dataset ? (
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={user?.id ?? 'session'} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy}/>
           ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
@@ -1219,6 +1217,7 @@ export default function Dashboard() {
                       ))}
                     </div>
                   </section>
+
                   <details className="progressive-panel"><summary>Fontes e regras de cálculo</summary>
                   <section className="audit-top">
                     <div className="panel">
@@ -1290,6 +1289,16 @@ export default function Dashboard() {
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                   </section>
+                  {view === 'overview' && <div className="result-help-row">
+                    <details className="reading-guide"><summary>Como ler estes números</summary><dl>
+                      <div><dt>Meta</dt><dd>O valor que a unidade precisa alcançar no período escolhido.</dd></div>
+                      <div><dt>Realizado</dt><dd>O valor registrado na base até a data informada.</dd></div>
+                      <div><dt>Atingimento</dt><dd>Quanto da meta já foi alcançado. A partir de 100%, a meta foi atingida.</dd></div>
+                      <div><dt>GAP / crescimento</dt><dd>O valor que falta para a meta ou que já ficou acima dela.</dd></div>
+                      <div><dt>Projeção</dt><dd>Uma estimativa de fechamento. Não representa produção já realizada.</dd></div>
+                    </dl></details>
+                    <button className="button secondary" onClick={() => navigate('alerts')}><BellRing size={17} />Ver metas atingidas no mês</button>
+                  </div>}
                   {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
                     <Info size={17} aria-hidden="true" /><span><strong>GAP somado: {money(leafSummary.individualGap)}.</strong> A superação de uma unidade não cobre a meta das demais.</span>
                     {view !== 'actions' && <button className="button quiet" onClick={() => setView('actions')}>Ver plano de ação <ArrowRight size={16} /></button>}
@@ -1331,7 +1340,7 @@ export default function Dashboard() {
                                       {actions[r.key]?.status ?? a.priority}
                                     </Pill>
                                   </div>
-                                  <p>GAP: {money(r.gap)}{r.requiredDaily != null ? ` · Necessário: ${money(r.requiredDaily)}/dia útil` : ""}</p>
+                                  <p>Falta para a meta: {money(r.gap)}{r.requiredDaily != null ? ` · Necessário: ${money(r.requiredDaily)}/dia útil` : ""}</p>
                                   <small>
                                     {r.cooperative}
                                     {r.pa != null ? ` · PA ${r.pa}` : ""} ·{" "}

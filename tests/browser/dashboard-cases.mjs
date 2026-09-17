@@ -1,4 +1,4 @@
-import { step, disclosure } from './composer-navigation.mjs';
+import { step, disclosure, customize } from './composer-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -12,7 +12,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible();
     return { ...state, dialog };
   }
-  test('selected period leads dashboard and annual support is omitted in annual scenario', async ({ page }, info) => {
+  test('selected period leads dashboard and annual cards replace duplicated evolution', async ({ page }, info) => {
     const { dialog, errors } = await open(page);
     await dialog.getByLabel('Incluir Venda Nova e Arrecadação, separadamente').check();
     await step(dialog, 2);
@@ -20,10 +20,12 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     for (const period of ['month','quarter','semester','ytd','annual']) {
       await dialog.getByLabel('Período da mensagem').selectOption(period);
       const support = frame.locator('[data-section="annual-support"]');
-      await expect(support).toHaveCount(period === 'annual' ? 0 : 1);
+      await expect(support).toHaveCount(0);
+      await expect(frame.getByRole('heading', { name: 'Cenário anual · 2026', exact: true })).toHaveCount(period === 'annual' ? 0 : 1);
+      await expect(frame.getByRole('heading', { name: 'Evolução do período', exact: true })).toHaveCount(0);
       if (period !== 'annual') {
         const text = await frame.locator('body').innerText();
-        expect(text.indexOf('Arrecadação')).toBeLessThan(text.indexOf('Apoio anual'));
+        expect(text.indexOf('Arrecadação')).toBeLessThan(text.indexOf('Cenário anual'));
       }
     }
     await dialog.getByLabel('Período da mensagem').selectOption('month');
@@ -57,6 +59,76 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await expect.poll(() => writes.length).toBe(1);
     expect(writes[0].presentation_version).toBe(2); expect(writes[0].whatsapp_dashboard.period).toBe('annual');
     expect(writes[0].whatsapp_dashboard.blocks.some((b) => b.type === 'secondary')).toBe(false);
+    expect(errors).toEqual([]);
+  });
+  test('projection is optional across channels and saved snapshots, preserving edited text when toggled', async ({ page }) => {
+    const { dialog, errors, writes } = await open(page);
+    await customize(dialog);
+    await dialog.getByLabel('Texto / modelo do e-mail', { exact: true }).fill('Minha abertura preservada.\n{{cenario}}');
+    await dialog.getByLabel('Texto / modelo do WhatsApp', { exact: true }).fill('Meu texto comercial.\n{{cenario}}');
+    await step(dialog, 2);
+    const projection = dialog.getByRole('checkbox', { name: /Incluir projeção de fechamento/ });
+    await expect(projection).not.toBeChecked();
+    const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
+    await expect(frame.locator('[data-metric="Projeção de fechamento"]')).toHaveCount(0);
+    await expect(frame.locator('body')).toContainText('Minha abertura preservada.');
+    await projection.check();
+    await expect(frame.locator('[data-metric="Projeção de fechamento"]')).toHaveCount(1);
+    await expect(frame.locator('[data-metric="Fechamento apurado"]')).toHaveCount(1);
+    await expect(frame.locator('body')).toContainText('Minha abertura preservada.');
+    await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+    await disclosure(dialog, 'Ver texto do WhatsApp');
+    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Meu texto comercial.');
+    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Projeção:');
+    await projection.uncheck();
+    await expect(dialog.getByLabel('WhatsApp gerado')).not.toContainText('Projeção:');
+    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Meu texto comercial.');
+    await step(dialog, 3);
+    await dialog.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
+    await expect.poll(() => writes.length).toBe(1);
+    expect(writes[0].whatsapp_dashboard.blocks.filter((block) => block.type === 'cards').every((block) => block.items.length === 3)).toBe(true);
+    expect(writes[0].email_body).toContain('Minha abertura preservada.');
+    expect(writes[0].whatsapp_body).toContain('Meu texto comercial.');
+    expect(writes[0].email_html).not.toContain('Projeção de fechamento');
+    expect(errors).toEqual([]);
+  });
+  test('copy image writes a real PNG and invalidates the previously copied Outlook panel', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__imageCopies = [];
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: async (items) => {
+        if (!items[0].types.includes('image/png')) return;
+        const blob = await items[0].getType('image/png');
+        window.__imageCopies.push({ type: blob.type, size: blob.size, bytes: Array.from(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)) });
+      } } });
+    });
+    const { dialog, errors } = await open(page);
+    await step(dialog, 3);
+    await dialog.getByRole('button', { name: 'Copiar painel', exact: true }).click();
+    await expect(dialog.getByRole('link', { name: 'Abrir Outlook e colar painel', exact: true })).toBeVisible();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
+    const copy = dialog.getByRole('button', { name: 'Copiar painel como imagem', exact: true });
+    await expect(copy).toBeEnabled(); await copy.click();
+    await expect(dialog.getByRole('status')).toContainText('Imagem copiada');
+    const images = await page.evaluate(() => window.__imageCopies);
+    expect(images).toHaveLength(1); expect(images[0].type).toBe('image/png'); expect(images[0].size).toBeGreaterThan(1000);
+    expect(images[0].bytes).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
+    await expect(dialog.getByRole('button', { name: 'Abrir Outlook e colar painel', exact: true })).toBeDisabled();
+    expect(errors).toEqual([]);
+  });
+  test('blocked image clipboard downloads PNG without claiming a successful copy', async ({ page }) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: async () => { throw new DOMException('Denied', 'NotAllowedError'); } } }));
+    const { dialog, errors } = await open(page);
+    await step(dialog, 2);
+    await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+    const copy = dialog.getByRole('button', { name: 'Copiar painel como imagem', exact: true });
+    await expect(copy).toBeEnabled();
+    const downloadPromise = page.waitForEvent('download'); await copy.click();
+    const downloaded = await downloadPromise;
+    const bytes = await readFile(await downloaded.path());
+    expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    await expect(dialog.getByRole('status')).toContainText('não permitiu copiar');
+    await expect(dialog.getByRole('status')).not.toContainText('Imagem copiada');
     expect(errors).toEqual([]);
   });
   test('native sharing receives real PNG plus commercial text; cancellation never downloads or claims delivery', async ({page}) => {

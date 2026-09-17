@@ -73,6 +73,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [contactError, setContactError] = useState("");
   const [extraEmails, setExtraEmails] = useState("");
   const [includeBoth, setIncludeBoth] = useState(false);
+  const [showProjection, setShowProjection] = useState(false);
   const [intro, setIntro] = useState("");
   const [signature, setSignature] = useState("");
   const [subject, setSubject] = useState("");
@@ -82,6 +83,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [personalOutlook, setPersonalOutlook] = useState(false);
   const [tab, setTab] = useState("panel");
   const [clipboardVersion, setClipboardVersion] = useState(0);
+  const invalidateClipboard = () => setClipboardVersion((version) => version + 1);
   const [step, setStep] = useState(1);
   const [channel, setChannel] = useState("email");
   const stepTitle = useRef<HTMLHeadingElement>(null);
@@ -111,8 +113,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const recipients = attempt(() => normalizeRecipients([...selectedContacts.flatMap((contact) => contact.emails), ...extraEmails.split(/[;,\n]+/)]));
   const reportResult = useMemo(() => attempt(() => buildPortfolioReport({ dataset, entity, metric, includeBoth, month, period, uplift })), [dataset, entity, metric, includeBoth, month, period, uplift]);
   const report = reportResult.value;
-  const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject }) : null;
-  const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject }) : null;
+  const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject, showProjection }) : null;
+  const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject, showProjection }) : null;
   const { message, whatsappMessage, editor: messageEditor, editError: templateError, hasEmailPanel, restoreEmailPanel } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: periodTitle(period, month, dataset.year), baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
   const panelOutlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: "", personal: personalOutlook }) : null);
@@ -194,9 +196,10 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
     </section>
     <section hidden={step !== 2} className={styles.stepContent} aria-label="Revisão da comunicação">
       <h3 tabIndex={-1} ref={step === 2 ? stepTitle : null}>Confira antes de compartilhar</h3>
+      <label className={styles.contact}><input type="checkbox" checked={showProjection} onChange={(event) => setShowProjection(event.target.checked)} /><span><strong>Incluir projeção de fechamento</strong><small>Opcional no painel e no texto automático, inclusive no cenário anual. Textos digitados manualmente são preservados.</small></span></label>
       <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[['panel', 'Painel do e-mail'], ['email', 'Texto do e-mail'], ['whatsapp', 'Painel do WhatsApp']].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? 'primary' : 'secondary'}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
       {noPanel}
-      {step === 2 && (tab === 'panel' ? <EmailPreview html={message.html} /> : tab === 'email' ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><details className={styles.disclosure}><summary>Ver texto do WhatsApp</summary><label>WhatsApp gerado<textarea rows={10} readOnly value={whatsappMessage.whatsapp} /></label></details></>)}
+      {step === 2 && (tab === 'panel' ? <EmailPreview html={message.html} /> : tab === 'email' ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard onClipboardChange={invalidateClipboard} model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><details className={styles.disclosure}><summary>Ver texto do WhatsApp</summary><label>WhatsApp gerado<textarea rows={10} readOnly value={whatsappMessage.whatsapp} /></label></details></>)}
     </section>
     <section hidden={step !== 3} className={styles.stepContent} aria-label="Preparação do envio">
       <h3 tabIndex={-1} ref={step === 3 ? stepTitle : null}>Pronto para compartilhar</h3>
@@ -216,7 +219,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
         </div>{outlook.value?.requiresPaste && <p className={styles.warning}>Texto maior que o limite do link. Cole a mensagem completa no Outlook ou use o arquivo .eml.</p>}</details>
       </div>
       {step === 3 && channel === 'whatsapp' && <div className={styles.card}><h4>Enviar pelo WhatsApp</h4>
-        <WhatsappDashboard model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading || !!templateError || !!whatsapp.error} />
+        <WhatsappDashboard onClipboardChange={invalidateClipboard} model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading || !!templateError || !!whatsapp.error} />
         <details className={styles.disclosure}><summary>Enviar somente texto</summary><div className={styles.actions}>
           <button className="button secondary" onClick={() => copy(whatsappMessage.whatsapp, 'Texto adaptado para WhatsApp copiado.')}><Copy size={17} /> Copiar WhatsApp</button>
           {whatsapp.value && !loading && !templateError ? <a className="button secondary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><MessageSquareText size={17} /> Abrir WhatsApp</a> : <button className="button secondary" disabled>Abrir WhatsApp</button>}
@@ -226,7 +229,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
       <p className="helper">Revise o destinatário no aplicativo. Nada é enviado automaticamente.</p>
       {feedback && <p className="message success" role="status">{feedback}</p>}
       {error && <p className="message error" role="alert">{error}</p>}
-      <details className={styles.disclosure}><summary>Rascunhos salvos desta unidade ({drafts.length})</summary>{!drafts.length && <p>Nenhum rascunho salvo.</p>}{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString('pt-BR')} · {draft.subject}</summary><p className="helper">Cenário da data de gravação; não atualizado automaticamente.</p><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label>{draft.whatsapp_dashboard && <SavedDashboard draft={draft} />}<div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, 'Texto do rascunho copiado.')}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, 'WhatsApp do rascunho copiado.')}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm('Excluir este rascunho salvo?')) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</details>
+      <details className={styles.disclosure}><summary>Rascunhos salvos desta unidade ({drafts.length})</summary>{!drafts.length && <p>Nenhum rascunho salvo.</p>}{drafts.map((draft) => <details key={draft.id} className={styles.draft}><summary>{new Date(draft.created_at).toLocaleString('pt-BR')} · {draft.subject}</summary><p className="helper">Cenário da data de gravação; não atualizado automaticamente.</p><label>E-mail salvo<textarea readOnly rows={10} value={draft.email_body} /></label><label>WhatsApp salvo<textarea readOnly rows={6} value={draft.whatsapp_body} /></label>{draft.whatsapp_dashboard && <SavedDashboard draft={draft} invalidateClipboard={invalidateClipboard} />}<div className={styles.actions}><button className="button secondary" onClick={() => copy(draft.email_body, 'Texto do rascunho copiado.')}>Copiar e-mail salvo</button><button className="button secondary" onClick={() => copy(draft.whatsapp_body, 'WhatsApp do rascunho copiado.')}>Copiar WhatsApp salvo</button><button className="button quiet" onClick={async () => { if (!owner || !window.confirm('Excluir este rascunho salvo?')) return; try { await deletePortfolioDraft(owner, draft.id); if (mounted.current) setDrafts((items) => items.filter((item) => item.id !== draft.id)); } catch (reason) { if (mounted.current) setError(errorText(reason)); } }}><Trash2 size={16} /> Excluir rascunho</button></div></details>)}</details>
     </section>
     <footer className={styles.stepFooter}>
       <span>Etapa {step} de 3</span>
@@ -238,7 +241,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   </div>;
 }
 
-function SavedDashboard({ draft }: { draft: PortfolioDraft }) {
+function SavedDashboard({ draft, invalidateClipboard }: { draft: PortfolioDraft; invalidateClipboard: () => void }) {
   const [open, setOpen] = useState(false);
-  return <div><button className="button secondary" onClick={() => setOpen((value) => !value)}>{open ? "Ocultar painel salvo" : "Ver painel WhatsApp salvo"}</button>{open && draft.whatsapp_dashboard && <WhatsappDashboard model={draft.whatsapp_dashboard} text={draft.whatsapp_body} subject={draft.subject} saved />}</div>;
+  return <div><button className="button secondary" onClick={() => setOpen((value) => !value)}>{open ? "Ocultar painel salvo" : "Ver painel WhatsApp salvo"}</button>{open && draft.whatsapp_dashboard && <WhatsappDashboard onClipboardChange={invalidateClipboard} model={draft.whatsapp_dashboard} text={draft.whatsapp_body} subject={draft.subject} saved />}</div>;
 }

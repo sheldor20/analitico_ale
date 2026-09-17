@@ -7,9 +7,15 @@ import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
 import { deleteEntity, distributeAmount, entityId as registryEntityId, getPlanRow, initializeRegistry, upsertEntity, upsertPlanRow } from "@/lib/registry.mjs";
 import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "@/lib/types";
 import ResponsibleManager from "@/components/responsible-manager";
+import EntityProfile from "@/components/entity-profile";
+import EntityAgenda from "@/components/entity-agenda";
+import { relationshipHierarchy } from "@/lib/relationship.mjs";
+import { hasEntityRelationships } from "@/lib/relationship-store";
+import profileStyles from "./entity-profile.module.css";
 
 type RegistryManagerProps = {
   dataset: Dataset;
+  userId: string;
   onChange: (next: Dataset) => Promise<void>;
   busy?: boolean;
 };
@@ -66,7 +72,7 @@ function defaultCutoff(dataset: Dataset, metric: Metric, kind: RegistryEntity["k
   return dataset.year === today.getFullYear() ? today.toISOString().slice(0, 10) : `${dataset.year}-${dataset.year < today.getFullYear() ? "12-31" : "01-31"}`;
 }
 
-export default function RegistryManager({ dataset, onChange, busy = false }: RegistryManagerProps) {
+export default function RegistryManager({ dataset, userId, onChange, busy = false }: RegistryManagerProps) {
   const normalized = useMemo(() => initializeRegistry(dataset) as Dataset, [dataset]);
   const entities = normalized.registry?.entities ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(entities[0]?.id ?? null);
@@ -82,8 +88,12 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [activeTab, setActiveTab] = useState<"profile" | "contacts" | "agenda" | "targets">("profile");
+  const [relationshipDirty, setRelationshipDirty] = useState(false);
+  const [identityLocked, setIdentityLocked] = useState(false);
   const locked = busy || saving;
   const selected = entities.find((entity) => entity.id === selectedId) ?? null;
+  const hierarchy = selected ? relationshipHierarchy(entities, selected) : { parents: [], children: [] };
   const effectiveMetric = selected?.kind === "pa" ? "VN" : metric;
   const row = useMemo(() => selected ? getPlanRow(normalized, selected.id, effectiveMetric) as DataRow | null : null, [normalized, selected, effectiveMetric]);
   const centrals = entities.filter((entity) => entity.kind === "central");
@@ -104,21 +114,32 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
   }, [entities, selectedId]);
 
   function clearFeedback() { setError(""); setNotice(""); }
+  function leaveRelationshipForm() {
+    if (relationshipDirty && !window.confirm("Há alterações não salvas nesta ficha ou agenda. Deseja sair sem salvar?")) return false;
+    setRelationshipDirty(false); return true;
+  }
   function selectEntity(entity: RegistryEntity) {
+    if (!leaveRelationshipForm()) return;
     setShowCommunication(false);
-    setSelectedId(entity.id); setEntityForm(null); setDeleting(false); clearFeedback();
+    setSelectedId(entity.id); setEntityForm(null); setDeleting(false); setActiveTab("profile"); clearFeedback();
   }
   function startCreate() {
+    if (!leaveRelationshipForm()) return;
     const central = centralFilter !== "all" ? centralFilter : selected?.central ?? centrals[0]?.central ?? "";
-    setEditingId(undefined);
+    setEditingId(undefined); setIdentityLocked(false);
     setEntityForm({ kind: centrals.length ? "cooperative" : "central", central, cooperative: "", pa: "", name: "", group: "" });
     setDeleting(false); clearFeedback();
   }
-  function startEdit() {
-    if (!selected) return;
-    setEditingId(selected.id);
-    setEntityForm({ kind: selected.kind, central: selected.central, cooperative: selected.cooperative ?? "", pa: selected.pa ?? "", name: selected.name, group: selected.group ?? "" });
-    setDeleting(false); clearFeedback();
+  async function startEdit() {
+    if (!selected || !leaveRelationshipForm()) return;
+    setSaving(true); clearFeedback();
+    try {
+      const linked = await hasEntityRelationships(dataset.year, selected, userId);
+      setIdentityLocked(linked); setEditingId(selected.id);
+      setEntityForm({ kind: selected.kind, central: selected.central, cooperative: selected.cooperative ?? "", pa: selected.pa ?? "", name: selected.name, group: selected.group ?? "" });
+      setDeleting(false);
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setSaving(false); }
   }
   async function persist(next: Dataset, message: string) {
     setSaving(true); clearFeedback();
@@ -156,7 +177,7 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
 
   return <section className="registry-manager" aria-label={`Cadastro e metas de ${dataset.year}`}>
     <div className="panel-heading">
-      <div><h2>Base fixa · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. As atualizações de produção preservam suas metas cadastradas.</p></div>
+      <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
       <button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button>
     </div>
     {error && <div className="message error registry-error" role="alert"><Info size={18} /><span>{error}</span><button type="button" aria-label="Fechar erro" onClick={() => setError("")}><X size={16} /></button></div>}
@@ -184,28 +205,35 @@ export default function RegistryManager({ dataset, onChange, busy = false }: Reg
           <fieldset disabled={locked} className="registry-fieldset">
             <div className="registry-grid">
               <label>Tipo de unidade<select value={entityForm.kind} disabled={!!editingId} onChange={(event) => setEntityForm({ ...entityForm, kind: event.target.value as EntityDraft["kind"], cooperative: "", pa: "", group: "" })}><option value="central">Central</option><option value="cooperative" disabled={!centrals.length}>Cooperativa</option><option value="pa" disabled={!cooperatives.length}>PA</option></select></label>
-              {entityForm.kind === "central" ? <label>Código da Central<input required inputMode="numeric" value={entityForm.central} onChange={(event) => setEntityForm({ ...entityForm, central: event.target.value })} placeholder="Ex.: 1002" /></label> : <label>Central<select required value={entityForm.central} onChange={(event) => setEntityForm({ ...entityForm, central: event.target.value, cooperative: "" })}><option value="">Selecione a Central</option>{centrals.map((entity) => <option key={entity.id} value={entity.central}>{entity.central} · {entity.name}</option>)}</select></label>}
-              {entityForm.kind === "cooperative" && <label>Código da cooperativa<input required inputMode="numeric" value={entityForm.cooperative} onChange={(event) => setEntityForm({ ...entityForm, cooperative: event.target.value })} placeholder="Ex.: 3017" /></label>}
-              {entityForm.kind === "pa" && <><label>Cooperativa<select required value={entityForm.cooperative} onChange={(event) => setEntityForm({ ...entityForm, cooperative: event.target.value })}><option value="">Selecione a cooperativa</option>{cooperatives.filter((entity) => entity.central === entityForm.central).map((entity) => <option key={entity.id} value={entity.cooperative}>{entity.cooperative} · {entity.name}</option>)}</select></label><label>Código do PA<input required inputMode="numeric" value={entityForm.pa} onChange={(event) => setEntityForm({ ...entityForm, pa: event.target.value })} placeholder="Ex.: 0, 1 ou 97" /></label><label>Grupo do PA<select required value={entityForm.group} onChange={(event) => setEntityForm({ ...entityForm, group: event.target.value })}><option value="">Selecione o grupo</option>{["P1", "P2", "P3", "P4", "P5"].map((group) => <option key={group} value={group}>{group}</option>)}</select></label></>}
+              {entityForm.kind === "central" ? <label>Código da Central<input required disabled={identityLocked} inputMode="numeric" value={entityForm.central} onChange={(event) => setEntityForm({ ...entityForm, central: event.target.value })} placeholder="Ex.: 1002" /></label> : <label>Central<select required disabled={identityLocked} value={entityForm.central} onChange={(event) => setEntityForm({ ...entityForm, central: event.target.value, cooperative: "" })}><option value="">Selecione a Central</option>{centrals.map((entity) => <option key={entity.id} value={entity.central}>{entity.central} · {entity.name}</option>)}</select></label>}
+              {entityForm.kind === "cooperative" && <label>Código da cooperativa<input required disabled={identityLocked} inputMode="numeric" value={entityForm.cooperative} onChange={(event) => setEntityForm({ ...entityForm, cooperative: event.target.value })} placeholder="Ex.: 3017" /></label>}
+              {entityForm.kind === "pa" && <><label>Cooperativa<select required disabled={identityLocked} value={entityForm.cooperative} onChange={(event) => setEntityForm({ ...entityForm, cooperative: event.target.value })}><option value="">Selecione a cooperativa</option>{cooperatives.filter((entity) => entity.central === entityForm.central).map((entity) => <option key={entity.id} value={entity.cooperative}>{entity.cooperative} · {entity.name}</option>)}</select></label><label>Código do PA<input required disabled={identityLocked} inputMode="numeric" value={entityForm.pa} onChange={(event) => setEntityForm({ ...entityForm, pa: event.target.value })} placeholder="Ex.: 0, 1 ou 97" /></label><label>Grupo do PA<select required value={entityForm.group} onChange={(event) => setEntityForm({ ...entityForm, group: event.target.value })}><option value="">Selecione o grupo</option>{["P1", "P2", "P3", "P4", "P5"].map((group) => <option key={group} value={group}>{group}</option>)}</select></label></>}
               <label>Nome da unidade<input required value={entityForm.name} onChange={(event) => setEntityForm({ ...entityForm, name: event.target.value })} placeholder="Nome para exibir nos acompanhamentos" /></label>
             </div>
-            {editingId && <p className="registry-notice"><Info size={17} /> Alterar código ou vínculo também atualiza os cadastros dependentes e os registros de produção desta unidade.</p>}
+            {editingId && <p className="registry-notice"><Info size={17} /> {identityLocked ? "Esta unidade ou suas dependentes têm fichas ou compromissos vinculados. Nome e grupo podem ser editados. Para mudar código ou vínculo, exclua primeiro as informações da ficha e os compromissos relacionados." : "Alterar código ou vínculo também atualiza os cadastros dependentes e os registros de produção desta unidade."}</p>}
             <div className="registry-actions"><button type="button" className="button secondary" onClick={() => setEntityForm(null)}>Cancelar</button><button type="submit" className="button primary">{saving ? <LoaderCircle size={18} className="spin" /> : <Save size={18} />} Salvar cadastro</button></div>
           </fieldset>
         </form> : selected ? <>
-          <div className="panel-heading"><div><span className="section-label">{kindLabel[selected.kind]} · {selected.kind === "pa" ? selected.pa : selected.kind === "cooperative" ? selected.cooperative : selected.central}</span><h3>{selected.name}</h3><p>Central {selected.central}{selected.cooperative ? ` · Cooperativa ${selected.cooperative}` : ""}{selected.group ? ` · ${selected.group}` : ""}</p></div><div className="registry-actions"><button type="button" className="button secondary" onClick={startEdit} disabled={locked}><Pencil size={16} /> Editar</button><button type="button" className="button quiet registry-danger" onClick={() => { clearFeedback(); setDeleting(true); }} disabled={locked}><Trash2 size={16} /> Excluir</button></div></div>
+          <nav className={profileStyles.breadcrumbs} aria-label="Hierarquia da unidade">{hierarchy.parents.map((parent) => <span key={parent.id}><button type="button" disabled={locked} onClick={() => selectEntity(parent)}>{parent.name}</button><span aria-hidden="true"> / </span></span>)}<span aria-current="page">{selected.name}</span></nav>
+          <div className="panel-heading"><div><span className="section-label">{kindLabel[selected.kind]} · {selected.kind === "pa" ? selected.pa : selected.kind === "cooperative" ? selected.cooperative : selected.central}</span><h3>{selected.name}</h3><p>Central {selected.central}{selected.cooperative ? ` · Cooperativa ${selected.cooperative}` : ""}{selected.group ? ` · ${selected.group}` : ""}</p></div><div className="registry-actions"><button type="button" className="button secondary" onClick={() => void startEdit()} disabled={locked}><Pencil size={16} /> Editar</button><button type="button" className="button quiet registry-danger" onClick={() => { if (leaveRelationshipForm()) { clearFeedback(); setDeleting(true); } }} disabled={locked}><Trash2 size={16} /> Excluir</button></div></div>
           <div className="registry-actions"><button type="button" className="button secondary" disabled={locked || deleting} onClick={() => setShowCommunication(true)}>Gerar e-mail / WhatsApp</button></div>
           {deleting ? <div className="registry-delete-confirm" role="alertdialog" aria-labelledby="registry-delete-title" aria-describedby="registry-delete-description">
             <h3 id="registry-delete-title">Excluir {selected.name}?</h3><p id="registry-delete-description">Serão removidos deste cadastro de {dataset.year}: esta unidade{descendants.length ? `, ${descendants.filter((entity) => entity.kind === "cooperative").length} cooperativas e ${descendants.filter((entity) => entity.kind === "pa").length} PAs vinculados` : ""}, além de {affectedRows} registros de metas e produção. Os acumulados serão recalculados. Esta alteração não pode ser desfeita nesta tela.</p><div className="registry-actions"><button type="button" className="button secondary" onClick={() => setDeleting(false)} disabled={locked}>Manter cadastro</button><button type="button" className="button registry-danger" disabled={locked} onClick={confirmDelete}><Trash2 size={17} /> Confirmar exclusão</button></div>
           </div> : <>
-            <details className="registry-responsibles progressive-panel" key={`responsibles:${selected.id}:${dataset.year}`}><summary>Responsáveis e contatos</summary><ResponsibleManager key={`${selected.id}:${dataset.year}`} entity={selected} year={dataset.year} disabled={locked} /></details>
-            <label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
+            <div className={profileStyles.tabs} aria-label="Seções da ficha">{([{ id: "profile", label: "Ficha da carteira" }, { id: "contacts", label: "Contatos" }, { id: "agenda", label: "Agenda" }, { id: "targets", label: "Metas e produção" }] as const).map((tab) => <button type="button" key={tab.id} aria-pressed={activeTab === tab.id} disabled={locked} onClick={() => { if (tab.id !== activeTab && leaveRelationshipForm()) setActiveTab(tab.id); }}>{tab.label}</button>)}</div>
+            {activeTab === "profile" && <div className={profileStyles.section}>
+              {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3><p className={profileStyles.muted}>Abra uma ficha para ver contatos, carteira e agenda.</p></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
+              <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} onDirtyChange={setRelationshipDirty} />
+            </div>}
+            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked} />}
+            {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} onDirtyChange={setRelationshipDirty} />}
+            {activeTab === "targets" && <><label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
             <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onSave={async (input) => {
               clearFeedback();
               await persist(upsertPlanRow(normalized, { entityId: selected.id, metric: effectiveMetric, ...input }) as Dataset, "Metas e produção salvas. Todos os períodos e acumulados foram atualizados.");
-            }} />
+            }} /></>}
           </>}
-        </> : <div className="empty compact"><Building2 size={30} /><h3>Selecione uma unidade</h3><p>Selecione à esquerda para editar metas, produção ou contatos.</p><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={17} /> Nova unidade</button></div>}
+        </> : <div className="empty compact"><Building2 size={30} /><h3>Selecione uma unidade</h3><p>Selecione uma unidade para abrir sua ficha, seus contatos, agenda ou metas.</p><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={17} /> Nova unidade</button></div>}
       </div>
     </div>
     {showCommunication && selected && <PortfolioCommunication dataset={normalized} candidates={[selected]} initialKey={selected.id} metric={effectiveMetric} period="ytd" month={Number(defaultCutoff(normalized, effectiveMetric, selected.kind).slice(5, 7)) - 1} onClose={() => setShowCommunication(false)} />}

@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Download, Share2 } from 'lucide-react';
+import { Copy, Download, Share2 } from 'lucide-react';
 import { renderDashboardPng } from '@/lib/portfolio-image.mjs';
 import { validateDashboard } from '@/lib/portfolio-presentation.mjs';
 import type { PortfolioDashboard } from '@/lib/portfolio-presentation.mjs';
 import styles from './portfolio-communication.module.css';
 
 type Ready = { key: string; file: File; url: string };
-export default function WhatsappDashboard({ model, text, subject, saved = false, busy = false }: {
-  model: PortfolioDashboard; text: string; subject: string; saved?: boolean; busy?: boolean;
+export default function WhatsappDashboard({ model, text, subject, saved = false, busy = false, onClipboardChange }: {
+  model: PortfolioDashboard; text: string; subject: string; saved?: boolean; busy?: boolean; onClipboardChange?: () => void;
 }) {
   const key = JSON.stringify(model);
   const [ready, setReady] = useState<Ready | null>(null);
   const [issue, setIssue] = useState({ key: '', message: '' });
   const [feedback, setFeedback] = useState('');
   const [sharing, setSharing] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [retry, setRetry] = useState(0);
   const current = ready?.key === key ? ready : null;
   useEffect(() => {
@@ -38,6 +39,18 @@ export default function WhatsappDashboard({ model, text, subject, saved = false,
     const link = document.createElement('a'); link.href = current.url; link.download = current.file.name; link.click();
     setFeedback('Painel baixado. Anexe a imagem na conversa e cole a mensagem comercial. O download não confirma envio.');
   }
+  async function copyImage() {
+    if (!current || copying) return;
+    setCopying(true); setFeedback(''); onClipboardChange?.();
+    try {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Clipboard unavailable');
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': current.file })]);
+      setFeedback('Imagem copiada. Abra a conversa no WhatsApp e cole para revisar antes de enviar.');
+    } catch {
+      download();
+      setFeedback('O navegador não permitiu copiar a imagem. O painel foi baixado em PNG para anexar na conversa.');
+    } finally { setCopying(false); onClipboardChange?.(); }
+  }
   async function share() {
     if (!current || sharing) return;
     setFeedback('');
@@ -54,16 +67,17 @@ export default function WhatsappDashboard({ model, text, subject, saved = false,
     } finally { setSharing(false); }
   }
   return <section className={styles.imagePanel} aria-label={saved ? 'Painel WhatsApp salvo' : 'Painel do WhatsApp'}>
-    <h3>{saved ? 'Painel do rascunho' : 'Dashboard para WhatsApp'}</h3>
-    <p className="helper">Mesmo cenário do e-mail em imagem. No compartilhamento, escolha WhatsApp e confirme a pessoa que receberá. O número informado não seleciona automaticamente o contato ao compartilhar arquivos.</p>
+    <h3>{saved ? 'Painel do rascunho' : 'Painel pronto para WhatsApp'}</h3>
+    <p className="helper">Copie a imagem e cole na conversa. Você também pode compartilhar pelo aparelho ou baixar o arquivo.</p>
     {current ? <img className={styles.dashboardImage} src={current.url} alt={`Dashboard ${model.periodLabel} de ${model.scope}. Os indicadores também estão no texto da mensagem.`} />
       : issue.key === key && issue.message ? <div><p role="alert" className={styles.warning}>{issue.message}</p><button className="button secondary" onClick={() => setRetry((value) => value + 1)}>Gerar imagem novamente</button></div>
       : <p aria-live="polite">Preparando imagem do cenário…</p>}
     <div className={styles.actions}>
-      <button className="button primary" disabled={!current || sharing || busy} onClick={share}><Share2 size={17} /> {sharing ? 'Compartilhando…' : 'Compartilhar painel + mensagem'}</button>
-      <button className="button secondary" disabled={!current || busy} onClick={download}><Download size={17} /> {saved ? 'Baixar painel salvo (PNG)' : 'Baixar painel WhatsApp (PNG)'}</button>
+      <button className="button primary" disabled={!current || sharing || copying || busy} onClick={copyImage}><Copy size={17} /> {copying ? 'Copiando imagem…' : 'Copiar painel como imagem'}</button>
+      <button className="button secondary" disabled={!current || sharing || copying || busy} onClick={share}><Share2 size={17} /> {sharing ? 'Compartilhando…' : 'Compartilhar painel + mensagem'}</button>
+      <button className="button secondary" disabled={!current || copying || busy} onClick={download}><Download size={17} /> {saved ? 'Baixar painel salvo (PNG)' : 'Baixar painel WhatsApp (PNG)'}</button>
     </div>
-    <p className="helper">Sem suporte a compartilhar arquivos, o painel será baixado para anexar manualmente. Alguns aparelhos não levam a legenda junto: use Copiar WhatsApp para enviar o texto. Nenhum link público é criado.</p>
+    <p className="helper">Ao compartilhar, escolha a pessoa no WhatsApp. Se o navegador não permitir copiar ou compartilhar, o PNG será baixado para anexar.</p>
     {feedback && <p role="status" className="message">{feedback}</p>}
   </section>;
 }

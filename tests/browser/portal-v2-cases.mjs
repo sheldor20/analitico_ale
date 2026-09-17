@@ -48,9 +48,9 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     }
     expect(errors).toEqual([]);
   });
-  test('portal v2: all six views retain focus and fit desktop and both mobile widths', async ({ page }, info) => {
+  test('portal v2: all views retain focus and fit desktop and both mobile widths', async ({ page }, info) => {
     const { errors } = await setup(page);
-    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas'];
+    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas','Metas atingidas'];
     for (const width of [1440,390,320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
       for (const [index, name] of views.entries()) {

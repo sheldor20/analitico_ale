@@ -109,7 +109,7 @@ test('HTML escapes names and custom content while text and WhatsApp preserve the
   assert.match(message.html, /&lt;script&gt;/);
   assert.match(message.html, /A &amp; B/);
   assert.match(message.whatsapp, /Olá, Ana!/);
-  for (const section of report.sections) for (const value of [section.current.target, section.current.actual, section.annual.projected]) {
+  for (const section of report.sections) for (const value of [section.current.target, section.current.actual, section.annual.target, section.annual.actual]) {
     for (const key of ['text', 'whatsapp', 'html']) assert.ok(message[key].includes(money(value)));
   }
   assert.equal(escapeHtml('"<&'), '&quot;&lt;&amp;');
