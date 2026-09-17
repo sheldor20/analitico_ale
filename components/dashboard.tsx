@@ -941,15 +941,7 @@ export default function Dashboard() {
             <img className="mobile-brand" src="/brand/sicoob-logo.svg" alt="Sicoob" width="108" height="25" />
             Gestão comercial <span>/</span>{" "}
             <strong>
-              {view === "registry" ? "Cadastro e metas" : view === "cadence"
-                ? "PAs"
-                : view === "actions"
-                  ? "Plano de ação"
-                  : view === "audit"
-                    ? "Conferência"
-                    : view === "imports"
-                      ? "Importações"
-                      : "Visão geral"}
+              {VIEW_TITLES[view]}
             </strong>
           </div>
           <div className="top-actions">

@@ -131,7 +131,11 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
     await expect(dialog.getByRole('button',{name:'Copiar painel',exact:true})).toBeDisabled();
     await dialog.getByRole('button',{name:'Restaurar painel automático',exact:true}).click();
     await expect(dialog.getByRole('button',{name:'Copiar painel',exact:true})).toBeEnabled();
-    await step(dialog,2);await expect(page.frameLocator('iframe').locator('[data-metric="Realizado informado"]')).toBeVisible();
+    await step(dialog,2);
+    const realized = page.frameLocator('iframe').locator('[data-metric="Realizado informado"]');
+    await expect(realized).toHaveCount(2);
+    await expect(realized.nth(0)).toBeVisible();
+    await expect(realized.nth(1)).toBeVisible();
   });
 
   test('followup review: annual goal conflict cannot claim growth or attainment', async ({page}) => {
