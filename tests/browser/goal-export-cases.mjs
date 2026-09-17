@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 
 const pngMagic = [137, 80, 78, 71, 13, 10, 26, 10];
 const alertRegion = page => page.getByRole('region', { name: 'Metas atingidas no mês', exact: true });
@@ -27,7 +28,113 @@ async function recordExports(page, denied = false) {
   }, { denied });
 }
 
+function hierarchyFixture(dataset) {
+  dataset.rows = dataset.rows.map(row => row.central === '1002' && row.cooperative === '3017' && row.metric === 'VN'
+    ? { ...row, actuals: row.actuals.map(value => value == null ? null : row.source === 'cadence' ? 450 : 100) } : row);
+  dataset = upsertEntity(dataset, { kind: 'pa', central: '2007', cooperative: '3017', pa: '0', name: 'PA Nordeste zero', group: 'P1' });
+  return upsertPlanRow(dataset, { entityId: 'pa:2007:3017:0', metric: 'VN', targets: Array(12).fill(450), annualTarget: 5400,
+    actuals: [...Array(8).fill(450), null, null, null, null], cutoff: '2026-08-31' });
+}
+
 export function registerGoalExportTests({ test, expect, setup, owner, created }) {
+  test('goal filters: central and composite cooperative scopes preserve PA zero and reset without changing the month', async ({ page }, info) => {
+    const { errors } = await setup(page, hierarchyFixture);
+    await page.getByRole('button', { name: 'Metas atingidas', exact: true }).click();
+    const alerts = alertRegion(page);
+    const central = alerts.getByRole('combobox', { name: 'Central', exact: true });
+    const cooperative = alerts.getByRole('combobox', { name: 'Cooperativa', exact: true });
+    const kind = alerts.getByRole('combobox', { name: 'Tipo de unidade', exact: true });
+    await expect(alerts.getByText('7 metas atingidas', { exact: true })).toBeVisible();
+    await expect(cooperative.locator('option[value="cooperative:1002:3017"]')).toHaveCount(1);
+    await expect(cooperative.locator('option[value="cooperative:2007:3017"]')).toHaveCount(1);
+    await central.selectOption('1002');
+    await expect(alerts.getByText('4 metas atingidas', { exact: true })).toBeVisible();
+    await expect(cooperative.locator('option[value="cooperative:2007:3017"]')).toHaveCount(0);
+    await cooperative.selectOption('cooperative:1002:3017');
+    await expect(alerts.getByText('2 metas atingidas', { exact: true })).toBeVisible();
+    await expect(alerts.getByRole('article')).toHaveCount(2);
+    await expect(achievement(page, 'Cooperativa Alfa')).toBeVisible();
+    await expect(achievement(page, 'PA Alfa zero')).toBeVisible();
+    await expect(achievement(page, 'Central Bahia teste')).toHaveCount(0);
+    await kind.selectOption('cooperative');
+    await expect(alerts.getByRole('article')).toHaveCount(1);
+    await expect(achievement(page, 'Cooperativa Alfa')).toBeVisible();
+    await kind.selectOption('pa');
+    await expect(achievement(page, 'PA Alfa zero')).toBeVisible();
+    await expect(alerts.getByText('1 meta atingida', { exact: true })).toBeVisible();
+    await central.selectOption('2007');
+    await expect(cooperative).toHaveValue('all');
+    await expect(achievement(page, 'PA Nordeste zero')).toBeVisible();
+    await expect(achievement(page, 'PA Alfa zero')).toHaveCount(0);
+    await kind.selectOption('all');
+    await expect(alerts.getByText('3 metas atingidas', { exact: true })).toBeVisible();
+    await cooperative.selectOption('cooperative:2007:3017');
+    await expect(alerts.getByRole('article')).toHaveCount(2);
+    await expect(achievement(page, 'Outra central')).toBeVisible();
+    await expect(achievement(page, 'PA Nordeste zero')).toBeVisible();
+    await expect(achievement(page, 'Cooperativa Alfa')).toHaveCount(0);
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await alerts.screenshot({ path: info.outputPath(`goal-hierarchy-${width}.png`) });
+    }
+    await kind.selectOption('central');
+    await expect(cooperative).toHaveValue('all');
+    await expect(cooperative).toBeDisabled();
+    await expect(alerts.getByText('1 meta atingida', { exact: true })).toBeVisible();
+    await expect(achievement(page, 'Central Nordeste teste')).toBeVisible();
+    await kind.selectOption('pa');
+    await expect(cooperative).toBeEnabled();
+    await central.selectOption('1002');
+    await cooperative.selectOption('cooperative:1002:3025');
+    await expect(alerts.getByRole('article')).toHaveCount(0);
+    await expect(alerts.getByText('0 metas atingidas', { exact: true })).toBeVisible();
+    await expect(alerts.getByRole('button', { name: 'Copiar painel filtrado como imagem', exact: true })).toHaveCount(0);
+    await alerts.getByRole('combobox', { name: 'Mês de referência', exact: true }).selectOption('6');
+    await alerts.getByRole('checkbox', { name: 'Somente não lidas', exact: true }).check();
+    await alerts.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+    await expect(central).toHaveValue('all');
+    await expect(cooperative).toHaveValue('all');
+    await expect(kind).toHaveValue('all');
+    await expect(alerts.getByRole('checkbox', { name: 'Somente não lidas', exact: true })).not.toBeChecked();
+    await expect(alerts.getByRole('combobox', { name: 'Mês de referência', exact: true })).toHaveValue('6');
+    await expect(alerts.getByText('7 metas atingidas', { exact: true })).toBeVisible();
+    await expect(alerts.getByRole('article')).toHaveCount(7);
+    expect(errors).toEqual([]);
+  });
+
+  test('goal filters: scoped unread PNG preserves hierarchy and excludes totals and same-code units from another central', async ({ page }) => {
+    await recordExports(page);
+    const { errors } = await setup(page, hierarchyFixture);
+    await page.getByRole('button', { name: 'Metas atingidas', exact: true }).click();
+    const alerts = alertRegion(page);
+    await alerts.getByRole('combobox', { name: 'Central', exact: true }).selectOption('1002');
+    await alerts.getByRole('combobox', { name: 'Cooperativa', exact: true }).selectOption('cooperative:1002:3017');
+    await achievement(page, 'Cooperativa Alfa').getByRole('button', { name: 'Marcar como lida', exact: true }).click();
+    await expect(achievement(page, 'Cooperativa Alfa').getByText('Lida', { exact: true })).toBeVisible();
+    await alerts.getByRole('checkbox', { name: 'Somente não lidas', exact: true }).check();
+    await expect(alerts.getByText('2 metas atingidas', { exact: true })).toBeVisible();
+    await expect(alerts.getByText(/^1 para reconhecer/)).toBeVisible();
+    await expect(alerts.getByRole('article')).toHaveCount(1);
+    await expect(achievement(page, 'PA Alfa zero')).toBeVisible();
+    await page.evaluate(() => { window.__goalExports.texts = []; });
+    await alerts.getByRole('button', { name: 'Copiar painel filtrado como imagem', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.__goalExports.png.length)).toBe(1);
+    const { texts, png } = await page.evaluate(() => window.__goalExports);
+    const text = texts.join(' ');
+    expect(png[0].bytes).toEqual(pngMagic);
+    expect(text).toContain('PA Alfa zero');
+    expect(text).toContain('Central 1002');
+    expect(text).toContain('Cooperativa 3017');
+    expect(text).toContain('AGO/2026');
+    expect(text).not.toContain('PA Nordeste zero');
+    expect(text).not.toContain('Outra central');
+    expect(text).not.toContain('Cooperativa Beta');
+    expect(text).not.toContain('2007');
+    expect(text).toContain('450,00');
+    expect(errors).toEqual([]);
+  });
+
   test('goal exports: a unit without contacts can copy its actual achievement as a real PNG', async ({ page }) => {
     await recordExports(page);
     const { errors, relationshipWrites } = await setup(page);
