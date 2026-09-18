@@ -155,6 +155,7 @@
 .workspace-content.view-audit .filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .workspace-content .table-panel .numeric { white-space:nowrap; }
 .workspace-content .audit-list { max-height:none; overflow:visible; }
+.workspace-content .pa-share-trigger { margin-top:12px; }
 @media(min-width:1101px) { .sidebar nav { gap:0; }.sidebar .nav-group+.nav-group { margin-top:32px; } }
 @media(max-width:720px) {
   .workspace-content .page-heading-actions { gap:8px; }

@@ -16,7 +16,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     const pas=page.getByRole('region',{name:'PAs da cooperativa',exact:true});
     await expect(pas.locator('tbody tr')).toHaveCount(1);
     await expect(pas).toContainText('PA Alfa zero');await expect(pas).not.toContainText('PA Beta zero');
-    await expect(pas.getByRole('columnheader',{name:'GAP',exact:true})).toBeVisible();
+    await expect(pas.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
     await page.screenshot({path:testInfo.outputPath('scenario-desktop.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
