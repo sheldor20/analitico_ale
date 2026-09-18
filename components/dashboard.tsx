@@ -54,6 +54,7 @@ import type { EntityAppointment } from "@/lib/relationship-store";
 import GoalAlerts from "@/components/goal-alerts";
 import { buildMonthlyGoalAlerts, defaultGoalAlertMonth } from '@/lib/goal-alerts.mjs';
 import PortfolioCommunication from "@/components/portfolio-communication";
+import PaScenarioShare from "@/components/pa-scenario-share";
 import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
 import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
@@ -156,6 +157,7 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
+  const [showPaShare, setShowPaShare] = useState(false);
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
   const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
@@ -169,6 +171,7 @@ export default function Dashboard() {
         setDataset(null); setDatasetId(null); setSelected(null); setActions({});
         setFiles({base:null,cadence:null}); setWorkspaceRevision(null); setWorkspaces([]);
         setHistorical(false); sessionYears.current.clear(); setExpandedPaKey("");
+        setShowPaShare(false);
       }
       activeOwner.current = nextId;
       setUser(session?.user ?? null);
@@ -1277,6 +1280,7 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
+                  {actualLevel === "pa" && sourceRows.some(row => (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => setShowPaShare(true)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar PAs</button>}
                 </section>
               ) : (
                 <>
@@ -1378,6 +1382,7 @@ export default function Dashboard() {
                                   : "Resultado por cooperativa"}
                             </h2>
                             <p>{displayed.length} de {analyses.length} unidades</p>
+                            {actualLevel === "pa" && <button type="button" className="button secondary pa-share-trigger" onClick={() => setShowPaShare(true)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar PAs</button>}
                           </div>
                           <div className="table-controls">
                             {listControls}
@@ -1398,7 +1403,7 @@ export default function Dashboard() {
                                 <th scope="col" className="numeric">Meta</th>
                                 <th scope="col" className="numeric">Realizado</th>
                                 <th scope="col">Atingimento</th>
-                                <th scope="col" className="numeric">GAP</th>
+                                <th scope="col" className="numeric">{actualLevel === "pa" ? "Crescimento / GAP" : "GAP"}</th>
                                 {showMoreIndicators && <><th scope="col" className="numeric">Projeção</th><th scope="col" className="numeric">Necessário/dia</th></>}
                                 <th scope="col">Situação</th>
                                 <th scope="col">
@@ -1445,7 +1450,7 @@ export default function Dashboard() {
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="numeric">{money(r.gap)}</td>
+                                    <td className="numeric">{actualLevel === "pa" ? <PaVariance actual={r.actual} target={r.target} complete={r.complete} conflict={!!r.annualConflict} /> : money(r.gap)}</td>
                                     {showMoreIndicators && <>
                                     <td className="numeric">
                                       {money(r.projected)}
@@ -1482,7 +1487,7 @@ export default function Dashboard() {
                         )}
                         <div className="pagination">{displayed.length} unidades exibidas</div>
                       </section>
-                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
+                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setShowPaShare(true)} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">
@@ -1600,6 +1605,7 @@ export default function Dashboard() {
           metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
           onClose={() => setShowCommunication(false)} />
       )}
+      {showPaShare && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}`} userId={user.id} dataset={dataset} filters={effectiveSource === "cadence" ? scenarioFilters : { ...scenarioFilters, source: "cadence", metric: "VN", group: "all", search: "", status: "all" }} onClose={() => setShowPaShare(false)} />}
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)} wide>
           <div className="detail-content">
@@ -1837,6 +1843,11 @@ function FileSlot({
       )}
     </div>
   );
+}
+
+function PaVariance({ actual, target, complete, conflict }: { actual: number | null; target: number | null; complete: boolean; conflict: boolean }) {
+  const value = goalVariance(actual, target, complete && !conflict);
+  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? 'Meta atingida' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
 }
 
 function Modal({

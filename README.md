@@ -50,6 +50,10 @@ Na própria tela **Metas atingidas**, cada cartão oferece **Copiar painel como 
 
 Os painéis de comunicação apresentam **Meta, Realizado e Crescimento sobre a meta/GAP** lado a lado quando houver espaço, tanto no e-mail quanto na imagem. Valores financeiros permanecem completos e indivisíveis, incluindo centavos e negativos; a fonte e as colunas se adaptam à largura. O realizado continua em destaque e a projeção permanece opcional, abaixo dos três indicadores principais. Em telas muito estreitas, o e-mail adapta a disposição para preservar a leitura.
 
+Em **Cadência dos PAs → Compartilhar PAs**, prepare uma lista consolidada com **PA, meta, realizado, atingimento e crescimento/GAP**. O período, a central e a cooperativa seguem a seleção da tela. Por padrão, entram todos os PAs dessa hierarquia, inclusive os que têm dados pendentes; escolha a lista filtrada se quiser aplicar também grupo, busca e situação. O mesmo comando está na lista **PAs desta cooperativa**, na Visão geral. A comunicação contém apenas a fonte Cadência PA, sem somar resultados da cooperativa.
+
+O painel completo pode ser copiado para o Outlook ou baixado em `.eml`. Para WhatsApp, copie o texto ou a imagem PNG; listas com mais de 20 PAs geram partes numeradas, cada uma com identificação do período e das unidades, sem omitir PAs. Se o navegador bloquear a cópia da imagem, use o PNG baixado. Links extensos de WhatsApp exigem colar o texto depois de abrir o aplicativo. Destinatários são informados para cada envio; o sistema prepara o conteúdo e o usuário revisa e envia. A exportação é local, sem novo armazenamento, sem link público dos dados e sem necessidade de migração SQL.
+
 **Preparar Outlook** carrega os e-mails da unidade e permite ajustar a lista para aquele envio. Copie o painel formatado, abra o link do Outlook e cole no corpo do e-mail; assunto e destinatários são preenchidos pelo link. Contas Microsoft 365 e Outlook.com são aceitas. Se a cópia for bloqueada, há download da imagem PNG ou do e-mail completo em `.eml`. Copiar, baixar ou abrir o Outlook não registra comunicação como enviada; essa confirmação continua manual. Essa melhoria usa as tabelas existentes de contatos e alertas, sem nova migração SQL.
 
 Novas informações são isoladas por conta, ano e unidade. A agenda não envia convites e não sincroniza calendários externos.
@@ -131,7 +135,7 @@ O filtro **Grupo do PA** e os cartões P1–P5 selecionam os grupos. Essa tabela
 
 ## Comunicação do cenário parcial
 
-Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. Clique em **Comunicação parcial** para gerar um texto com posição da fonte, meta, realizado, atingimento, projeção, saldo, esforço e até cinco prioridades. O texto pode ser editado, copiado para WhatsApp/Teams, baixado em `.txt` ou aberto no aplicativo de e-mail. O sistema somente abre o rascunho; o envio continua sob confirmação do usuário.
+Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. **Gerar e-mail / WhatsApp** prepara o resultado de uma unidade por vez, com projeção opcional. **Compartilhar PAs** prepara a lista consolidada de PAs da central ou cooperativa. Confira o período, os dados pendentes e os destinatários antes de enviar pelo aplicativo escolhido.
 
 ## Critérios dos indicadores
 
