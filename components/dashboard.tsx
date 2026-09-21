@@ -1108,6 +1108,7 @@ export default function Dashboard() {
                   <label>
                     Carteira
                     <select
+                      aria-label="Carteira"
                       value={effectiveMetric}
                       onChange={(e) => setMetric(e.target.value)}
                     >

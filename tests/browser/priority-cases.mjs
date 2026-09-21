@@ -66,7 +66,9 @@ export function registerPriorityTests({ test, expect, setup }) {
     await expect(list.locator('tbody tr')).toHaveCount(1);
     const missing = list.locator('tbody tr').first();
     await expect(missing).toContainText('Cooperativa Sem realizado');
-    await expect(missing.locator('td').nth(2)).toHaveText('—');
+    await expect(missing.locator('td').nth(2)).toHaveText('Não disponível');
+    await expect(missing.locator('td').nth(2)).not.toContainText('0,00');
+    await expect(missing.locator('td').nth(3)).not.toContainText('%');
     await expect(missing).toContainText('Sem realizado');
     await expect(missing).not.toContainText('Meta atingida');
     await expect(missing).not.toContainText('Cooperativa Alfa');

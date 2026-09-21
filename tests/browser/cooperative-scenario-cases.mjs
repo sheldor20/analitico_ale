@@ -78,7 +78,7 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await close(page);
     await page.getByLabel('Buscar cooperativa ou PA').fill('');
     await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('all');
-    await page.getByLabel('Carteira').selectOption('AR');
+    await page.getByRole('combobox', { name: 'Carteira', exact: true }).selectOption('AR');
     await open(page); await email(page);
     await expect(rows(page)).toHaveCount(2);
     await expect(frame(page).locator('body')).toContainText('Arrecadação');
@@ -98,7 +98,7 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await expect(row(page, 'cooperative:1002:3025').locator('td').nth(1)).toContainText(money(6000));
     await expect(row(page, 'cooperative:1002:3025').locator('td').nth(2)).toContainText(money(6400));
     await close(page);
-    await page.getByLabel('Carteira').selectOption('VN');
+    await page.getByRole('combobox', { name: 'Carteira', exact: true }).selectOption('VN');
     await august(page, '2007');
     await page.getByRole('combobox', { name: 'Cooperativa', exact: true }).selectOption('2007:3017');
     await open(page); await email(page);
