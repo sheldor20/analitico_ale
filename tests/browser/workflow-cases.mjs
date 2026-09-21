@@ -148,6 +148,9 @@ export function registerWorkflowTests({ test, expect, setup }) {
     const { errors, writes, relationshipWrites } = await setup(page, workflowFixture);
     await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await august(page);
+    const selectAll = await list(page).getByRole('checkbox', { name: 'Selecionar todas as unidades filtradas', exact: true }).boundingBox();
+    expect(selectAll.width).toBeLessThanOrEqual(24);
+    expect(selectAll.height).toBeLessThanOrEqual(24);
     for (const name of ['PA Alfa zero', 'PA Nordeste zero', '=PA Ajuste negativo']) {
       await list(page).getByRole('checkbox', { name: `Selecionar ${name}`, exact: true }).check();
     }
