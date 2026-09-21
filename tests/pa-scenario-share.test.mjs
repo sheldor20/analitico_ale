@@ -5,6 +5,7 @@ import { createEmptyDataset, initializeRegistry } from '../lib/registry.mjs';
 import { scopedAnalyses, sortAnalysis } from '../lib/scenarios.mjs';
 import { filterDashboardRows } from '../lib/dashboard-view.mjs';
 import { scenarioDisplay } from '../lib/scenario-share-presentation.mjs';
+import { paScenarioImageLayout } from '../lib/pa-scenario-image.mjs';
 
 const filters = { central: 'all', coop: 'all', group: 'all', source: 'cadence', metric: 'VN', level: 'pa', period: 'month', month: 0, status: 'all', search: '', sortBy: 'name', uplift: 0 };
 function row(pa, actual = 100, target = 100, overrides = {}) {
@@ -84,15 +85,17 @@ test('each period uses the same analytical values and never adds cooperative/bas
   }
 });
 
-test('20-PA image parts cover all 46 identities once and keep the full email/text list', () => {
-  assert.equal(PA_SCENARIO_PAGE_SIZE, 20);
+test('12-PA image parts cover all 46 identities once and keep the full email/text list', () => {
+  assert.equal(PA_SCENARIO_PAGE_SIZE, 12);
   const result = report(dataset(Array.from({ length: 46 }, (_, index) => row(index))));
-  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 3, 1, 20, 20], [2, 3, 21, 40, 20], [3, 3, 41, 46, 6]]);
+  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 4, 1, 12, 12], [2, 4, 13, 24, 12], [3, 4, 25, 36, 12], [4, 4, 37, 46, 10]]);
   assert.deepEqual(result.parts.flatMap(part => part.rows.map(item => item.id)), result.rows.map(item => item.id));
   assert.equal((result.html.match(/data-pa-id=/g) || []).length, 46);
   for (const item of result.rows) assert.ok(result.text.includes(`PA ${item.pa} · ${item.name} | Meta:`));
   assert.equal(report(dataset(Array.from({ length: 12 }, (_, index) => row(index)))).parts.length, 1);
   assert.equal(result.whatsapp, result.text);
+  assert.ok(result.caption.length < result.text.length / 4);
+  assert.doesNotMatch(result.caption, /PA 0 · Ponto 0|Meta:|Realizado:|R\$/);
   assert.equal((result.text.match(/Central 1002/g) || []).length, 1);
   assert.equal((result.text.match(/Cooperativa 3017/g) || []).length, 1);
   assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
@@ -102,6 +105,92 @@ test('20-PA image parts cover all 46 identities once and keep the full email/tex
     assert.equal(display.cutoffLabel, 'Corte: 31/01/2026');
     assert.ok(display.groups.flatMap(group => group.rows).every(item => !item.exception));
   }
+});
+
+test('explicit IDs preserve PA zero, hidden choices and exact scope while identifying the partial selection everywhere', () => {
+  const data = dataset([row(0), row(1, -25.5), row(0, 50, null, { cooperative: '3025' }), row(0, 999, 100, { central: '2007' })]);
+  const before = JSON.stringify(data), selectedIds = ['pa:1002:3017:0', 'pa:1002:3025:0'];
+  const result = report(data, { filters: { ...filters, central: '1002', search: 'inexistente', group: 'P9', status: 'attention' }, mode: 'selected', selectedIds });
+  assert.equal(result.allCount, 3); assert.equal(result.filteredCount, 0); assert.equal(result.count, 2);
+  assert.deepEqual(result.rows.map(item => item.id), selectedIds);
+  assert.deepEqual(result.candidates.map(item => item.id).sort(), ['pa:1002:3017:0', 'pa:1002:3017:1', 'pa:1002:3025:0']);
+  assert.equal(result.selectionLabel, 'Seleção parcial: 2 de 3 PAs');
+  for (const output of [result.text, result.html, result.caption]) assert.ok(output.includes(result.selectionLabel));
+  assert.equal(result.parts[0].selectionLabel, result.selectionLabel);
+  assert.deepEqual(result.summary, { achievedCount: 1, gapCount: 0, unknownCount: 1 });
+  assert.match(result.scope, /Central 1002/); assert.doesNotMatch(result.scope, /Cooperativa 3017/);
+  assert.deepEqual(scenarioDisplay(result).groups.map(group => group.label), ['Cooperativa 3017', 'Cooperativa 3025']);
+  assert.doesNotMatch(result.text, /Ponto 1|2007|25,50/);
+  assert.throws(() => report(data, { filters: { ...filters, central: '1002' }, mode: 'selected', selectedIds: ['pa:2007:3017:0'] }), /fora deste escopo/);
+  assert.throws(() => report(data, { mode: 'selected', selectedIds: [null] }), /fora deste escopo/);
+  assert.equal(report(data, { mode: 'selected', selectedIds: [selectedIds[0], selectedIds[0]] }).count, 1);
+  const empty = report(data, { mode: 'selected', selectedIds: [] });
+  assert.equal(empty.count, 0); assert.deepEqual(empty.parts, []); assert.deepEqual(empty.summary, { achievedCount: 0, gapCount: 0, unknownCount: 0 });
+  assert.equal(JSON.stringify(data), before);
+});
+
+test('explicit ordering is identical in selected HTML, text and images with complete monetary values', () => {
+  const data = dataset([row(0, 150), row(1, -10), row(2, 75)]);
+  const selectedIds = ['pa:1002:3017:0', 'pa:1002:3017:1', 'pa:1002:3017:2'];
+  const result = report(data, { mode: 'selected', selectedIds, sortBy: 'attainment' });
+  assert.deepEqual(result.rows.map(item => item.pa), ['1', '2', '0']);
+  assert.equal(result.sortBy, 'attainment');
+  assert.deepEqual([...result.html.matchAll(/data-pa-id="([^"]+)"/g)].map(match => match[1]), result.rows.map(item => item.id));
+  assert.deepEqual(result.text.split('\n').filter(text => /^PA \d+ ·/.test(text)).map(text => text.split(' | ')[0]), result.rows.map(item => `PA ${item.pa} · ${item.name}`));
+  const context = { font: '', measureText(text) { return { width: String(text).length * Number(this.font.match(/([\d.]+)px/)?.[1] || 20) * .52 }; } };
+  const drawn = paScenarioImageLayout(result.parts[0], context).commands.filter(command => command.type === 'text');
+  assert.deepEqual(drawn.filter(command => /^PA \d+ ·/.test(command.value)).map(command => command.value), result.rows.map(item => `PA ${item.pa} · ${item.name}`));
+  assert.ok(drawn.some(command => command.value === result.selectionLabel));
+  assert.throws(() => report(data, { sortBy: 'not-an-order' }), /ordenação válida/);
+});
+
+test('contribution and evolution recompute the comparable cohort after filtering or choosing explicit IDs', () => {
+  const alpha = row(0, 90, 100, { name: 'Alpha', cutoff: '2026-09-30' });
+  const zulu = row(1, 100, 100, { name: 'Zulu', cutoff: '2026-09-30' });
+  alpha.actuals.splice(3, 3, 100, 100, 100);
+  zulu.actuals.splice(3, 3, 10, 10, 10);
+  const older = row(2, 100, 100, { name: 'Older', group: 'P2', cutoff: '2026-05-31' });
+  const data = dataset([alpha, zulu, older]), before = JSON.stringify(data);
+  for (const sortBy of ['contribution', 'evolution']) {
+    const options = { filters: { ...filters, month: 8, group: 'P1' }, sortBy };
+    const full = report(data, options);
+    assert.equal(full.rows[0].pa, '0', 'the old cutoff makes the whole scope incomparable and sorting falls back to names');
+    for (const mode of ['filtered', 'selected']) {
+      const result = report(data, { ...options, mode, selectedIds: ['pa:1002:3017:0', 'pa:1002:3017:1'] });
+      assert.deepEqual(result.rows.map(item => item.pa), ['1', '0'], `${mode}/${sortBy} must compare only the two September units`);
+      assert.deepEqual(result.rows.map(item => item.actual), [100, 90]);
+      assert.equal(result.allCount, 3); assert.equal(result.count, 2);
+      assert.deepEqual([...result.html.matchAll(/data-pa-id="([^"]+)"/g)].map(match => match[1]), result.rows.map(item => item.id));
+    }
+  }
+  assert.equal(JSON.stringify(data), before);
+});
+
+test('editable subject, opening and CTA are escaped, bounded, and independent of the calculated indicators', () => {
+  const data = dataset(Array.from({ length: 15 }, (_, index) => row(index, index * 12.34)));
+  const baseline = report(data), customization = { subject: 'Revisão\r\nSicoob', intro: 'Olá, equipe!\n<img src=x onerror=alert(1)>', cta: 'Vamos combinar o retorno? <script>x</script>' };
+  const edited = report(data, { customization });
+  assert.equal(edited.subject, 'Revisão Sicoob'); assert.equal(edited.intro, customization.intro); assert.equal(edited.cta, customization.cta);
+  assert.deepEqual(edited.rows, baseline.rows); assert.deepEqual(edited.parts, baseline.parts);
+  assert.match(edited.html, /data-communication-intro/); assert.match(edited.html, /data-communication-cta/);
+  assert.match(edited.html, /Olá, equipe!<br>&lt;img/); assert.match(edited.html, /&lt;script&gt;x&lt;\/script&gt;/); assert.doesNotMatch(edited.html, /<img|<script>/);
+  for (const text of [edited.text, edited.caption]) { assert.ok(text.includes(customization.intro)); assert.ok(text.includes(customization.cta)); }
+  assert.doesNotMatch(edited.caption, /Meta:|Realizado:|R\$/);
+  assert.equal(edited.whatsapp, edited.text);
+  assert.equal(report(data, { customization: { cta: '' } }).cta, '', 'an intentionally empty CTA must override the suggestion');
+  for (const [field, limit] of [['subject', 300], ['intro', 1000], ['cta', 1000]]) assert.throws(() => report(data, { customization: { [field]: 'x'.repeat(limit + 1) } }), /caracteres/);
+});
+
+test('suggested next steps follow observed results and incomplete data without calling a partial GAP late', () => {
+  assert.match(report(dataset([row(0, null)])).cta, /Confira os dados pendentes/);
+  assert.match(report(dataset([row(0, 50, null)])).cta, /metas cadastradas/);
+  assert.match(report(dataset([row(0, 20, 100, { cutoff: '2026-01-05' })])).cta, /maior GAP/);
+  assert.match(report(dataset([row(0, 95, 100, { cutoff: '2026-01-05' })])).cta, /oportunidades em aberto/);
+  assert.match(report(dataset([row(0, 150)])).cta, /Sustente a produção/);
+  assert.match(report(dataset([row(0), row(1, 20, 100, { cutoff: '2026-01-05' })])).cta, /datas de corte/);
+  assert.match(report(dataset([row(0, 100, 100, { annualTarget: 999 })]), { filters: { ...filters, period: 'annual' } }).cta, /Concilie a meta anual/);
+  const partial = report(dataset([row(0, 20, 100, { cutoff: '2026-01-05' })]));
+  assert.doesNotMatch(partial.caption, /atras|ritmo|proje[çc]|parabéns/i);
 });
 
 test('mixed parents are grouped once with explicit ordering and only exceptional dates on their PA', () => {

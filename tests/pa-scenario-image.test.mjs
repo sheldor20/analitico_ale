@@ -109,6 +109,18 @@ test('twenty PAs fit below 2600 pixels with no missing rows or repeated shared m
   assertGeometry(layout, measure);
 });
 
+test('mobile-sized parts show the partial selection count once and preserve every selected financial row', () => {
+  const rows = Array.from({ length: 12 }, (_, index) => row(index));
+  const source = part(rows, { index: 1, total: 2, from: 1, to: 12, selectionLabel: 'Seleção parcial: 15 de 47 PAs' });
+  const measure = measurement(), layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  assert.ok(layout.height < 1900);
+  assert.equal(drawn.filter(command => command.value === source.selectionLabel).length, 1);
+  assert.ok(drawn.some(command => command.value === 'Parte 1 de 2 · PAs 1–12'));
+  assert.equal(drawn.filter(command => /^PA \d+ · Unidade/.test(command.value)).length, 12);
+  assert.equal(drawn.filter(command => command.value === amount(1250)).length, 12);
+  assertGeometry(layout, measure);
+});
+
 test('long names wrap completely, and strings containing markup are drawn as literal text', () => {
   const name = '<script>alert(1)</script>';
   const longToken = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.repeat(5);

@@ -139,7 +139,16 @@ O filtro **Grupo do PA** e os cartões P1–P5 selecionam os grupos. Essa tabela
 
 ## Comunicação do cenário parcial
 
-Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. **Gerar e-mail / WhatsApp** prepara o resultado de uma unidade por vez, com projeção opcional. **Compartilhar cooperativas** prepara a parcial da central com suas cooperativas; **Compartilhar PAs** prepara a lista dos PAs. Confira o período, os dados pendentes e os destinatários antes de enviar pelo aplicativo escolhido.
+Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste central, cooperativa, PA, período e carteira. **Gerar comunicação** aproveita os filtros e permite escolher cooperativas, PAs ou uma unidade, em e-mail, imagem para WhatsApp ou painel resumido. A seleção e a ordem podem ser revisadas; assunto, introdução e chamada para ação são editáveis sem alterar os indicadores.
+
+As imagens contêm até **12 unidades por parte**, com identificação da seleção e numeração. A mensagem curta acompanha a imagem; o relatório completo fica disponível separadamente. O cenário anual e a projeção são opcionais na comunicação individual. Confira a prévia e os destinatários antes de enviar pelo aplicativo escolhido.
+
+## Gestão e extração do recorte
+
+- **Prioridades da carteira** usa a meta proporcional ao corte para distinguir atraso, proximidade da meta e registros que precisam de conferência. Cada ação mostra as unidades exatas do fato.
+- **Ver cooperativas**, **Ver PAs** e **Abrir cadência** permitem avançar na hierarquia; **Voltar ao recorte anterior** recupera filtros, período, ordenação e prioridade.
+- **Exportar dados** oferece CSV e Excel das unidades filtradas ou selecionadas, com cabeçalhos, cortes, totais e critérios. As caixas de seleção usam a identidade completa da unidade, incluindo PA zero.
+- **Maior GAP** ordena o saldo observado. **Maior GAP projetado** usa a estimativa. Contribuição corresponde ao realizado líquido da seleção, com posições comparáveis. Evolução compara os três últimos meses fechados comuns com os três anteriores; períodos insuficientes e bases anteriores nulas ou não positivas ficam sem percentual.
 
 ## Critérios dos indicadores
 

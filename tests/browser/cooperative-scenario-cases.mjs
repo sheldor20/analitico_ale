@@ -64,7 +64,10 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await page.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
     await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('attention');
     await open(page); await email(page);
-    await expect(shared(page).getByRole('radio', { name: 'Todas as cooperativas da seleção', exact: true })).toBeChecked();
+    await expect(shared(page).getByRole('radio', { name: 'Somente cooperativas filtradas', exact: true })).toBeChecked();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(row(page, 'cooperative:1002:3017')).toBeVisible();
+    await shared(page).getByRole('radio', { name: 'Todas as cooperativas da seleção', exact: true }).check();
     await expect(rows(page)).toHaveCount(2);
     await expect(row(page, 'cooperative:1002:3017').locator('td').nth(2)).toContainText(money(50));
     await expect(row(page, 'cooperative:1002:3025').locator('td').nth(2)).toContainText(money(150));
@@ -114,6 +117,7 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await page.getByRole('button', { name: 'Compartilhar cooperativas de Central Bahia teste', exact: true }).click();
     const dialog = shared(page);
     await expect(dialog.getByRole('img', { name: 'Cenário das cooperativas — parte 1 de 1', exact: true })).toBeVisible();
+    await dialog.getByRole('combobox', { name: 'Texto do WhatsApp', exact: true }).selectOption({ label: 'Relatório completo' });
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__cooperativeExports.plain.length)).toBe(1);
     const text = await page.evaluate(() => window.__cooperativeExports.plain[0]);
@@ -169,16 +173,18 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await open(page);
     const dialog = shared(page);
     const names = ['Cooperativa Alfa', 'Cooperativa Beta', ...Array.from({ length: 25 }, (_, index) => `Cooperativa Lote ${String(index + 1).padStart(2, '0')}`)];
+    await dialog.getByRole('combobox', { name: 'Texto do WhatsApp', exact: true }).selectOption({ label: 'Relatório completo' });
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__cooperativeExports.plain.length)).toBe(1);
     const text = await page.evaluate(() => window.__cooperativeExports.plain[0]);
     for (const name of names) expect(text).toContain(name);
     expect(text).toContain('15/08/2026'); expect(text).toContain('31/08/2026');
-    for (let part = 1; part <= 2; part++) {
-      await expect(dialog.getByRole('img', { name: `Cenário das cooperativas — parte ${part} de 2`, exact: true })).toBeVisible();
+    for (let part = 1; part <= 3; part++) {
+      await expect(dialog.getByRole('img', { name: `Cenário das cooperativas — parte ${part} de 3`, exact: true })).toBeVisible();
+      await expect(dialog.getByText(`Parte ${part} de 3 · cooperativas ${(part - 1) * 12 + 1} a ${Math.min(part * 12, 27)}`, { exact: true })).toBeVisible();
       await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__cooperativeExports.png.length)).toBe(part);
-      if (part === 1) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
+      if (part < 3) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
     const exported = await page.evaluate(() => window.__cooperativeExports);
     for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(3000); }

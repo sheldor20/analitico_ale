@@ -17,13 +17,13 @@ import styles from "./portfolio-communication.module.css";
 import OutlookHandoff from "./outlook-handoff";
 import EmailPreview from "./email-preview";
 
-type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
+type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; initialFormat?: 'email' | 'image' | 'summary'; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
 const errorText = (reason: unknown) => reason instanceof Error ? reason.message : "Não foi possível concluir a operação.";
 function attempt<T>(fn: () => T): { value: T | null; error: string } {
   try { return { value: fn(), error: "" }; } catch (reason) { return { value: null, error: errorText(reason) }; }
 }
 
-export default function PortfolioCommunication({ dataset, candidates, initialKey, metric, month, period, uplift = 0, onClose }: Props) {
+export default function PortfolioCommunication({ dataset, candidates, initialKey, initialFormat = 'email', metric, month, period, uplift = 0, onClose }: Props) {
   const entities = useMemo(() => [...new Map(candidates.map((candidate) => [candidate.id, dataset.registry?.entities.find((entry) => entry.id === candidate.id) ?? candidate])).values()], [candidates, dataset.registry]);
   const [entityId, setEntityId] = useState(initialKey || entities[0]?.id || "");
   const [owner, setOwner] = useState<string | null>(null);
@@ -61,12 +61,12 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
         <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
           onPeriodChange={setSelectedPeriod} onMonthChange={setSelectedMonth} />
       </div>
-      {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} /> : <p role="alert">Não há unidades neste filtro.</p>}
+      {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} initialFormat={initialFormat} /> : <p role="alert">Não há unidades neste filtro.</p>}
     </section>
   </div>;
 }
 
-function Composer({ dataset, entity, owner, metric, month, period, uplift }: { dataset: Dataset; entity: RegistryEntity; owner: string | null; metric: Metric; month: number; period: string; uplift: number }) {
+function Composer({ dataset, entity, owner, metric, month, period, uplift, initialFormat }: { dataset: Dataset; entity: RegistryEntity; owner: string | null; metric: Metric; month: number; period: string; uplift: number; initialFormat: 'email' | 'image' | 'summary' }) {
   const [contacts, setContacts] = useState<ResponsibleContact[]>([]);
   const [contactIds, setContactIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +74,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [extraEmails, setExtraEmails] = useState("");
   const [includeBoth, setIncludeBoth] = useState(false);
   const [showProjection, setShowProjection] = useState(false);
-  const [showAnnual, setShowAnnual] = useState(true);
+  const [showAnnual, setShowAnnual] = useState(initialFormat !== 'summary');
   const [intro, setIntro] = useState("");
   const [signature, setSignature] = useState("");
   const [subject, setSubject] = useState("");
@@ -85,8 +85,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [tab, setTab] = useState("panel");
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const invalidateClipboard = () => setClipboardVersion((version) => version + 1);
-  const [step, setStep] = useState(1);
-  const [channel, setChannel] = useState("email");
+  const [step, setStep] = useState(initialFormat === 'summary' ? 2 : 1);
+  const [channel, setChannel] = useState(initialFormat === 'image' ? 'whatsapp' : 'email');
   const stepTitle = useRef<HTMLHeadingElement>(null);
   const navigate = (next: number) => { setStep(next); setFeedback(""); setError(""); };
   useEffect(() => { stepTitle.current?.focus({ preventScroll: true }); stepTitle.current?.scrollIntoView({ block: "nearest" }); }, [step]);
