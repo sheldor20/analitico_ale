@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 import { money } from '../../lib/analytics.mjs';
+import { captureScenarioDocument } from './scenario-artifacts.mjs';
 
 const pngMagic = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -26,7 +27,8 @@ function scenarioFixture(dataset, extra = 0) {
     pa: String(100 + index), name: `PA Completo ${String(index).padStart(2, '0')}`,
     target: 200 + index, actual: 100 + index,
   });
-  return dataset;
+  return { ...dataset, rows: dataset.rows.map(row => row.source === 'cadence' && row.central === '1002' && row.cooperative === '3025'
+    ? { ...row, cutoff: '2026-08-15' } : row) };
 }
 
 // Exercise the real canvas encoder; only replace the browser clipboard boundary.
@@ -93,8 +95,12 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
     await expect(reportRow(page, 'pa:1002:3017:1')).toContainText('PA Crescimento exato');
     await expect(reportRow(page, 'pa:1002:3025:0')).toContainText('PA Beta zero');
+    await expect(reportRow(page, 'pa:1002:3025:0')).toContainText('15/08/2026');
     await expect(reportRow(page, 'pa:2007:3017:0')).toHaveCount(0);
     await expect(emailFrame(page).locator('body')).toContainText('AGO/2026');
+    const grouped = await emailFrame(page).locator('body').innerText();
+    for (const common of ['Central 1002', 'Cooperativa 3017', 'Cooperativa 3025', '31/08/2026']) expect(grouped.split(common)).toHaveLength(2);
+    await expect(reportRow(page, 'pa:1002:3017:0')).not.toContainText('Central 1002');
     await dialog.getByRole('radio', { name: 'Somente PAs filtrados', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
@@ -124,7 +130,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:2007:3017:0')).toContainText('PA Nordeste zero');
     await expect(reportRow(page, 'pa:1002:3017:0')).toHaveCount(0);
-    await emailFrame(page).locator('body').screenshot({ path: info.outputPath('pa-scenario-hierarchy.png') });
+    await captureScenarioDocument(page, emailFrame(page), info.outputPath('pa-scenario-hierarchy.png'));
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
 
@@ -139,13 +145,17 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect.poll(() => page.evaluate(() => window.__paExports.plain.length)).toBe(1);
     const text = await page.evaluate(() => window.__paExports.plain[0]);
     for (const fragment of ['PA Crescimento exato', '1.234,56', '234,56', 'PA Ajuste negativo', '25,50', '125,50', 'PA Produção zero', 'PA Sem realizado', 'PA Sem meta']) expect(text).toContain(fragment);
+    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(text.split(common)).toHaveLength(2);
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(1);
     const exported = await page.evaluate(() => window.__paExports);
     expect(exported.png[0].bytes).toEqual(pngMagic); expect(exported.png[0].width).toBe(1200);
+    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(exported.texts.join(' ').split(common)).toHaveLength(2);
     for (const amount of [1000, 1234.56, 234.56, -25.50, 125.50, 0]) expect(exported.texts.map(value => value.replace(/\s/g, ' '))).toContain(money(amount).replace(/\s/g, ' '));
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(6);
+    const commonHeader = await emailFrame(page).locator('body').innerText();
+    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(commonHeader.split(common)).toHaveLength(2);
     const growth = reportRow(page, 'pa:1002:3017:1').locator('td');
     await expect(growth).toHaveCount(4);
     await expect(growth.nth(1)).toContainText(money(1000));
@@ -193,7 +203,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await openShare(page);
     const dialog = shared(page);
     const names = ['PA Alfa zero', 'PA Beta zero', 'PA Crescimento exato', 'PA Ajuste negativo', 'PA Produção zero', 'PA Sem realizado', 'PA Sem meta', ...Array.from({ length: 40 }, (_, index) => `PA Completo ${String(index + 1).padStart(2, '0')}`)];
-    await expect(dialog.getByText('Este cenário é longo para o link do WhatsApp. Copie o texto abaixo; depois abra a conversa e cole a mensagem.', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Mensagem longa: copie o texto, abra a conversa e cole.', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Abrir WhatsApp e colar texto', exact: true })).toBeDisabled();
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__paExports.plain.length)).toBe(1);
@@ -213,7 +223,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
       if (part < 3) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
     const exported = await page.evaluate(() => window.__paExports);
-    for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(8000); expect(png.size).toBeGreaterThan(1000); }
+    for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(3000); expect(png.size).toBeGreaterThan(1000); }
     const drawn = exported.texts.join(' ');
     for (const name of names) expect(drawn).toContain(name);
     expect(drawn).not.toContain('PA Nordeste zero');
@@ -298,7 +308,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
         expect(cell.left, `${cell.text} at ${width}px`).toBeGreaterThanOrEqual(cell.availableLeft - 1);
         expect(cell.right, `${cell.text} at ${width}px`).toBeLessThanOrEqual(cell.availableRight + 1);
       }
-      if (width === 1440 || width === 320) await emailFrame(page).locator('body').screenshot({ path: info.outputPath(`pa-scenario-email-${width}.png`) });
+      if (width === 1440 || width === 320) await captureScenarioDocument(page, emailFrame(page), info.outputPath(`pa-scenario-email-${width}.png`));
     }
     expect(context.pages()).toHaveLength(1);
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);

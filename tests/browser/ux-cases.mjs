@@ -26,7 +26,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   const result=page.getByRole('region',{name:'Resultado do período',exact:true}),list=page.getByRole('region',{name:'Lista de unidades',exact:true});
   expect((await result.boundingBox()).y).toBeLessThan((await list.boundingBox()).y);
   expect((await list.boundingBox()).y).toBeLessThan((await page.getByRole('region',{name:'Comparativo entre anos',exact:true}).boundingBox()).y);
-  await expect(list.getByRole('columnheader',{name:'GAP',exact:true})).toBeVisible();
+  await expect(list.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
   await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toHaveCount(0);
   await list.getByLabel('Mais indicadores').check();await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toBeVisible();
   await list.getByLabel('Mais indicadores').uncheck();

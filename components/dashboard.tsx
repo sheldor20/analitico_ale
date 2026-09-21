@@ -46,7 +46,7 @@ import {
   percent,
   sum,
 } from "@/lib/analytics.mjs";
-import { buildPartialCommunication, buildDecisionInsights } from "@/lib/communication.mjs";
+import { buildDecisionInsights } from "@/lib/communication.mjs";
 import RegistryManager from "@/components/registry-manager";
 import ConsolidatedAgenda from "@/components/consolidated-agenda";
 import { zonedDateTimeInput } from "@/lib/relationship.mjs";
@@ -157,7 +157,7 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
-  const [showPaShare, setShowPaShare] = useState(false);
+  const [sharing, setSharing] = useState<{ kind: "pa" | "cooperative"; central?: string } | null>(null);
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
   const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
@@ -171,7 +171,7 @@ export default function Dashboard() {
         setDataset(null); setDatasetId(null); setSelected(null); setActions({});
         setFiles({base:null,cadence:null}); setWorkspaceRevision(null); setWorkspaces([]);
         setHistorical(false); sessionYears.current.clear(); setExpandedPaKey("");
-        setShowPaShare(false);
+        setSharing(null);
       }
       activeOwner.current = nextId;
       setUser(session?.user ?? null);
@@ -305,6 +305,12 @@ export default function Dashboard() {
   const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(aggregate(filtered, effectiveSource === 'cadence' ? 'pa' : 'cooperative'), displayed, actualLevel);
   const leafSummary = summarize(visibleLeaves.map(row => analyze(row, { year: dataset?.year ?? config.year, month, period, uplift })));
   const scenarioFilters = { central, coop, source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
+  const sharingFilters = sharing?.kind === "cooperative"
+    ? { ...scenarioFilters, source: "base", level: "cooperative", group: "all",
+        ...(actualLevel === "central" ? { search: "", status: "all" } : {}),
+        ...(sharing.central ? { central: sharing.central, coop: "all", search: "", status: "all" } : {}) }
+    : effectiveSource === "cadence" ? scenarioFilters
+    : { ...scenarioFilters, source: "cadence", metric: "VN", group: "all", search: "", status: "all" };
   const insights = buildDecisionInsights(displayed);
   const cutoffs = [...new Set(visibleLeaves.flatMap((r) => [r.cutoffMin || r.cutoff, r.cutoff]))].sort();
   const cutoff = cutoffs[0];
@@ -321,38 +327,6 @@ export default function Dashboard() {
     if (view !== "audit" && group !== "all") labels.push(`Grupo ${group}`);
     return labels.length ? labels.join(" · ") : "Todas as centrais da seleção";
   }, [central, coop, group, cooperatives, centralOptions, view]);
-  const communicationDraft = useMemo(() => {
-    if (
-      !cutoff ||
-      !displayed.length
-    )
-      return null;
-    return buildPartialCommunication({
-      analyses: displayed,
-      source: effectiveSource,
-      metric: effectiveMetric,
-      year: dataset?.year ?? config.year,
-      month,
-      periodLabel: periodDescription,
-      scopeLabel,
-      cutoff,
-      group,
-      uplift,
-    });
-  }, [
-    effectiveSource,
-    effectiveMetric,
-    cutoff,
-    displayed,
-    dataset,
-    config.year,
-    month,
-    period,
-    periodDescription,
-    scopeLabel,
-    group,
-    uplift,
-  ]);
   const [auditKind, setAuditKind] = useState("data");
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
@@ -373,6 +347,7 @@ export default function Dashboard() {
   }
   function navigate(next: View) {
     if (next !== view && !canLeaveRegistry()) return false;
+    setSharing(null);
     setAgendaRequest(null);
     if (next === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     if ((next === "registry" || next === "agenda") && !dataset) setDataset(createEmptyDataset(config.year));
@@ -518,6 +493,7 @@ export default function Dashboard() {
   }
   async function logout() {
     setLeaving(true);
+    setSharing(null);
     activeOwner.current = null;
     setDataset(null); setSelected(null); setActions({}); setHistory([]); setWorkspaces([]);
     setFiles({ base: null, cadence: null }); sessionYears.current.clear();
@@ -1280,7 +1256,7 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
-                  {actualLevel === "pa" && sourceRows.some(row => (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => setShowPaShare(true)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar PAs</button>}
+                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => setSharing({ kind: actualLevel === "pa" ? "pa" : "cooperative" })}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
                 </section>
               ) : (
                 <>
@@ -1382,7 +1358,7 @@ export default function Dashboard() {
                                   : "Resultado por cooperativa"}
                             </h2>
                             <p>{displayed.length} de {analyses.length} unidades</p>
-                            {actualLevel === "pa" && <button type="button" className="button secondary pa-share-trigger" onClick={() => setShowPaShare(true)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar PAs</button>}
+                            <button type="button" className="button secondary pa-share-trigger" onClick={() => setSharing({ kind: actualLevel === "pa" ? "pa" : "cooperative" })}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                           </div>
                           <div className="table-controls">
                             {listControls}
@@ -1403,7 +1379,7 @@ export default function Dashboard() {
                                 <th scope="col" className="numeric">Meta</th>
                                 <th scope="col" className="numeric">Realizado</th>
                                 <th scope="col">Atingimento</th>
-                                <th scope="col" className="numeric">{actualLevel === "pa" ? "Crescimento / GAP" : "GAP"}</th>
+                                <th scope="col" className="numeric">Crescimento / GAP</th>
                                 {showMoreIndicators && <><th scope="col" className="numeric">Projeção</th><th scope="col" className="numeric">Necessário/dia</th></>}
                                 <th scope="col">Situação</th>
                                 <th scope="col">
@@ -1450,7 +1426,7 @@ export default function Dashboard() {
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="numeric">{actualLevel === "pa" ? <PaVariance actual={r.actual} target={r.target} complete={r.complete} conflict={!!r.annualConflict} /> : money(r.gap)}</td>
+                                    <td className="numeric"><ResultVariance actual={r.actual} target={r.target} complete={r.complete} conflict={!!r.annualConflict} /></td>
                                     {showMoreIndicators && <>
                                     <td className="numeric">
                                       {money(r.projected)}
@@ -1466,6 +1442,7 @@ export default function Dashboard() {
                                       <Pill>{r.status}</Pill>
                                     </td>
                                     <td>
+                                      {actualLevel === "central" && effectiveSource === "base" && <button type="button" className="button quiet" aria-label={`Compartilhar cooperativas de ${r.name}`} onClick={() => setSharing({ kind: "cooperative", central: r.central })}>Compartilhar cooperativas</button>}
                                       {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} onClick={() => { setCoop(`${r.central}:${r.cooperative}`); setLevel("cooperative"); setExpandedPaKey(`${dataset?.year}:${r.central}:${r.cooperative}`); }}>Ver PAs</button>}
                                       <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
                                         onClick={() => { setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
@@ -1487,7 +1464,7 @@ export default function Dashboard() {
                         )}
                         <div className="pagination">{displayed.length} unidades exibidas</div>
                       </section>
-                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setShowPaShare(true)} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
+                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa" })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">
@@ -1605,7 +1582,7 @@ export default function Dashboard() {
           metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
           onClose={() => setShowCommunication(false)} />
       )}
-      {showPaShare && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}`} userId={user.id} dataset={dataset} filters={effectiveSource === "cadence" ? scenarioFilters : { ...scenarioFilters, source: "cadence", metric: "VN", group: "all", search: "", status: "all" }} onClose={() => setShowPaShare(false)} />}
+      {sharing && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}:${sharing.kind}`} unitKind={sharing.kind} userId={user.id} dataset={dataset} filters={sharingFilters} onClose={() => setSharing(null)} />}
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)} wide>
           <div className="detail-content">
@@ -1845,9 +1822,9 @@ function FileSlot({
   );
 }
 
-function PaVariance({ actual, target, complete, conflict }: { actual: number | null; target: number | null; complete: boolean; conflict: boolean }) {
+function ResultVariance({ actual, target, complete, conflict }: { actual: number | null; target: number | null; complete: boolean; conflict: boolean }) {
   const value = goalVariance(actual, target, complete && !conflict);
-  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? 'Meta atingida' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
+  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? (target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
 }
 
 function Modal({

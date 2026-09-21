@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, Mail, MessageCircle, Trophy } from 'lucide-react';
 import { money, percent, MONTHS } from '@/lib/analytics.mjs';
-import { buildMonthlyGoalAlerts, defaultGoalAlertMonth, goalAchievementMessage, type GoalAlert } from '@/lib/goal-alerts.mjs';
+import { buildMonthlyGoalAlerts, defaultGoalAlertMonth, type GoalAlert } from '@/lib/goal-alerts.mjs';
 import { listGoalAlertStates, saveGoalAlertState, type GoalAlertState } from '@/lib/goal-alert-store';
 import { listResponsibleContacts, type ResponsibleContact } from '@/lib/contact-store';
 import { buildWhatsappLink, recipientsForContacts, whatsappNumber } from '@/lib/portfolio-communication.mjs';
@@ -118,7 +118,7 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
       const state = stateMap.get(alert.key);
       const panel = contactPanel?.scope === scope && contactPanel.key === alert.key ? contactPanel : null;
       const contact = panel?.contacts.find((item) => item.id === panel.selected);
-      const link = contact ? buildWhatsappLink({ phone: contact.whatsapp, body: goalAchievementMessage(alert) }).url : '';
+      const link = contact ? buildWhatsappLink({ phone: contact.whatsapp, body: buildGoalAlertPresentation(alert).text }).url : '';
       return <article key={alert.key} className={styles.card}>
         <div className={styles.cardTop}><span>{kindLabel[alert.entity.kind]} · {alert.metricLabel}</span><span className={styles.badge}>{state?.readAt ? <><Check size={14} /> Lida</> : 'Nova'}</span></div>
         <h3>{alert.entity.name}</h3><p className={styles.path}>Central {alert.entity.central}{alert.entity.cooperative && ` · Cooperativa ${alert.entity.cooperative}`}{alert.entity.pa != null && ` · PA ${alert.entity.pa}`}</p>

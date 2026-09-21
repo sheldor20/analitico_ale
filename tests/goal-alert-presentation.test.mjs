@@ -52,7 +52,7 @@ test('PA zero and AR keep their correct scope and metric without inheriting anot
   const pa = sample({ entity: { id: 'pa:1002:3025:0', kind: 'pa', central: '1002', cooperative: '3025', pa: '0', name: 'PA Centro' } });
   const paOutput = buildGoalAlertPresentation(pa);
   assert.equal(paOutput.dashboard.scope, 'PA 0 · PA Centro');
-  assert.equal(paOutput.dashboard.hierarchy, 'Central 1002 · Cooperativa 3025 · PA 0');
+  assert.equal(paOutput.dashboard.hierarchy, 'Central 1002 · Cooperativa 3025');
   const arOutput = buildGoalAlertPresentation(sample({ metric: 'AR', metricLabel: 'Venda nova' }));
   for (const value of [arOutput.subject, arOutput.text, arOutput.html, texts(arOutput.dashboard)]) {
     assert.match(value, /Arrecadação/);
@@ -110,7 +110,8 @@ test('filtered dashboard preserves every received unit and metric in order witho
   const dashboard = buildGoalAlertsDashboard(selection, { year: 2026, month: 7, kindLabel: 'Seleção atual' });
   assert.deepEqual(selection, before);
   assert.equal(dashboard.hierarchy, 'Seleção atual');
-  assert.equal(dashboard.blocks.length, 12);
+  assert.equal(dashboard.blocks.length, 8);
+  assert.deepEqual(dashboard.notes, ['Dados até 20/08/2026.']);
   const cards = dashboard.blocks.filter((block) => block.type === 'cards');
   assert.equal(cards.length, selection.length);
   for (const [index, alert] of selection.entries()) {
@@ -118,7 +119,7 @@ test('filtered dashboard preserves every received unit and metric in order witho
     assert.equal(cards[index].items[1].value, money(alert.actual));
   }
   const captions = dashboard.blocks.filter((block) => block.type === 'text' && block.tone === 'action').map((block) => block.text);
-  assert.deepEqual(captions, ['Central 1002 · Central Bahia · Venda nova', 'Cooperativa 3025 · Cooperativa Beta · Arrecadação', 'Cooperativa 3025 · Cooperativa Beta · Venda nova', 'PA 0 · PA Zero · Venda nova']);
+  assert.deepEqual(captions, ['Central 1002 · Central Bahia · Venda nova', 'Cooperativa 3025 · Cooperativa Beta · Arrecadação · Central 1002', 'Cooperativa 3025 · Cooperativa Beta · Venda nova · Central 1002', 'PA 0 · PA Zero · Venda nova · Central 1002 · Cooperativa 3025']);
   const text = texts(dashboard);
   assert.match(text, /4 metas atingidas/);
   assert.doesNotMatch(text, /Projeç|Total realizado|Total da meta/);
@@ -135,7 +136,7 @@ test('empty, stale-period and excessive selections fail explicitly without silen
   assert.throws(() => buildGoalAlertsDashboard(Array(27).fill(sample()), { year: 2026, month: 7 }), /muitas metas.*Nenhuma unidade foi removida/);
   const complete = buildGoalAlertsDashboard(Array(26).fill(sample()), { year: 2026, month: 7 });
   assert.equal(complete.blocks.filter((block) => block.type === 'cards').length, 26);
-  const longNamed = sample({ entity: { ...sample().entity, name: 'Cooperativa regional '.repeat(8).trim() } });
+  const longNamed = sample({ entity: { ...sample().entity, name: 'Cooperativa regional '.repeat(30).trim() } });
   const oversized = buildGoalAlertsDashboard(Array(26).fill(longNamed), { year: 2026, month: 7 });
   assert.throws(() => dashboardImageLayout(oversized, measure), /muito longo/);
 });
@@ -144,4 +145,21 @@ test('invalid achievements and unsupported context do not produce a shareable re
   for (const change of [{ year: 2019 }, { month: 12 }, { month: -1 }, { metric: 'OTHER' }, { actual: 1100 }, { target: 0 }, { actual: NaN }, { attainment: Infinity }, { cutoff: '2026-02-31' }, { cutoffMin: '2026-08-31' }]) {
     assert.throws(() => buildGoalAlertPresentation(sample(change)));
   }
+});
+
+
+test('recognition exports repeat neither the source date nor the same identity fields', () => {
+  const individual = buildGoalAlertPresentation(sample());
+  for (const content of [individual.text, individual.html.replace(/<head>[\s\S]*?<\/head>/, ''), texts(individual.dashboard)]) {
+    assert.equal((content.match(/20\/08\/2026/g) || []).length, 1);
+    assert.equal((content.match(/Cooperativa 3025/g) || []).length, 1);
+    assert.equal((content.match(/AGO\/2026/g) || []).length, 1);
+    assert.doesNotMatch(content, /Confira o resultado|Valores realizados informados/);
+  }
+  const common = buildGoalAlertsDashboard([sample(), sample({ metric: 'AR' })], { year: 2026, month: 7 });
+  assert.equal((texts(common).match(/20\/08\/2026/g) || []).length, 1);
+  const different = buildGoalAlertsDashboard([sample(), sample({ metric: 'AR', cutoff: '2026-08-19', cutoffMin: '2026-08-19' })], { year: 2026, month: 7 });
+  assert.equal(different.notes.length, 0);
+  const positions = different.blocks.filter(block => block.type === 'text' && block.tone === 'muted');
+  assert.deepEqual(positions.map(block => block.text), ['Dados até 20/08/2026.', 'Dados até 19/08/2026.']);
 });

@@ -9,6 +9,7 @@ import { registerRelationshipTests } from './relationship-cases.mjs';
 import { registerGoalExportTests } from './goal-export-cases.mjs';
 import { registerConsolidatedAgendaTests } from './consolidated-agenda-cases.mjs';
 import { registerPaScenarioTests } from './pa-scenario-cases.mjs';
+import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -264,3 +265,5 @@ registerGoalExportTests({ test, expect, setup, owner, created });
 registerConsolidatedAgendaTests({ test, expect, setup, owner, created });
 
 registerPaScenarioTests({ test, expect, setup });
+
+registerCooperativeScenarioTests({ test, expect, setup });

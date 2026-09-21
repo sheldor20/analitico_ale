@@ -27,7 +27,7 @@ test('Central shows net gap separately from the sum of individual cooperative ga
   assert.equal(section.individualGap, 400);
   assert.equal(section.priorities.length, 1);
   assert.match(section.priorities[0].name, /Alfa/);
-  assert.match(renderPortfolioCommunication(report).text, /não compensado/);
+  assert.match(renderPortfolioCommunication(report).text, /sem compensar/);
 });
 test('PA zero is valid and does not include a PA zero at another cooperative', () => {
   const report = reportFor(portfolioFixture(), 'pa:1002:3017:0', { includeBoth: true });

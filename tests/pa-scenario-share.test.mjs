@@ -4,6 +4,7 @@ import { buildPaScenarioReport, PA_SCENARIO_PAGE_SIZE } from '../lib/pa-scenario
 import { createEmptyDataset, initializeRegistry } from '../lib/registry.mjs';
 import { scopedAnalyses, sortAnalysis } from '../lib/scenarios.mjs';
 import { filterDashboardRows } from '../lib/dashboard-view.mjs';
+import { scenarioDisplay } from '../lib/scenario-share-presentation.mjs';
 
 const filters = { central: 'all', coop: 'all', group: 'all', source: 'cadence', metric: 'VN', level: 'pa', period: 'month', month: 0, status: 'all', search: '', sortBy: 'name', uplift: 0 };
 function row(pa, actual = 100, target = 100, overrides = {}) {
@@ -19,7 +20,7 @@ test('all includes every PA in central/cooperative scope despite group, search a
   const result = report(data, { filters: scoped });
   assert.deepEqual(result.rows.map(item => item.id), ['pa:1002:3017:0', 'pa:1002:3017:1']);
   assert.equal(result.count, 2); assert.equal(result.allCount, 2); assert.equal(result.filteredCount, 1);
-  assert.match(result.notes[0], /busca, grupo ou situação/);
+  assert.doesNotMatch(result.text, /filtros de busca|desconsiderados/);
   assert.match(result.scopeLabel, /Central 1002 · Cooperativa 3017/);
   assert.deepEqual(report(data).rows.filter(item => item.pa === '0').map(item => item.id).sort(), ['pa:1002:3017:0', 'pa:1002:3025:0', 'pa:2007:3017:0']);
 });
@@ -40,10 +41,10 @@ test('exports exact realized, target and monetary variance, preserving negative 
   assert.deepEqual(result.rows.map(item => [item.actual, item.target, item.variance.value, item.variance.kind]), [
     [1234.56, 1000, 234.56, 'growth'], [-25.5, 100, 125.5, 'gap'], [0, 100, 100, 'gap'], [null, 100, null, 'unknown'], [50, null, null, 'unknown'], [50, 0, 50, 'growth'],
   ]);
-  assert.match(result.text, /Crescimento sobre a meta: R\$\s*234,56/);
+  assert.match(result.text, /Crescimento: R\$\s*234,56/);
   assert.match(result.text, /Realizado: -R\$\s*25,50/);
   assert.match(result.text, /Meta: — \| Realizado: R\$\s*50,00/);
-  assert.match(result.text, /Realizado: — \(Atingimento sem base\)/);
+  assert.match(result.text, /Realizado: — \(Sem avaliação\)/);
   assert.equal(result.rows[2].status, 'Abaixo da meta');
   assert.equal(result.rows[3].status, 'Sem realizado');
   assert.equal(result.rows[4].status, 'Sem meta');
@@ -70,7 +71,7 @@ test('annual conflicts and incomplete observations suppress evaluation while ret
   assert.equal(result.rows[0].status, 'Metas divergentes');
   assert.equal(result.rows[1].actual, 100); assert.equal(result.rows[1].complete, false); assert.equal(result.rows[1].status, 'Dados incompletos');
   assert.equal(result.rows[1].variance.value, null); assert.match(result.text, /15\/02\/2026/); assert.match(result.text, /28\/02\/2026/);
-  assert.ok(result.notes.some(note => note.includes('datas de corte diferentes')));
+  assert.ok(result.notes.some(note => note.includes('Exceções à data de corte')));
 });
 
 test('each period uses the same analytical values and never adds cooperative/base or AR totals', () => {
@@ -89,9 +90,31 @@ test('20-PA image parts cover all 46 identities once and keep the full email/tex
   assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 3, 1, 20, 20], [2, 3, 21, 40, 20], [3, 3, 41, 46, 6]]);
   assert.deepEqual(result.parts.flatMap(part => part.rows.map(item => item.id)), result.rows.map(item => item.id));
   assert.equal((result.html.match(/data-pa-id=/g) || []).length, 46);
-  for (const item of result.rows) assert.ok(result.text.includes(`PA ${item.pa} · ${item.name}\n`));
+  for (const item of result.rows) assert.ok(result.text.includes(`PA ${item.pa} · ${item.name} | Meta:`));
   assert.equal(report(dataset(Array.from({ length: 12 }, (_, index) => row(index)))).parts.length, 1);
   assert.equal(result.whatsapp, result.text);
+  assert.equal((result.text.match(/Central 1002/g) || []).length, 1);
+  assert.equal((result.text.match(/Cooperativa 3017/g) || []).length, 1);
+  assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
+  for (const part of result.parts) {
+    const display = scenarioDisplay(part);
+    assert.match(display.scope, /Central 1002 · Cooperativa 3017/);
+    assert.equal(display.cutoffLabel, 'Corte: 31/01/2026');
+    assert.ok(display.groups.flatMap(group => group.rows).every(item => !item.exception));
+  }
+});
+
+test('mixed parents are grouped once with explicit ordering and only exceptional dates on their PA', () => {
+  const result = report(dataset([row(0, 100), row(1, 200), row(2, 150, 100, { cooperative: '3025', cutoff: '2026-01-15' }), row(3, 250, 100, { cooperative: '3025' })]), { filters: { ...filters, sortBy: 'production' } });
+  assert.deepEqual(result.rows.map(item => item.pa), ['3', '2', '1', '0']);
+  assert.ok(result.notes.includes('Por cooperativa · Maior produção'));
+  const display = scenarioDisplay(result);
+  assert.equal(display.cutoffLabel, 'Corte de referência: 31/01/2026');
+  assert.deepEqual(display.groups.map(group => group.label), ['Cooperativa 3025', 'Cooperativa 3017']);
+  assert.deepEqual(display.groups.flatMap(group => group.rows).filter(item => item.exception).map(item => [item.row.pa, item.exception]), [['2', 'Corte: 15/01/2026']]);
+  assert.equal((result.text.match(/Cooperativa 3025/g) || []).length, 1);
+  assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
+  assert.equal((result.text.match(/15\/01\/2026/g) || []).length, 1);
 });
 
 test('HTML escapes names, preserves whole monetary values and subject is a bounded single line', () => {

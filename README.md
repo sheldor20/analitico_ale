@@ -32,7 +32,7 @@ A identidade Sicoob e as diretrizes para futuras melhorias estão em [docs/IDENT
 - Fichas por central, cooperativa e PA, com navegação pela hierarquia, contatos, modalidade de capital do prestamista, tabelas/taxas e observações de arrecadação e venda nova.
 - Agenda mensal por unidade para visitas, treinamentos, reuniões e ligações, com horário/fuso, edição, conclusão e cancelamento.
 - Alertas de metas mensais atingidas pelo realizado, separados por unidade e carteira, com leitura persistida e mensagem de reconhecimento para o WhatsApp do responsável cadastrado.
-- Parciais com projeção opcional (desmarcada inicialmente), cenário anual em cartões e botão para copiar o painel como PNG; se a área de transferência estiver bloqueada, o arquivo pode ser baixado.
+- Parciais individuais e listas de cooperativas/PAs com meta, realizado, atingimento e crescimento/GAP; projeção opcional e imagem PNG para WhatsApp, com download quando a cópia estiver bloqueada.
 
 A revisão de hierarquia, textos e navegação está registrada em [Revisão de UX/UI](docs/UX_PORTAL.md). Os indicadores vêm antes dos detalhes opcionais, a barra do cadastro concentra as ações anuais e o plano de ação separa prioridade comercial de andamento da tarefa.
 
@@ -52,7 +52,11 @@ Os painéis de comunicação apresentam **Meta, Realizado e Crescimento sobre a 
 
 Em **Cadência dos PAs → Compartilhar PAs**, prepare uma lista consolidada com **PA, meta, realizado, atingimento e crescimento/GAP**. O período, a central e a cooperativa seguem a seleção da tela. Por padrão, entram todos os PAs dessa hierarquia, inclusive os que têm dados pendentes; escolha a lista filtrada se quiser aplicar também grupo, busca e situação. O mesmo comando está na lista **PAs desta cooperativa**, na Visão geral. A comunicação contém apenas a fonte Cadência PA, sem somar resultados da cooperativa.
 
-O painel completo pode ser copiado para o Outlook ou baixado em `.eml`. Para WhatsApp, copie o texto ou a imagem PNG; listas com mais de 20 PAs geram partes numeradas, cada uma com identificação do período e das unidades, sem omitir PAs. Se o navegador bloquear a cópia da imagem, use o PNG baixado. Links extensos de WhatsApp exigem colar o texto depois de abrir o aplicativo. Destinatários são informados para cada envio; o sistema prepara o conteúdo e o usuário revisa e envia. A exportação é local, sem novo armazenamento, sem link público dos dados e sem necessidade de migração SQL.
+Em **Visão geral → Resultado por cooperativa → Compartilhar cooperativas**, prepare a parcial da central com todas as cooperativas selecionadas. O relatório usa **Venda Nova ou Arrecadação**, conforme a carteira e o período da tela, e permite aplicar a busca e a situação da lista. No agrupamento por centrais, o comando de cada central abre suas cooperativas. A fonte é a base de cooperativas; a produção dos PAs não é somada ao resultado.
+
+Os relatórios usam cabeçalho comum para unidade, carteira, período e data. As linhas mostram apenas identificação e resultados, com indicação de dados pendentes. Cooperativas ou centrais distintas formam grupos identificados; datas divergentes continuam explícitas. Assim, central, cooperativa e atualização não se repetem em cada PA. Os painéis individuais também concentram o contexto e removem aberturas e recomendações genéricas repetidas. A opção **Incluir cenário anual** começa marcada e permite encurtar o envio; a projeção permanece desmarcada inicialmente.
+
+O painel completo pode ser copiado para o Outlook ou baixado em `.eml`. Para WhatsApp, copie o texto ou a imagem PNG; listas com mais de 20 unidades geram partes numeradas e compactas, cada uma com o contexto necessário, sem omitir unidades. Se o navegador bloquear a cópia da imagem, use o PNG baixado. Links extensos de WhatsApp exigem colar o texto depois de abrir o aplicativo. Destinatários são informados para cada envio; o sistema prepara o conteúdo e o usuário revisa e envia. A exportação é local, sem novo armazenamento, sem link público dos dados e sem necessidade de migração SQL. A verificação do banco está em [COMMUNICATION_SQL_VERIFICATION.md](docs/COMMUNICATION_SQL_VERIFICATION.md).
 
 **Preparar Outlook** carrega os e-mails da unidade e permite ajustar a lista para aquele envio. Copie o painel formatado, abra o link do Outlook e cole no corpo do e-mail; assunto e destinatários são preenchidos pelo link. Contas Microsoft 365 e Outlook.com são aceitas. Se a cópia for bloqueada, há download da imagem PNG ou do e-mail completo em `.eml`. Copiar, baixar ou abrir o Outlook não registra comunicação como enviada; essa confirmação continua manual. Essa melhoria usa as tabelas existentes de contatos e alertas, sem nova migração SQL.
 
@@ -135,7 +139,7 @@ O filtro **Grupo do PA** e os cartões P1–P5 selecionam os grupos. Essa tabela
 
 ## Comunicação do cenário parcial
 
-Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. **Gerar e-mail / WhatsApp** prepara o resultado de uma unidade por vez, com projeção opcional. **Compartilhar PAs** prepara a lista consolidada de PAs da central ou cooperativa. Confira o período, os dados pendentes e os destinatários antes de enviar pelo aplicativo escolhido.
+Nas visões **Cooperativas** ou **Cadência dos PAs**, ajuste Central, Cooperativa, Grupo, Período e Mês. **Gerar e-mail / WhatsApp** prepara o resultado de uma unidade por vez, com projeção opcional. **Compartilhar cooperativas** prepara a parcial da central com suas cooperativas; **Compartilhar PAs** prepara a lista dos PAs. Confira o período, os dados pendentes e os destinatários antes de enviar pelo aplicativo escolhido.
 
 ## Critérios dos indicadores
 
