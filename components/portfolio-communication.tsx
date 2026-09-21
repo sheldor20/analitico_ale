@@ -74,6 +74,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const [extraEmails, setExtraEmails] = useState("");
   const [includeBoth, setIncludeBoth] = useState(false);
   const [showProjection, setShowProjection] = useState(false);
+  const [showAnnual, setShowAnnual] = useState(true);
   const [intro, setIntro] = useState("");
   const [signature, setSignature] = useState("");
   const [subject, setSubject] = useState("");
@@ -113,8 +114,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
   const recipients = attempt(() => normalizeRecipients([...selectedContacts.flatMap((contact) => contact.emails), ...extraEmails.split(/[;,\n]+/)]));
   const reportResult = useMemo(() => attempt(() => buildPortfolioReport({ dataset, entity, metric, includeBoth, month, period, uplift })), [dataset, entity, metric, includeBoth, month, period, uplift]);
   const report = reportResult.value;
-  const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject, showProjection }) : null;
-  const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject, showProjection }) : null;
+  const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject, showProjection, showAnnual }) : null;
+  const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject, showProjection, showAnnual }) : null;
   const { message, whatsappMessage, editor: messageEditor, editError: templateError, hasEmailPanel, restoreEmailPanel } = useMessageCustomization({ owner, kind: entity.kind, metric: entity.kind === "pa" ? "VN" : includeBoth ? "BOTH" : metric, contextKey: `${dataset.year}:${entity.id}:${metric}:${includeBoth}:${period}:${month}:${uplift}`, unit: entity.name, year: dataset.year, period: periodTitle(period, month, dataset.year), baseMessage, baseWhatsapp });
   const outlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: message.text, personal: personalOutlook }) : null);
   const panelOutlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: "", personal: personalOutlook }) : null);
@@ -196,7 +197,8 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift }: { d
     </section>
     <section hidden={step !== 2} className={styles.stepContent} aria-label="Revisão da comunicação">
       <h3 tabIndex={-1} ref={step === 2 ? stepTitle : null}>Confira antes de compartilhar</h3>
-      <label className={styles.contact}><input type="checkbox" checked={showProjection} onChange={(event) => setShowProjection(event.target.checked)} /><span><strong>Incluir projeção de fechamento</strong><small>Opcional no painel e no texto automático, inclusive no cenário anual. Textos digitados manualmente são preservados.</small></span></label>
+      {period !== "annual" && <label className={styles.contact}><input type="checkbox" aria-label="Incluir cenário anual" checked={showAnnual} onChange={(event) => setShowAnnual(event.target.checked)} /><span><strong>Incluir cenário anual</strong><small>Acrescente a visão do ano ao período escolhido.</small></span></label>}
+      <label className={styles.contact}><input type="checkbox" checked={showProjection} onChange={(event) => setShowProjection(event.target.checked)} /><span><strong>Incluir projeção de fechamento</strong><small>Acrescente a estimativa aos resultados. Textos editados manualmente são preservados.</small></span></label>
       <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[['panel', 'Painel do e-mail'], ['email', 'Texto do e-mail'], ['whatsapp', 'Painel do WhatsApp']].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? 'primary' : 'secondary'}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
       {noPanel}
       {step === 2 && (tab === 'panel' ? <EmailPreview html={message.html} /> : tab === 'email' ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard onClipboardChange={invalidateClipboard} model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><details className={styles.disclosure}><summary>Ver texto do WhatsApp</summary><label>WhatsApp gerado<textarea rows={10} readOnly value={whatsappMessage.whatsapp} /></label></details></>)}

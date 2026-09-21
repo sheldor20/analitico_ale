@@ -69,5 +69,5 @@ export function YearComparison({ dataset, filters, owner, years, sessionDatasets
 function Cells({ value }: { value: any }) { return <><td className="numeric">{money(value?.target)}</td><td className="numeric">{money(value?.actual)}</td><td className="numeric">{percent(value?.attainment)}</td><td className="numeric">{money(value?.gap)}</td></>; }
 function PaVariance({ row }: { row: { actual: number | null; target: number | null; complete: boolean; annualConflict?: boolean } }) {
   const value = goalVariance(row.actual, row.target, row.complete && !row.annualConflict);
-  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? 'Meta atingida' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
+  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? (row.target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
 }

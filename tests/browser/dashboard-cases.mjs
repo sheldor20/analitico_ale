@@ -148,6 +148,8 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await dialog.getByLabel('Incluir Venda Nova e Arrecadação, separadamente').check();
     await step(dialog, 2);
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
+    const annual = dialog.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true });
+    await expect(annual).toBeChecked();
     for (const period of ['month','quarter','semester','ytd','annual']) {
       await dialog.getByLabel('Período da mensagem').selectOption(period);
       const support = frame.locator('[data-section="annual-support"]');
@@ -155,11 +157,41 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
       await expect(frame.getByRole('heading', { name: 'Cenário anual · 2026', exact: true })).toHaveCount(period === 'annual' ? 0 : 1);
       await expect(frame.getByRole('heading', { name: 'Evolução do período', exact: true })).toHaveCount(0);
       if (period !== 'annual') {
+        await expect(annual).toBeChecked();
         const text = await frame.locator('body').innerText();
         expect(text.indexOf('Arrecadação')).toBeLessThan(text.indexOf('Cenário anual'));
+      } else {
+        await expect(annual).toHaveCount(0);
+        await expect(frame.locator('[data-metric="Meta anual"]')).toHaveCount(2);
       }
     }
     await dialog.getByLabel('Período da mensagem').selectOption('month');
+    const cards = frame.locator('table[data-layout="metric-cards"]');
+    await expect(cards).toHaveCount(4);
+    const monthlyValues = await cards.locator('.metric-value').allTextContents();
+    await annual.uncheck();
+    await expect(frame.getByRole('heading', { name: 'Cenário anual · 2026', exact: true })).toHaveCount(0);
+    await expect(frame.locator('[data-metric="Meta anual"]')).toHaveCount(0);
+    await expect(cards).toHaveCount(2);
+    expect(await cards.locator('.metric-value').allTextContents()).toEqual(monthlyValues.slice(0, 6));
+    await expect(frame.locator('body')).toContainText('Venda Nova');
+    await expect(frame.locator('body')).toContainText('Arrecadação');
+    await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+    const image = dialog.getByRole('img', { name: /Dashboard Mensal/ });
+    await expect(image).toBeVisible();
+    const compactSource = await image.getAttribute('src');
+    const compactHeight = await image.evaluate(node => node.naturalHeight);
+    await disclosure(dialog, 'Ver texto do WhatsApp');
+    const whatsapp = dialog.getByLabel('WhatsApp gerado');
+    await expect(whatsapp).not.toContainText('Cenário anual');
+    await expect(whatsapp).toContainText(`Meta: ${money(100)} · Realizado: ${money(50)}`);
+    await expect(whatsapp).toContainText(`Meta: ${money(1000)} · Realizado: ${money(700)}`);
+    await annual.check();
+    await expect(whatsapp).toContainText('Cenário anual · 2026');
+    await expect(image).not.toHaveAttribute('src', compactSource);
+    await expect.poll(() => image.evaluate(node => node.naturalHeight)).toBeGreaterThan(compactHeight);
+    await dialog.getByRole('button', { name: 'Painel do e-mail', exact: true }).click();
+    await expect(frame.getByRole('heading', { name: 'Cenário anual · 2026', exact: true })).toBeVisible();
     await frame.locator('body').screenshot({path:info.outputPath('email-month-primary.png')});
     expect(errors).toEqual([]);
   });
@@ -279,7 +311,9 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await expect(share).toBeEnabled(); await share.click();
     const sent = await page.evaluate(() => window.__shared);
     expect(sent).toHaveLength(1); expect(sent[0].type).toBe('image/png'); expect(sent[0].size).toBeGreaterThan(1000);
-    expect(sent[0].text).toContain('Foco comercial'); expect(sent[0].text).toContain('Mensal');
+    expect(sent[0].text).toContain(`Meta: ${money(100)} · Realizado: ${money(50)}`);
+    expect(sent[0].text).toContain(`GAP: ${money(50)}`); expect(sent[0].text).toContain('Mensal');
+    expect(sent[0].text).not.toContain('Foco comercial');
     let downloads = 0; page.on('download',() => downloads++);
     await page.evaluate(() => { window.__cancelShare = true; }); await share.click();
     await expect(dialog.getByRole('status')).toContainText('Compartilhamento cancelado');
@@ -295,7 +329,9 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     expect((await event).suggestedFilename()).toMatch(/\.png$/);
     await expect(dialog.getByRole('status')).toContainText('Anexe a imagem');
     await disclosure(dialog, 'Ver texto do WhatsApp');
-    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText('Foco comercial');
+    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText(`Meta: ${money(100)} · Realizado: ${money(50)}`);
+    await expect(dialog.getByLabel('WhatsApp gerado')).toContainText(`GAP: ${money(50)}`);
+    await expect(dialog.getByLabel('WhatsApp gerado')).not.toContainText('Foco comercial');
     expect(errors).toEqual([]);
   });
 }

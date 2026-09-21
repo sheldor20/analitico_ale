@@ -12,5 +12,5 @@ export type PortfolioDashboard = {
 };
 export function scenarioTitle(report: PortfolioReport): string;
 export function validateDashboard(model: unknown): PortfolioDashboard;
-export function buildPortfolioPresentation(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string; showProjection?: boolean }): PortfolioMessage;
+export function buildPortfolioPresentation(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string; showProjection?: boolean; showAnnual?: boolean }): PortfolioMessage;
 export function renderDashboardHtml(model: PortfolioDashboard, subject?: string): string;

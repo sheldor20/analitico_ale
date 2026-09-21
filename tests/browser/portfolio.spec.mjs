@@ -9,6 +9,7 @@ import { registerRelationshipTests } from './relationship-cases.mjs';
 import { registerGoalExportTests } from './goal-export-cases.mjs';
 import { registerConsolidatedAgendaTests } from './consolidated-agenda-cases.mjs';
 import { registerPaScenarioTests } from './pa-scenario-cases.mjs';
+import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -189,13 +190,25 @@ test('central and PA use their own responsible contacts and original level', asy
   await expect(dialog.getByLabel('Unidade selecionada')).toHaveValue('central:1002');
   await step(dialog, 2);
   await dialog.getByRole('button', { name: 'Texto do e-mail', exact: true }).click();
-  await expect(dialog.getByLabel('E-mail gerado')).toHaveValue(/todas as 2 cooperativas/);
+  const centralText = (await dialog.getByLabel('E-mail gerado').inputValue()).replace(/\s+/g, ' ');
+  expect(centralText).toContain('Central 1002 · Central Bahia teste');
+  // Both cooperative results contribute to the central; PA production is a separate source.
+  expect(centralText).toContain('Meta: R$ 200,00 · Realizado: R$ 200,00');
+  expect(centralText).toContain('GAP das cooperativas: R$ 50,00');
+  expect(centralText).toContain('Cooperativa Alfa: R$ 50,00');
+  expect(centralText).not.toContain('PA Alfa zero');
   await dialog.getByRole('button', { name: 'Fechar comunicação', exact: true }).click();
   await page.getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
   await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
   await selectAugust(composer(page));
   await expect(composer(page).getByText('Paula Teste', { exact: true })).toBeVisible();
   await expect(composer(page).getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');
+  await step(composer(page), 2);
+  await composer(page).getByRole('button', { name: 'Texto do e-mail', exact: true }).click();
+  const paText = (await composer(page).getByLabel('E-mail gerado').inputValue()).replace(/\s+/g, ' ');
+  expect(paText).toContain('PA 0 · PA Alfa zero');
+  expect(paText).toContain('Central 1002 · Cooperativa 3017');
+  expect(paText).toContain('Meta: R$ 450,00 · Realizado: R$ 225,00');
   await emailDelivery(composer(page));
   expect(new URL(await composer(page).getByRole('link', { name: 'Abrir Outlook somente texto', exact: true }).getAttribute('href')).searchParams.get('to')).toBe('paula@example.com');
   await page.screenshot({ path: testInfo.outputPath('pa-portfolio.png'), fullPage: true });
@@ -264,3 +277,5 @@ registerGoalExportTests({ test, expect, setup, owner, created });
 registerConsolidatedAgendaTests({ test, expect, setup, owner, created });
 
 registerPaScenarioTests({ test, expect, setup });
+
+registerCooperativeScenarioTests({ test, expect, setup });

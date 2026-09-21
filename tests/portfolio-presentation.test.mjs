@@ -18,7 +18,8 @@ for (const period of ['daily','month','quarter','semester','ytd','annual']) {
     for (const text of [output.html, output.text, output.whatsapp]) {
       assert.doesNotMatch(text, /Apoio anual|annual-support|Evolução do período|projeção|projeções|Fechamento apurado/i);
       if (period === 'annual') assert.doesNotMatch(text, /Cenário anual/);
-      else assert.ok(text.indexOf('Foco comercial') < text.indexOf('Cenário anual'));
+      else assert.ok(text.indexOf('Venda Nova') < text.indexOf('Cenário anual'));
+      assert.doesNotMatch(text, /Foco comercial|Vamos às prioridades|Segue o resultado/);
     }
     if (period === 'annual') assert.match(output.dashboard.periodLabel, /^Anual · 2026$/);
     assert.ok(output.whatsapp.length < 3000); assert.ok(output.text.length < 3400);
@@ -78,11 +79,13 @@ test('legacy snapshots retain their saved tables, projections and annual support
   assert.match(renderDashboardHtml(model), /Apoio anual/);
   assert.match(dashboardImageLayout(model, measure).commands.map((c) => c.value ?? '').join('\n'), /Projeção salva/);
 });
-test('commercial text respects closed, incomplete, met and in-progress cases', () => {
+test('compact text preserves closed, incomplete, met and calculated effort without generic advice', () => {
   let report = make('month',{includeBoth:false});
-  assert.match(renderPortfolioCommunication(report).text,/Período encerrado abaixo da meta/);
+  assert.match(renderPortfolioCommunication(report).text,/Venda Nova · Fechado/);
+  assert.match(renderPortfolioCommunication(report).text,/GAP: R\$/);
   report = make('annual',{includeBoth:false});
-  assert.match(renderPortfolioCommunication(report).text,/Priorize as oportunidades/);
+  assert.match(renderPortfolioCommunication(report).text,/Necessário por dia útil/);
+  assert.doesNotMatch(renderPortfolioCommunication(report).text,/Priorize as oportunidades|Foco comercial/);
   report.sections[0].current.complete = false; report.sections[0].current.attainment = null;
   const output = renderPortfolioCommunication(report);
   assert.match(output.text,/dados incompletos/); assert.doesNotMatch(output.text,/Meta atingida/);
@@ -104,4 +107,45 @@ test('long names wrap without cropping and huge vertical input fails before canv
   assert.equal(layout.commands.filter((c) => c.value && /^X+$/.test(c.value)).map((c) => c.value).join(''),model.scope);
   model.opening = '\n'.repeat(4000);
   assert.throws(() => dashboardImageLayout(model,measure),/muito longo/);
+});
+
+
+test('a shared source date appears once and differing metric dates stay explicitly associated', () => {
+  const report = make();
+  const common = renderPortfolioCommunication(report);
+  for (const content of [common.html.replace(/<head>[\s\S]*?<\/head>/, ''), common.text, common.whatsapp, dashboardImageLayout(common.dashboard, measure).commands.map(item => item.value || '').join('\n')]) {
+    assert.equal((content.match(/31\/08\/2026/g) || []).length, 1);
+    assert.equal((content.match(/Cooperativa 3017/g) || []).length, 1);
+  }
+  assert.equal(common.dashboard.opening, '');
+  assert.equal(common.dashboard.hierarchy, 'Central 1002');
+  assert.equal(common.dashboard.notes.length, 1);
+  report.sections[1].cutoff = '2026-08-20';
+  report.sections[1].cutoffMin = '2026-08-20';
+  const mixed = renderPortfolioCommunication(report);
+  assert.deepEqual(mixed.dashboard.notes, ['Venda Nova: Dados até 31/08/2026.', 'Arrecadação: Dados até 20/08/2026.']);
+  for (const content of [mixed.html, mixed.text, mixed.whatsapp]) {
+    assert.equal((content.match(/31\/08\/2026/g) || []).length, 1);
+    assert.equal((content.match(/20\/08\/2026/g) || []).length, 1);
+  }
+});
+
+test('annual opt-out only removes annual blocks and leaves current figures and custom writing intact', () => {
+  const report = make('quarter');
+  const options = { names: ['Ana'], intro: 'Abertura revisada pela equipe.', signature: 'Maria · relacionamento' };
+  const full = renderPortfolioCommunication(report, options);
+  const compact = renderPortfolioCommunication(report, { ...options, showAnnual: false });
+  const currentCards = compact.dashboard.blocks.filter(block => block.type === 'cards');
+  assert.equal(currentCards.length, report.sections.length);
+  assert.deepEqual(currentCards, full.dashboard.blocks.filter(block => block.type === 'cards').slice(0, report.sections.length));
+  for (const field of ['html', 'text', 'whatsapp']) {
+    assert.doesNotMatch(compact[field], /Cenário anual|Meta anual| · ano/);
+    assert.match(compact[field], /Abertura revisada pela equipe/);
+    assert.match(compact[field], /Maria · relacionamento/);
+    assert.match(compact[field], /Olá, Ana!/);
+  }
+  const annual = renderPortfolioCommunication(make('annual'), { showAnnual: false });
+  assert.equal(annual.dashboard.blocks.filter(block => block.type === 'cards').length, 2, 'the selected annual period itself is never removed');
+  assert.equal(validateDashboard(compact.dashboard), compact.dashboard);
+  assert.ok(dashboardImageLayout(compact.dashboard, measure).height < dashboardImageLayout(full.dashboard, measure).height);
 });
