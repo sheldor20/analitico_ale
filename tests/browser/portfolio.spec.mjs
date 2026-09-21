@@ -1,4 +1,4 @@
-import { step, disclosure, customize, emailDelivery, whatsappDelivery } from './composer-navigation.mjs';
+import { step, disclosure, customize, emailDelivery, whatsappDelivery, openIndividualCommunication } from './composer-navigation.mjs';
 import { registerFollowupTests } from './followup-cases.mjs';
 import { registerPortalV2Tests } from './portal-v2-cases.mjs';
 import { registerPeriodTests } from './period-cases.mjs';
@@ -10,6 +10,8 @@ import { registerGoalExportTests } from './goal-export-cases.mjs';
 import { registerConsolidatedAgendaTests } from './consolidated-agenda-cases.mjs';
 import { registerPaScenarioTests } from './pa-scenario-cases.mjs';
 import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.mjs';
+import { registerWorkflowTests } from './workflow-cases.mjs';
+import { registerPriorityTests } from './priority-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -126,7 +128,8 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await login.getByLabel('Senha', { exact: true }).fill('Synthetic-only-password-123!');
   await login.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(login).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Visão geral', level: 1, exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
   return { errors, writes, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
@@ -134,7 +137,7 @@ async function selectAugust(dialog) { await dialog.getByLabel('Período da mensa
 
 test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved draft', async ({ page }, testInfo) => {
   const { errors, writes } = await setup(page);
-  await page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true }).click();
+  await openIndividualCommunication(page);
   const dialog = composer(page);
   await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
   await selectAugust(dialog);
@@ -237,7 +240,7 @@ test('mobile: fixed registry entry exposes usable communication without horizont
 
 test('long valid recipient list keeps complete EML export and draft while Outlook link is unavailable', async ({ page }) => {
   const { errors, writes } = await setup(page);
-  await page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true }).click();
+  await openIndividualCommunication(page);
   const dialog = composer(page);
   await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
   await expect(dialog.getByText('Ana Teste', { exact: true })).toBeVisible();
@@ -279,3 +282,7 @@ registerConsolidatedAgendaTests({ test, expect, setup, owner, created });
 registerPaScenarioTests({ test, expect, setup });
 
 registerCooperativeScenarioTests({ test, expect, setup });
+
+registerWorkflowTests({ test, expect, setup });
+
+registerPriorityTests({ test, expect, setup });

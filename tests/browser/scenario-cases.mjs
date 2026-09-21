@@ -1,4 +1,4 @@
-import { step, customize, emailDelivery, whatsappDelivery } from './composer-navigation.mjs';
+import { step, customize, emailDelivery, whatsappDelivery, openIndividualCommunication } from './composer-navigation.mjs';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
 export function registerScenarioTests({test,expect,setup,composer,owner,created}) {
   test('network: overview cooperative PAs, summary, descending sorts and responsive layout',async({page},testInfo)=>{
@@ -6,6 +6,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
     await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
+    await page.locator('summary').filter({hasText:'Rede da seleção'}).click();
     await expect(page.getByRole('region',{name:'Resumo da rede filtrada'})).toContainText('2');
     await page.getByLabel('Ordenar análise').selectOption('attainment-desc');
     const table=page.locator('.table-panel tbody');
@@ -58,7 +59,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
   });
   test('texts: editable channels, optional private default, restore and disable persistence',async({page})=>{
     const {errors,writes}=await setup(page);
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     let dialog=composer(page);
     await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
     await customize(dialog);
@@ -71,7 +72,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     const outlook=new URL(await dialog.getByRole('link',{name:'Abrir Outlook somente texto',exact:true}).getAttribute('href'));
     expect(outlook.searchParams.get('body')).toContain('Olá Cooperativa Alfa!');
     await dialog.getByRole('button',{name:'Fechar comunicação'}).click();
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
     await customize(dialog);
     await expect(dialog.getByLabel('Texto / modelo do e-mail',{exact:true})).toHaveValue(/Vamos atuar/);
@@ -87,7 +88,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await dialog.getByRole('button',{name:'Salvar preferência de texto'}).click();
     await expect(dialog.getByText('Padrão desativado.',{exact:false})).toBeVisible();
     await dialog.getByRole('button',{name:'Fechar comunicação'}).click();
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
     await customize(dialog);
     await expect(dialog.getByLabel('Texto / modelo do WhatsApp',{exact:true})).toHaveValue('{{cenario}}');

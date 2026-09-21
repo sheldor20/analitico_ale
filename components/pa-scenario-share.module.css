@@ -7,17 +7,31 @@
 .context { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 20px; overflow-wrap: anywhere; }
 .context strong { font-size: 17px; color: var(--ink); }
 .context span { color: var(--muted); font-size: 14px; }
-.scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; border: 0; }
+.scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; border: 0; }
 .scope legend, .channels legend { margin-bottom: 10px; font-size: 14px; font-weight: 700; color: var(--ink); }
 .scope label { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; line-height: 1.4; }
 .scope label.selectedScope { border-color: var(--brand, #00ae9d); background: #edf8f5; box-shadow: inset 0 0 0 1px var(--brand, #00ae9d); }
-.scope input, .channels input { width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px; accent-color: #00776b; margin: 2px 0 0; }
+.scope input, .channels input, .unitOptions input { width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px; accent-color: #00776b; margin: 2px 0 0; }
 .scope label span { display: grid; gap: 5px; min-width: 0; }
 .scope label strong { font-size: 15px; }
 .scope small { color: var(--muted); font-size: 13px; }
 .helper { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
 .summary { display: flex; flex-wrap: wrap; gap: 5px 16px; justify-content: space-between; padding: 10px 12px; background: #f3f7f7; border-radius: 10px; font-size: 14px; }
 .summary span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.selectionSettings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, .55fr); align-items: end; gap: 14px; }
+.selectionSettings .summary { align-content: center; min-height: 44px; }
+.unitSelector { display: grid; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.selectionToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.selectionToolbar > p { flex: 1 1 280px; }
+.unitOptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.unitOptions label { display: flex; align-items: flex-start; gap: 10px; min-width: 0; min-height: 56px; padding: 11px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.unitOptions label.checkedUnit { background: #edf8f5; border-color: #7cbcb1; }
+.unitOptions label span { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.unitOptions strong { font-size: 14px; line-height: 1.4; }
+.unitOptions small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.messageEditor { min-width: 0; border: 1px solid var(--line); border-radius: 10px; }
+.messageEditor summary { min-height: 44px; padding: 13px 15px; color: var(--ink); cursor: pointer; font-size: 14px; font-weight: 700; }
+.editorFields { display: grid; gap: 12px; padding: 0 15px 15px; }
 .channels { display: flex; flex-wrap: wrap; gap: 10px; border: 0; margin: 4px 0 0; padding: 0; }
 .channels label { display: flex; align-items: center; gap: 9px; min-height: 46px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 700; }
 .channels label.activeChannel { border-color: #00776b; background: #edf8f5; }
@@ -42,6 +56,18 @@
 .destination .field { max-width: 480px; }
 .emailFields { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .subject { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.summaryCards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.summaryCards > div { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #f3f7f7; }
+.summaryCards span { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.summaryCards strong { font-size: 28px; color: var(--ink); line-height: 1.15; }
+.summaryTable { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.summaryTable table { width: 100%; border-collapse: collapse; }
+.summaryTable th, .summaryTable td { padding: 12px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.4; text-align: right; }
+.summaryTable thead th { background: #f3f7f7; color: var(--ink); font-size: 13px; }
+.summaryTable th:first-child { min-width: 210px; max-width: 320px; text-align: left; overflow-wrap: anywhere; }
+.summaryTable td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.summaryTable small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.summaryTable tbody tr:last-child > * { border-bottom: 0; }
 .emailPreview { min-width: 0; display: grid; gap: 12px; }
 .emailPreview iframe { max-width: 100%; }
 .textPreview { min-width: 0; border: 1px solid var(--line); border-radius: 10px; }
@@ -58,7 +84,12 @@
   .heading { padding: 16px; gap: 10px; }
   .heading h2 { font-size: 22px; }
   .content { padding: 16px; }
-  .scope, .emailFields, .deliveryControls { grid-template-columns: minmax(0, 1fr); }
+  .scope, .emailFields, .deliveryControls, .selectionSettings, .unitOptions { grid-template-columns: minmax(0, 1fr); }
+  .unitSelector { padding: 11px; }
+  .summaryCards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summaryCards > div { padding: 12px; }
+  .selectionToolbar .actions { width: 100%; }
+  .selectionToolbar .actions > * { flex: 1 1 150px; }
   .destination { padding-left: 0; border-left: 0; padding-top: 14px; border-top: 1px solid var(--line); }
   .deliveryControls { gap: 14px; }
   .channels { gap: 8px; }

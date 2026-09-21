@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
-import { step, disclosure, customize } from './composer-navigation.mjs';
+import { step, disclosure, customize, openIndividualCommunication } from './composer-navigation.mjs';
 
 export function registerFollowupTests({test,expect,setup,composer,selectAugust}) {
   test('followup: login fits desktop and mobile without unnecessary scrolling or clipping',async({page},info)=>{
@@ -62,7 +62,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
   });
   test('followup: three-step composer preserves fields, scales to mobile and previews without inner scroll',async({page},info)=>{
     const {errors}=await setup(page);
-    const trigger=page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}); await trigger.click();
+    const trigger=page.getByRole('button',{name:'Gerar comunicação',exact:true}); await openIndividualCommunication(page);
     const dialog=composer(page); await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017'); await selectAugust(dialog);
     await expect(dialog.getByRole('heading',{name:'Quem vai receber?'})).toBeVisible();
     await expect(dialog.locator('iframe')).toHaveCount(0);
@@ -92,7 +92,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
   test('followup: Outlook copies actual HTML before enabling blank compose link and invalidates stale copy',async({page,context})=>{
     await context.grantPermissions(['clipboard-read','clipboard-write']);
     const {errors}=await setup(page);
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     const dialog=composer(page); await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017'); await selectAugust(dialog);
     await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible(); await step(dialog,3);
     await expect(dialog.getByRole('button',{name:'Abrir Outlook e colar painel',exact:true})).toBeDisabled();
@@ -110,7 +110,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
   });
   test('followup: denied formatted clipboard never opens Outlook; EML contains complete HTML and recipients',async({page,context})=>{
     await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async()=>{throw new DOMException('Test denial','NotAllowedError');}}});});
-    await setup(page); await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await setup(page); await openIndividualCommunication(page);
     const dialog=composer(page); await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');await selectAugust(dialog);
     await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible(); await step(dialog,3);
     await dialog.getByRole('button',{name:'Copiar painel',exact:true}).click();
@@ -124,7 +124,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
     expect(html).toContain('data-metric="Realizado informado"');expect(html).toContain('50,00');expect(html).toContain('Cooperativa Alfa');
   });
   test('followup: text-only custom template is explicit and can restore automatic dashboard',async({page})=>{
-    await setup(page);await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();const dialog=composer(page);
+    await setup(page);await openIndividualCommunication(page);const dialog=composer(page);
     await customize(dialog); await dialog.getByLabel('Texto / modelo do e-mail').fill('Mensagem sem painel');
     await step(dialog,3);
     await expect(dialog.getByRole('alert')).toContainText('somente texto');
@@ -153,7 +153,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
   test('followup review: any other in-app or native copy requires copying the panel again',async({page,context})=>{
     await context.grantPermissions(['clipboard-read','clipboard-write']);
     const {errors}=await setup(page);
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     const dialog=composer(page);await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');await selectAugust(dialog);
     await expect(dialog.getByText('Ana Teste',{exact:true})).toBeVisible();await step(dialog,3);
     const copyPanel=dialog.getByRole('button',{name:'Copiar painel',exact:true});

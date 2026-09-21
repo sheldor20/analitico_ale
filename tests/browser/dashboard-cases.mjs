@@ -1,4 +1,4 @@
-import { step, disclosure, customize } from './composer-navigation.mjs';
+import { step, disclosure, customize, openIndividualCommunication } from './composer-navigation.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { money } from '../../lib/analytics.mjs';
@@ -6,7 +6,7 @@ import { money } from '../../lib/analytics.mjs';
 export function registerDashboardTests({ setup, composer, selectAugust }) {
   async function open(page) {
     const state = await setup(page);
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await openIndividualCommunication(page);
     const dialog = composer(page);
     await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
     await selectAugust(dialog);
@@ -97,7 +97,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     const target = 9279000;
     const { errors } = await setup(page, dataset => ({ ...dataset, rows: dataset.rows.map(row => row.source === 'base' && row.central === '1002' && row.metric === 'VN'
       ? { ...row, targets: Array(12).fill(target), annualTarget: target * 12, actuals: row.actuals.map(value => value == null ? null : row.cooperative === '3017' ? 186000000 : -186000000) } : row) }));
-    await page.getByRole('button', { name: 'Gerar e-mail / WhatsApp', exact: true }).click();
+    await openIndividualCommunication(page);
     const dialog = composer(page);
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     for (const [cooperative, actual] of [['3017', 186000000], ['3025', -186000000]]) {

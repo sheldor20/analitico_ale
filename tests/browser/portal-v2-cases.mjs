@@ -79,7 +79,7 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     await expect(page.getByRole('region', { name: 'Resultado do período' })).toHaveCount(0);
     await page.goto('/');
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('button', { name: 'Gerar e-mail / WhatsApp' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Gerar comunicação', exact: true })).toHaveCount(0);
   });
   test('portal v2: logout provider outage still removes local access', async ({ page }) => {
     await setup(page);

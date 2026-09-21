@@ -1,0 +1,10 @@
+.panel { display: grid; gap: 16px; color: var(--ink); }
+.panel p { margin: 0; line-height: 1.55; }
+.context { display: grid; gap: 5px; }
+.context span, .helper { color: var(--muted); font-size: 14px; }
+.field { display: grid; gap: 7px; font-weight: 650; }
+.field select { width: 100%; min-height: 44px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: inherit; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.error { color: #9c252b; }
+.success { color: var(--ink); font-weight: 650; }
+@media (max-width: 600px) { .field select { font-size: 16px; } .actions > button { flex: 1 1 150px; } }

@@ -72,15 +72,27 @@ test('common metadata is one header; mixed and interval dates remain truthful in
 
 test('47 cooperatives remain complete in HTML/text and numbered image parts, with compact shared geometry', () => {
   const result = report(dataset(Array.from({ length: 47 }, (_, index) => row(String(4000 + index)))));
-  assert.equal(COOPERATIVE_SCENARIO_PAGE_SIZE, 20);
-  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 3, 1, 20, 20], [2, 3, 21, 40, 20], [3, 3, 41, 47, 7]]);
+  assert.equal(COOPERATIVE_SCENARIO_PAGE_SIZE, 12);
+  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 4, 1, 12, 12], [2, 4, 13, 24, 12], [3, 4, 25, 36, 12], [4, 4, 37, 47, 11]]);
   assert.deepEqual(result.parts.flatMap(part => part.rows.map(item => item.id)), result.rows.map(item => item.id));
   assert.equal((result.html.match(/data-cooperative-id=/g) || []).length, 47);
   for (const item of result.rows) assert.ok(result.text.includes(`${item.cooperative} · ${item.name} | Meta:`));
   const context = { font: '', measureText(text) { return { width: String(text).length * (Number(this.font.match(/([\d.]+)px/)?.[1]) || 20) * .52 }; } };
   const layout = paScenarioImageLayout(result.parts[0], context);
-  assert.equal(layout.width, 1200); assert.ok(layout.height < 2600);
+  assert.equal(layout.width, 1200); assert.ok(layout.height < 1900);
   for (const part of result.parts) { assert.match(part.scope, /Central 1002/); assert.equal(scenarioDisplay(part).cutoffLabel, 'Corte: 31/01/2026'); }
+});
+
+test('selected cooperative IDs keep AR isolated and captions identify the exact subset without individual figures', () => {
+  const data = dataset([row('3017', 10), row('3017', 150, 100, { metric: 'AR' }), row('3025', -25.5, 100, { metric: 'AR' }), row('3030', null, null, { metric: 'AR' })]);
+  const result = report(data, { filters: { ...filters, metric: 'AR', search: '3017' }, mode: 'selected', selectedIds: ['cooperative:1002:3025', 'cooperative:1002:3030'], customization: { subject: 'Plano da equipe', cta: 'Retornem com as ações combinadas.' } });
+  assert.equal(result.count, 2); assert.equal(result.allCount, 3); assert.equal(result.filteredCount, 1);
+  assert.deepEqual(result.rows.map(item => [item.cooperative, item.actual, item.variance.value]), [['3025', -25.5, 125.5], ['3030', null, null]]);
+  assert.deepEqual(result.summary, { achievedCount: 0, gapCount: 1, unknownCount: 1 });
+  assert.match(result.caption, /Arrecadação/); assert.match(result.caption, /Seleção parcial: 2 de 3 cooperativas/); assert.match(result.caption, /Retornem/);
+  assert.doesNotMatch(result.caption, /125,50|25,50|3017|Venda Nova/);
+  assert.doesNotMatch(result.html, /data-cooperative-id="cooperative:1002:3017"/);
+  assert.throws(() => report(data, { mode: 'selected', selectedIds: ['pa:1002:3017:0'] }), /fora deste escopo/);
 });
 
 test('cooperative HTML escapes names and whole billions fit the responsive layout without leaking metadata', () => {

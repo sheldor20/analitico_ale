@@ -1,4 +1,4 @@
-import { step, whatsappDelivery } from './composer-navigation.mjs';
+import { step, whatsappDelivery, openIndividualCommunication } from './composer-navigation.mjs';
 import { readFile } from 'node:fs/promises';
 
 export function registerPeriodTests({test,expect,setup,composer}) {
@@ -51,10 +51,14 @@ export function registerPeriodTests({test,expect,setup,composer}) {
     const {errors,writes}=await setup(page);
     await select(page,'Cooperativa').selectOption('1002:3017');
     await select(page,'Período').selectOption('quarter');await select(page,'Trimestre').selectOption('2');
-    const exported=page.waitForEvent('download');await page.getByRole('button',{name:/Exportar/}).first().click();
+    await page.getByRole('button',{name:'Exportar dados',exact:true}).click();
+    const exportDialog=page.getByRole('dialog',{name:'Exportar dados',exact:true});
+    await exportDialog.getByLabel('Escopo da exportação',{exact:true}).selectOption({label:'Todas as unidades filtradas'});
+    const exported=page.waitForEvent('download');await exportDialog.getByRole('button',{name:'Baixar CSV',exact:true}).click();
     const file=await exported, csv=await readFile(await file.path(),'utf8');
     expect(csv).toContain('2º trimestre · 2026');expect(file.suggestedFilename()).toContain('quarter');
-    await page.getByRole('button',{name:'Gerar e-mail / WhatsApp',exact:true}).click();
+    await page.keyboard.press('Escape');await expect(exportDialog).toBeHidden();
+    await openIndividualCommunication(page);
     const dialog=composer(page);await expect(select(dialog,'Trimestre')).toHaveValue('2');
     await step(dialog, 2);
     const frame=page.frameLocator('iframe[title="Painel do e-mail da carteira"]');

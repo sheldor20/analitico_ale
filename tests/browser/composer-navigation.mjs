@@ -1,3 +1,14 @@
+export async function openIndividualCommunication(page, format = 'E-mail') {
+  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
+  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
+  await chooser.getByRole('radio', { name: 'Uma unidade', exact: true }).check();
+  await chooser.getByRole('radio', { name: format, exact: true }).check();
+  await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
+  await dialog.waitFor({ state: 'visible' });
+  return dialog;
+}
+
 export async function step(dialog, number) {
   await dialog.getByRole('navigation', { name: 'Etapas da comunicação' }).locator('button').nth(number - 1).click();
 }
