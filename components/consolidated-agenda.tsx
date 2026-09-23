@@ -13,7 +13,7 @@ import styles from './consolidated-agenda.module.css';
 
 type Props = {
   entities: RegistryEntity[]; year: number; userId: string; refreshKey: number;
-  onOpenEntity: (entity: RegistryEntity, appointment: EntityAppointment) => void; disabled?: boolean;
+  onOpenEntity: (entity: RegistryEntity, appointment: EntityAppointment) => void; disabled?: boolean; creationDisabled?: boolean;
   onDirtyChange?: (dirty: boolean) => void; onSavingChange?: (saving: boolean) => void; onAppointmentsChange?: () => void;
 };
 type AppointmentTarget = { kind: RegistryEntity['kind']; central: string; cooperative: string; pa: string };
@@ -28,7 +28,7 @@ export default function ConsolidatedAgenda(props: Props) {
   return <Agenda key={`${props.userId}:${props.year}`} {...props} />;
 }
 
-function Agenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = false, onDirtyChange, onSavingChange, onAppointmentsChange }: Props) {
+function Agenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = false, creationDisabled = false, onDirtyChange, onSavingChange, onAppointmentsChange }: Props) {
   const today = useCalendarToday();
   const todayInYear = today.startsWith(`${year}-`);
   const scope = `${userId}:${year}`;
@@ -111,7 +111,7 @@ function Agenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = f
   const targetEntity = target.kind === 'central' ? targetCentral : target.kind === 'cooperative' ? targetCooperative : targetPas.find((entity) => entity.id === target.pa);
 
   function startCreate() {
-    if (locked || error || !entities.length) return;
+    if (locked || creationDisabled || error || !entities.length) return;
     const day = filters.date || (today.startsWith(filters.month) ? today : `${filters.month}-01`);
     setDraft(createAppointmentDraft(day));
     setTarget({ kind: 'central', central: central === 'all' ? '' : central, cooperative: '', pa: '' });
@@ -123,7 +123,7 @@ function Agenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = f
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft || locked || savingNow.current) return;
+    if (!draft || locked || creationDisabled || savingNow.current) return;
     if (!targetEntity) { setSaveError('Selecione a unidade do compromisso.'); return; }
     savingNow.current = true;
     setSaving(true); setSaveError(''); setNotice('');
@@ -145,9 +145,9 @@ function Agenda({ entities, year, userId, refreshKey, onOpenEntity, disabled = f
   }
 
   return <section className={styles.section} aria-label="Agenda consolidada" aria-busy={loading}>
-    <header className={styles.heading}><div><span className={styles.eyebrow}><CalendarDays size={17} aria-hidden="true" /> Relacionamento</span><h2>Agenda consolidada</h2><p>Visitas, treinamentos, reuniões e ligações de todas as unidades.</p></div><div className={styles.headerActions}>{!draft && <button ref={createButton} type="button" className="button primary" disabled={locked || !!error || !entities.length} onClick={startCreate}><Plus size={16} aria-hidden="true" />Novo compromisso</button>}<button type="button" className="button secondary" disabled={locked || hasDraft} onClick={() => setRetry((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" /> Atualizar agenda</button></div></header>
+    <header className={styles.heading}><div><span className={styles.eyebrow}><CalendarDays size={17} aria-hidden="true" /> Relacionamento</span><h2>Agenda consolidada</h2><p>Visitas, treinamentos, reuniões e ligações de todas as unidades.</p></div><div className={styles.headerActions}>{!draft && <button ref={createButton} type="button" className="button primary" disabled={locked || creationDisabled || !!error || !entities.length} onClick={startCreate}><Plus size={16} aria-hidden="true" />Novo compromisso</button>}<button type="button" className="button secondary" disabled={locked || hasDraft} onClick={() => setRetry((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" /> Atualizar agenda</button></div></header>
     {notice && <p ref={noticeRef} tabIndex={-1} role="status" className={styles.success}><Check size={18} aria-hidden="true" />{notice}</p>}
-    {draft && <AppointmentForm year={year} draft={draft} onChange={setDraft} onSubmit={submit} onCancel={cancelCreate} disabled={disabled || loading} saving={saving} autoFocusTitle={false}>
+    {draft && <AppointmentForm year={year} draft={draft} onChange={setDraft} onSubmit={submit} onCancel={cancelCreate} disabled={disabled || creationDisabled || loading} saving={saving} autoFocusTitle={false}>
       <div className={styles.targetFields}>
         <label>Nível da unidade<select autoFocus aria-label="Nível da unidade" value={target.kind} onChange={(event) => { const kind = event.target.value as RegistryEntity['kind']; setTarget({ ...target, kind, cooperative: kind === 'central' ? '' : target.cooperative, pa: '' }); }}><option value="central">Central</option><option value="cooperative">Cooperativa</option><option value="pa">PA</option></select></label>
         <label>Central do compromisso<select required aria-label="Central do compromisso" value={target.central} onChange={(event) => setTarget({ ...target, central: event.target.value, cooperative: '', pa: '' })}><option value="">Selecione a central</option>{targetCentrals.map((entity) => <option key={entity.id} value={entity.central}>{entity.central} · {entity.name}</option>)}</select></label>

@@ -218,6 +218,8 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
     await page.getByRole('button', { name: 'Nova unidade', exact: true }).click();
     const draftName = page.getByRole('textbox', { name: 'Nome da unidade', exact: true });
     await draftName.fill('Unidade em rascunho');
+    await expect(consolidated(page).getByRole('button', { name: 'Novo compromisso', exact: true })).toBeDisabled();
+    await expect(open).toBeEnabled();
     const dismissDialog = page.waitForEvent('dialog');
     const declinedClick = open.click();
     const first = await dismissDialog;
