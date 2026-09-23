@@ -122,7 +122,7 @@ export default function Dashboard() {
   const achievedMonth = useMemo(() => dataset ? defaultGoalAlertMonth(dataset) : 0, [dataset]);
   const monthlyAchievements = useMemo(() => dataset ? buildMonthlyGoalAlerts(dataset, achievedMonth) : [], [dataset, achievedMonth]);
   const [importMode, setImportMode] = useState("production");
-  const [sortBy, setSortBy] = useState("gap");
+  const [sortBy, setSortBy] = useState("attainment-desc");
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedPaKey, setExpandedPaKey] = useState("");
@@ -369,7 +369,7 @@ export default function Dashboard() {
   }, [view, activeAgendaRequest]);
   function canLeaveRegistry() {
     if (registrySaving) return false;
-    if (registryDirty && !window.confirm("Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
+    if (registryDirty && !window.confirm(view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
     setRegistryDirty(false); return true;
   }
   function navigate(next: View) {
@@ -404,6 +404,7 @@ export default function Dashboard() {
     setSearch("");
     setUplift(0);
     setStatusFilter("all");
+    setSortBy("attainment-desc");
     setPa('all'); setPriorityFocus(null); setRowSelection({context:'',keys:[]}); setExpandedCoops([]);
   }
   function rememberFilters() {
@@ -477,6 +478,8 @@ export default function Dashboard() {
     } finally { setBusy(""); }
   }
   async function importFiles() {
+    if (registrySaving) return;
+    if (view === "agenda" && registryDirty && !window.confirm("A importação encerrará o compromisso não salvo na agenda. Deseja continuar?")) return;
     setError("");
     setNotice("");
     const selectedFiles = (Object.entries(files) as [keyof SourceFiles, File | null][])
@@ -554,6 +557,7 @@ export default function Dashboard() {
     }
   }
   async function logout() {
+    if (view === "agenda" && registryDirty && !window.confirm("Há um compromisso não salvo na agenda. Deseja sair sem salvar?")) return;
     setLeaving(true);
     setSharing(null);
     activeOwner.current = null;
@@ -948,7 +952,7 @@ export default function Dashboard() {
             </button>
             <button
               className="button primary"
-              disabled={!!busy}
+              disabled={!!busy || registrySaving}
               onClick={() => setShowImport(true)}
             >
               <Upload size={17} />
@@ -1014,11 +1018,11 @@ export default function Dashboard() {
           )}
           {historical && dataset && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
           {dataset && !historical && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
-            <label>Ano <select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy} onChange={(e) => openWorkspace(Number(e.target.value))}>
+            <label>Ano <select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy || registrySaving} onChange={(e) => openWorkspace(Number(e.target.value))}>
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
-            <details className="year-management"><summary>Gerenciar anos</summary><div>            <button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
-            <label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event => setRequestedYear(Number(event.target.value))} /></label><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(requestedYear)}>Abrir ano</button>
+            <details className="year-management"><summary>Gerenciar anos</summary><div>            <button className="button secondary" disabled={!!busy || registrySaving} onClick={() => openWorkspace(dataset.year + 1)}>Novo ano</button>
+            <label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event => setRequestedYear(Number(event.target.value))} /></label><button className="button secondary" disabled={!!busy || registrySaving} onClick={() => openWorkspace(requestedYear)}>Abrir ano</button>
             {user && <button className="button secondary" disabled={!!busy || registrySaving} onClick={() => openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}
 </div></details>
             <span className="muted">{user && workspaceRevision ? "Cadastro salvo" : "Dados nesta sessão"}</span>
@@ -1026,7 +1030,7 @@ export default function Dashboard() {
           {view === "alerts" && dataset && user ? (
             <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
           ) : view === "agenda" && dataset && user ? (
-            historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} disabled={!!busy} />
+            historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} disabled={!!busy} />
           ) : view === "registry" && dataset ? (
             historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/>
           ) : !dataset && view !== "imports" ? (

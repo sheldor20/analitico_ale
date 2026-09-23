@@ -67,6 +67,13 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await expect(shared(page).getByRole('radio', { name: 'Somente cooperativas filtradas', exact: true })).toBeChecked();
     await expect(rows(page)).toHaveCount(1);
     await expect(row(page, 'cooperative:1002:3017')).toBeVisible();
+    const header = frame(page).locator('[data-communication-header]');
+    await expect(header.getByText('Gestão comercial · Venda nova', { exact: true })).toBeVisible();
+    await expect(header.getByRole('heading', { level: 1 })).toHaveText('Central Bahia teste');
+    await expect(header.getByText('Mensal · AGO/2026', { exact: true })).toBeVisible();
+    await expect(header).not.toContainText('Cenário das cooperativas');
+    await expect(header).not.toContainText('Corte');
+    await expect(frame(page).locator('[data-communication-context]')).toContainText('31/08/2026');
     await shared(page).getByRole('radio', { name: 'Todas as cooperativas da seleção', exact: true }).check();
     await expect(rows(page)).toHaveCount(2);
     await expect(row(page, 'cooperative:1002:3017').locator('td').nth(2)).toContainText(money(50));
@@ -82,6 +89,8 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await open(page); await email(page);
     await expect(rows(page)).toHaveCount(2);
     await expect(frame(page).locator('body')).toContainText('Arrecadação');
+    await expect(header.getByText('Gestão comercial · Arrecadação', { exact: true })).toBeVisible();
+    await expect(header.getByRole('heading', { level: 1 })).toHaveText('Central Bahia teste');
     await expect(row(page, 'cooperative:1002:3017').locator('td').nth(2)).toContainText(money(700));
     await expect(row(page, 'cooperative:1002:3025').locator('td').nth(3)).toContainText(money(300));
     await close(page);
@@ -197,7 +206,7 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     await expect(row(page, 'cooperative:1002:4003')).toContainText('Meta zero');
     await expect(row(page, 'cooperative:1002:4003')).not.toContainText('Meta atingida');
     const content = await frame(page).locator('body').innerText();
-    expect((content.match(/Central 1002/g) || [])).toHaveLength(1);
+    expect((content.match(/Central Bahia teste/g) || [])).toHaveLength(1);
     expect((content.match(/31\/08\/2026/g) || [])).toHaveLength(1);
     for (const width of [1440, 820, 768, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });

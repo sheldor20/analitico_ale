@@ -9,8 +9,10 @@ export type PortfolioDashboard = {
   version: 2; year: number; period: string; entityId: string; scope: string; hierarchy: string;
   periodLabel: string; greeting: string; opening: string; notes: string[];
   blocks: DashboardBlock[]; footer: string; signature: string;
+  header?: { centralName: string; metricLabel: string };
 };
 export function scenarioTitle(report: PortfolioReport): string;
 export function validateDashboard(model: unknown): PortfolioDashboard;
 export function buildPortfolioPresentation(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string; showProjection?: boolean; showAnnual?: boolean }): PortfolioMessage;
 export function renderDashboardHtml(model: PortfolioDashboard, subject?: string): string;
+export function dashboardHeader(model: PortfolioDashboard): { brand: string; centralName: string; periodLabel: string; unitLabel: string; unitContext: string };

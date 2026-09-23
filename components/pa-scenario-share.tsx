@@ -84,7 +84,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const [channel, setChannel] = useState<Format>(initialFormat);
   const [selectedIds, setSelectedIds] = useState<string[] | null>(initialSelectedIds ?? (initialMode === 'selected' ? [] : null));
   const [selectionSearch, setSelectionSearch] = useState('');
-  const [sortBy, setSortBy] = useState<UnitOrder>(Object.hasOwn(SORT_OPTIONS, filters.sortBy) ? filters.sortBy as UnitOrder : 'gap');
+  const [sortBy, setSortBy] = useState<UnitOrder>(Object.hasOwn(SORT_OPTIONS, filters.sortBy) ? filters.sortBy as UnitOrder : 'attainment-desc');
   const [subject, setSubject] = useState<string | null>(null);
   const [intro, setIntro] = useState<string | null>(null);
   const [cta, setCta] = useState<string | null>(null);

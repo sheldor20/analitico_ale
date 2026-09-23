@@ -21,7 +21,7 @@ test('central list includes only its cooperatives, excludes direct central and P
   assert.doesNotMatch(result.text, /555\.555|888\.888|999\.999|PA 0|proje[çc]/i);
   const all = report(data, { filters: { ...filters, central: 'all' } });
   assert.equal(all.count, 3); assert.equal(all.rows.filter(item => item.cooperative === '3017').length, 2);
-  assert.deepEqual(scenarioDisplay(all).groups.map(group => group.label).sort(), ['Central 1002', 'Central 2007']);
+  assert.deepEqual([...new Set(scenarioDisplay(all).groups.map(group => group.label))].sort(), ['Central 1002', 'Central 2007']);
 });
 
 test('all ignores search/status/PA group; filtered honors search/status/order while group never hides cooperatives', () => {
@@ -62,7 +62,7 @@ test('common metadata is one header; mixed and interval dates remain truthful in
   const data = dataset([row('3017'), row('3025'), row('3030', 100, 100, { cutoff: '2026-01-15' })]);
   const result = report(data), display = scenarioDisplay(result);
   assert.equal(display.cutoffLabel, 'Corte de referência: 31/01/2026');
-  assert.equal((result.text.match(/Central 1002/g) || []).length, 1);
+  assert.equal((result.text.match(/Sicoob Central Bahia/g) || []).length, 1);
   assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
   assert.deepEqual(display.groups[0].rows.map(item => item.exception), ['', '', 'Corte: 15/01/2026']);
   const interval = report(dataset([row('3017', 100, 100, { cutoffMin: '2026-01-15' })]));
@@ -103,4 +103,20 @@ test('cooperative HTML escapes names and whole billions fit the responsive layou
   assert.ok(Number(result.html.match(/@media\(max-width:(\d+)px\)/)[1]) > 768);
   assert.ok(result.subject.length <= 300); assert.doesNotMatch(result.subject, /[\r\n]/);
   assert.doesNotMatch(JSON.stringify(result), /private\.xlsx|sourceFile|projected|phone|email/);
+});
+
+test('default higher attainment ranks cooperatives globally across centrals while explicit overrides remain effective', () => {
+  const data = dataset([row('3017', 80, 100), row('3025', 100, 100), row('3030', 180, 200, { central: '2007' })]);
+  const withoutSort = { ...filters, central: 'all' }; delete withoutSort.sortBy;
+  const result = report(data, { filters: withoutSort });
+  assert.equal(result.sortBy, 'attainment-desc');
+  assert.deepEqual(result.rows.map(item => item.cooperative), ['3025', '3030', '3017']);
+  assert.deepEqual(scenarioDisplay(result).groups.map(group => group.key), ['1002', '2007', '1002']);
+  assert.deepEqual([...result.html.matchAll(/data-cooperative-id="([^"]+)"/g)].map(match => match[1]), result.rows.map(item => item.id));
+  const labels = result.rows.map(item => `${item.cooperative} · ${item.name}`);
+  assert.deepEqual(result.text.split('\n').filter(text => /^\d+ ·/.test(text)).map(text => text.split(' | ')[0]), labels);
+  const measure = { font: '', measureText(value) { return { width: value.length * Number(this.font.match(/(\d+)px/)?.[1] || 20) * .52 }; } };
+  assert.deepEqual(paScenarioImageLayout(result.parts[0], measure).commands.filter(command => command.type === 'text' && /^\d+ ·/.test(command.value)).map(command => command.value), labels);
+  assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' } }).rows.map(item => item.cooperative), ['3030', '3025', '3017']);
+  assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' }, sortBy: 'attainment' }).rows.map(item => item.cooperative), ['3017', '3030', '3025']);
 });

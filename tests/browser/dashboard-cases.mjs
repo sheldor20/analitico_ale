@@ -2,6 +2,31 @@ import { step, disclosure, customize, openIndividualCommunication } from './comp
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { money } from '../../lib/analytics.mjs';
+import { captureScenarioDocument } from './scenario-artifacts.mjs';
+
+async function assertCompactHeader(frame) {
+  const header = frame.locator('[data-communication-header]');
+  const context = frame.locator('[data-communication-context]');
+  await expect(header).toContainText('Gestão comercial · Venda nova');
+  expect((await header.innerText()).split(/\n+/).map(line => line.trim()).filter(Boolean)).toEqual([
+    'Gestão comercial · Venda nova', 'Central Bahia teste', 'Mensal · AGO/2026',
+  ]);
+  await expect(context).toContainText('Cooperativa 3017');
+  await expect(context).toContainText('Cooperativa Alfa');
+  await expect(context).toContainText('31/08/2026');
+  await expect(header).not.toContainText('Cooperativa Alfa');
+  await expect(header).not.toContainText('31/08/2026');
+  const text = await frame.locator('body').innerText();
+  expect(text.split('Central Bahia teste')).toHaveLength(2);
+  expect(text.split('31/08/2026')).toHaveLength(2);
+  const headerBox = await header.evaluate(node => { const rect = node.getBoundingClientRect(); return { bottom: rect.bottom, height: rect.height }; });
+  const contextBox = await context.evaluate(node => { const rect = node.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }; });
+  const cardsTop = await frame.locator('[data-layout="metric-cards"]').first().evaluate(node => node.getBoundingClientRect().top);
+  expect(headerBox.height).toBeLessThanOrEqual(180);
+  expect(contextBox.top).toBeGreaterThanOrEqual(headerBox.bottom);
+  expect(cardsTop).toBeGreaterThanOrEqual(contextBox.bottom);
+  expect(cardsTop - headerBox.bottom).toBeLessThanOrEqual(180);
+}
 
 export function registerDashboardTests({ setup, composer, selectAugust }) {
   async function open(page) {
@@ -16,10 +41,17 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
   test('compact dashboard: three main cards share one row in HTML and PNG, with projection below', async ({ page }, info) => {
     await page.addInitScript(() => {
       window.__compactText = [];
+      window.__compactRects = [];
       const fillText = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (value, x, y, ...args) {
-        window.__compactText.push({ text: String(value), x, y });
+        const metrics = this.measureText(String(value));
+        window.__compactText.push({ text: String(value), x, y, right: x + metrics.width, bottom: y + metrics.actualBoundingBoxDescent });
         return fillText.call(this, value, x, y, ...args);
+      };
+      const fillRect = CanvasRenderingContext2D.prototype.fillRect;
+      CanvasRenderingContext2D.prototype.fillRect = function (x, y, width, height) {
+        window.__compactRects.push({ x, y, width, height, fill: this.fillStyle });
+        return fillRect.call(this, x, y, width, height);
       };
     });
     const { dialog, errors } = await open(page);
@@ -29,6 +61,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     const expectedLabels = ['Meta do período', 'Realizado informado', 'GAP para a meta'];
     const cells = primary.locator('td[data-metric]');
     await expect(cells).toHaveCount(3);
+    await assertCompactHeader(frame);
     async function assertHtmlRow() {
       const geometry = await cells.evaluateAll(items => items.map(item => { const box = item.getBoundingClientRect(); return { label: item.getAttribute('data-metric'), x: box.x, y: box.y, width: box.width, height: box.height }; }));
       expect(geometry.map(cell => cell.label)).toEqual(expectedLabels);
@@ -46,9 +79,9 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await expect(projected).toBeVisible();
     await assertHtmlRow();
     expect(await projected.evaluate(node => node.getBoundingClientRect().y)).toBeGreaterThan(plain[0].y + plain[0].height);
-    await frame.locator('body').screenshot({ path: info.outputPath('compact-email-desktop.png') });
+    await captureScenarioDocument(page, frame, info.outputPath('compact-email-desktop.png'));
     await projection.uncheck();
-    await page.evaluate(() => { window.__compactText = []; });
+    await page.evaluate(() => { window.__compactText = []; window.__compactRects = []; });
     await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
     const image = dialog.getByRole('img', { name: /Dashboard Mensal/ });
     await expect(image).toBeVisible();
@@ -60,6 +93,21 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     expect(new Set(png.map(item => item.y)).size).toBe(1);
     expect(png[0].x).toBeLessThan(png[1].x);
     expect(png[1].x).toBeLessThan(png[2].x);
+    const compactDrawing = await page.evaluate(() => ({ texts: window.__compactText, rects: window.__compactRects }));
+    expect(compactDrawing.texts.slice(0, 3).map(item => item.text)).toEqual([
+      'Gestão comercial · Venda nova', 'Central Bahia teste', 'Mensal · AGO/2026',
+    ]);
+    const headerRect = compactDrawing.rects.find(rect => rect.x === 0 && rect.y === 0 && rect.width === 1080 && rect.fill === '#003641');
+    expect(headerRect).toBeTruthy(); expect(headerRect.height).toBeLessThanOrEqual(180);
+    const cutoff = compactDrawing.texts.find(item => item.text.includes('31/08/2026'));
+    expect(cutoff).toBeTruthy(); expect(cutoff.y).toBeGreaterThanOrEqual(headerRect.height);
+    expect(compactDrawing.texts.filter(item => item.text.includes('31/08/2026'))).toHaveLength(1);
+    expect(png[0].y - headerRect.height).toBeLessThanOrEqual(180);
+    const dimensions = await image.evaluate(node => ({ width: node.naturalWidth, height: node.naturalHeight }));
+    for (const item of compactDrawing.texts) {
+      expect(item.right, item.text).toBeLessThanOrEqual(dimensions.width);
+      expect(item.bottom, item.text).toBeLessThanOrEqual(dimensions.height);
+    }
     await page.evaluate(() => { window.__compactText = []; });
     const previousSource = await image.getAttribute('src');
     await projection.check();
@@ -80,8 +128,19 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
       expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
       const bounds = await frame.locator('body').evaluate(node => ({ content: node.ownerDocument.documentElement.scrollWidth, viewport: node.ownerDocument.defaultView.innerWidth }));
       expect(bounds.content).toBeLessThanOrEqual(bounds.viewport + 1);
-      await frame.locator('body').screenshot({ path: info.outputPath(`compact-email-mobile-${width}.png`) });
+      await assertCompactHeader(frame);
+      await captureScenarioDocument(page, frame, info.outputPath(`compact-email-mobile-${width}.png`));
     }
+    await dialog.getByRole('button', { name: 'Fechar comunicação', exact: true }).click();
+    const summary = await openIndividualCommunication(page, 'Painel resumido');
+    await summary.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
+    await selectAugust(summary);
+    await expect(summary.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true })).not.toBeChecked();
+    await expect(frame.locator('[data-layout="metric-cards"]')).toHaveCount(1);
+    await assertCompactHeader(frame);
+    await expect(frame.locator('[data-metric="Meta do período"] .metric-value')).toHaveText(money(100));
+    await expect(frame.locator('[data-metric="Realizado informado"] .metric-value')).toHaveText(money(50));
+    await captureScenarioDocument(page, frame, info.outputPath('compact-summary-mobile-320.png'));
     expect(errors).toEqual([]);
   });
 
@@ -149,6 +208,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await step(dialog, 2);
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     const annual = dialog.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true });
+    await expect(frame.locator('[data-communication-header] p').first()).toHaveText('Gestão comercial · Venda nova · Arrecadação');
     await expect(annual).toBeChecked();
     for (const period of ['month','quarter','semester','ytd','annual']) {
       await dialog.getByLabel('Período da mensagem').selectOption(period);
@@ -168,6 +228,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await dialog.getByLabel('Período da mensagem').selectOption('month');
     const cards = frame.locator('table[data-layout="metric-cards"]');
     await expect(cards).toHaveCount(4);
+    expect((await frame.locator('body').innerText()).split('31/08/2026')).toHaveLength(2);
     const monthlyValues = await cards.locator('.metric-value').allTextContents();
     await annual.uncheck();
     await expect(frame.getByRole('heading', { name: 'Cenário anual · 2026', exact: true })).toHaveCount(0);
@@ -210,7 +271,9 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     const download = await downloadPromise;
     const bytes = await readFile(await download.path());
     expect(bytes.subarray(0,8).toString('hex')).toBe('89504e470d0a1a0a');
-    expect(bytes.readUInt32BE(16)).toBe(1080); expect(bytes.readUInt32BE(20)).toBeGreaterThan(800);
+    expect(bytes.readUInt32BE(16)).toBe(1080);
+    expect(bytes.readUInt32BE(20)).toBe(await image.evaluate(node => node.naturalHeight));
+    expect(bytes.readUInt32BE(20)).toBeGreaterThan(400);
     await download.saveAs(info.outputPath('whatsapp-month-dashboard.png'));
     await image.screenshot({path:info.outputPath('mobile-dashboard-preview.png')});
     await dialog.getByLabel('Período da mensagem').selectOption('annual');

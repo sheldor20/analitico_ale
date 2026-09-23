@@ -55,6 +55,26 @@ test("appointment duration and workspace year use local calendar year", () => {
   assert.throws(() => validateAppointment({ ...input, status: "unknown" }, 2026), /Situação/);
 });
 
+test("appointments require no minimum notice and accept past, immediate and one-minute appointments", () => {
+  const now = Date.now();
+  for (const timezone of ["America/Sao_Paulo", "America/Manaus", "America/Rio_Branco", "America/Noronha"]) {
+    for (const offset of [-30 * 24 * 60 * 60 * 1000, 0, 60 * 1000]) {
+      const startsAt = new Date(now + offset).toISOString();
+      const endsAt = new Date(now + offset + 60 * 1000).toISOString();
+      const year = Number(zonedDateTimeInput(startsAt, timezone).slice(0, 4));
+      const saved = validateAppointment({ ...appointment(), startsAt, endsAt, timezone }, year);
+      assert.equal(saved.startsAt, startsAt);
+      assert.equal(saved.endsAt, endsAt);
+      assert.equal(Date.parse(saved.endsAt) - Date.parse(saved.startsAt), 60 * 1000);
+    }
+  }
+  const past = { ...appointment(), startsAt: "2020-01-02T12:00:00Z", endsAt: "2020-01-02T12:01:00Z" };
+  assert.equal(validateAppointment(past, 2020).startsAt, "2020-01-02T12:00:00.000Z");
+  // Removing advance notice must not allow reversed dates or bypass the annual registry.
+  assert.throws(() => validateAppointment({ ...past, endsAt: "2020-01-02T11:59:00Z" }, 2020), /posterior/);
+  assert.throws(() => validateAppointment(past, 2026), /ano 2026/);
+});
+
 test("hierarchy scopes cooperative and PA codes by central, including PA zero", () => {
   const entities = [
     { id: "central:1", kind: "central", central: "1", name: "Bahia" },

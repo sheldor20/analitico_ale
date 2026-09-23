@@ -111,6 +111,8 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await page.setViewportSize({ width: 320, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath('workflow-hierarchy-320.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+    await expect(select(page, 'Ordenar análise')).toHaveValue('attainment-desc');
     expect(errors).toEqual([]);
   });
 
@@ -118,15 +120,20 @@ export function registerWorkflowTests({ test, expect, setup }) {
     const { errors, writes, relationshipWrites } = await setup(page, workflowFixture);
     await august(page);
     await select(page, 'Central').selectOption('1002');
+    await expect(select(page, 'Ordenar análise')).toHaveValue('attainment-desc');
     await openGenerator(page, 'Cooperativas da seleção');
     const cooperatives = page.getByRole('dialog', { name: 'Compartilhar cenário das cooperativas', exact: true });
     await expect(cooperatives.getByRole('radio', { name: 'E-mail', exact: true })).toBeChecked();
+    await expect(select(cooperatives, 'Ordem das unidades')).toHaveValue('attainment-desc');
     await expect(frame(page).locator('tr[data-cooperative-id]')).toHaveCount(2);
+    expect(await frame(page).locator('tr[data-cooperative-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-cooperative-id')))).toEqual(['cooperative:1002:3025', 'cooperative:1002:3017']);
     await expect(frame(page).locator('body')).toContainText('AGO/2026');
     await expect(frame(page).locator('body')).not.toContainText('Outra central');
     await cooperatives.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'Cooperativa').selectOption('1002:3017');
+    await select(page, 'Ordenar análise').selectOption('production');
     await openGenerator(page, 'PAs da seleção', 'Imagem para WhatsApp');
+    await expect(select(share(page), 'Ordem das unidades')).toHaveValue('production');
     await expect(share(page).getByRole('radio', { name: 'WhatsApp e imagem', exact: true })).toBeChecked();
     await expect(share(page).getByRole('img', { name: 'Cenário dos PAs — parte 1 de 1', exact: true })).toBeVisible();
     await share(page).getByRole('radio', { name: 'E-mail', exact: true }).check();
@@ -220,12 +227,21 @@ export function registerWorkflowTests({ test, expect, setup }) {
 
   test('workflow: selected units, editable message and order stay consistent across summary, email, caption and real PNG', async ({ page, context }, info) => {
     await captureCopies(page);
-    const { errors, writes, relationshipWrites } = await setup(page, workflowFixture);
+    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertPlanRow(workflowFixture(dataset), {
+      entityId: 'pa:1002:3017:0', metric: 'VN', targets: Array(12).fill(100), annualTarget: 1200,
+      actuals: [...Array(8).fill(225), null, null, null, null], cutoff: '2026-08-31',
+    }));
     await august(page);
     await select(page, 'Cooperativa').selectOption('1002:3017');
     await openGenerator(page, 'PAs da seleção', 'Painel resumido');
     const dialog = share(page);
-    await expect(dialog.getByRole('region', { name: 'Prévia do painel resumido', exact: true })).toBeVisible();
+    const summary = dialog.getByRole('region', { name: 'Prévia do painel resumido', exact: true });
+    await expect(summary).toBeVisible();
+    await expect(select(dialog, 'Ordem das unidades')).toHaveValue('attainment-desc');
+    // Higher attainment must lead even when another PA has more production in reais.
+    await expect(summary.locator('tbody tr').first()).toContainText('PA Alfa zero');
+    await expect(summary.locator('tbody tr').first()).toContainText('225%');
+    await expect(summary.locator('tbody tr').nth(1)).toContainText('PA Próximo da meta');
     await dialog.getByRole('radio', { name: 'Selecionar unidades', exact: true }).check();
     const selection = dialog.getByRole('region', { name: 'Seleção de unidades', exact: true });
     await selection.getByRole('button', { name: 'Limpar seleção', exact: true }).click();

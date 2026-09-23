@@ -96,7 +96,7 @@ test('12-PA image parts cover all 46 identities once and keep the full email/tex
   assert.equal(result.whatsapp, result.text);
   assert.ok(result.caption.length < result.text.length / 4);
   assert.doesNotMatch(result.caption, /PA 0 · Ponto 0|Meta:|Realizado:|R\$/);
-  assert.equal((result.text.match(/Central 1002/g) || []).length, 1);
+  assert.equal((result.text.match(/Sicoob Central Bahia/g) || []).length, 1);
   assert.equal((result.text.match(/Cooperativa 3017/g) || []).length, 1);
   assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
   for (const part of result.parts) {
@@ -140,7 +140,7 @@ test('explicit ordering is identical in selected HTML, text and images with comp
   const context = { font: '', measureText(text) { return { width: String(text).length * Number(this.font.match(/([\d.]+)px/)?.[1] || 20) * .52 }; } };
   const drawn = paScenarioImageLayout(result.parts[0], context).commands.filter(command => command.type === 'text');
   assert.deepEqual(drawn.filter(command => /^PA \d+ ·/.test(command.value)).map(command => command.value), result.rows.map(item => `PA ${item.pa} · ${item.name}`));
-  assert.ok(drawn.some(command => command.value === result.selectionLabel));
+  assert.ok(drawn.some(command => command.value.includes(result.selectionLabel)));
   assert.throws(() => report(data, { sortBy: 'not-an-order' }), /ordenação válida/);
 });
 
@@ -193,15 +193,15 @@ test('suggested next steps follow observed results and incomplete data without c
   assert.doesNotMatch(partial.caption, /atras|ritmo|proje[çc]|parabéns/i);
 });
 
-test('mixed parents are grouped once with explicit ordering and only exceptional dates on their PA', () => {
+test('mixed parents retain global ordering with contiguous context and exceptional dates on their PA', () => {
   const result = report(dataset([row(0, 100), row(1, 200), row(2, 150, 100, { cooperative: '3025', cutoff: '2026-01-15' }), row(3, 250, 100, { cooperative: '3025' })]), { filters: { ...filters, sortBy: 'production' } });
-  assert.deepEqual(result.rows.map(item => item.pa), ['3', '2', '1', '0']);
-  assert.ok(result.notes.includes('Por cooperativa · Maior produção'));
+  assert.deepEqual(result.rows.map(item => item.pa), ['3', '1', '2', '0']);
+  assert.ok(result.notes.includes('Ordem: Maior produção'));
   const display = scenarioDisplay(result);
   assert.equal(display.cutoffLabel, 'Corte de referência: 31/01/2026');
-  assert.deepEqual(display.groups.map(group => group.label), ['Cooperativa 3025', 'Cooperativa 3017']);
+  assert.deepEqual(display.groups.map(group => group.label), ['Cooperativa 3025', 'Cooperativa 3017', 'Cooperativa 3025', 'Cooperativa 3017']);
   assert.deepEqual(display.groups.flatMap(group => group.rows).filter(item => item.exception).map(item => [item.row.pa, item.exception]), [['2', 'Corte: 15/01/2026']]);
-  assert.equal((result.text.match(/Cooperativa 3025/g) || []).length, 1);
+  assert.equal((result.text.match(/Cooperativa 3025/g) || []).length, 2);
   assert.equal((result.text.match(/31\/01\/2026/g) || []).length, 1);
   assert.equal((result.text.match(/15\/01\/2026/g) || []).length, 1);
 });
@@ -229,4 +229,21 @@ test('empty scopes are honest and invalid period/year/mode fail explicitly', () 
   assert.throws(() => report(data, { filters: { ...filters, period: 'unknown' } }), /válidos/);
   assert.throws(() => report(data, { mode: 'unknown' }), /válidos/);
   assert.throws(() => report({ ...data, year: 2019 }), /válidos/);
+});
+
+test('default attainment ranks PAs globally across parents in every channel and explicit sorts retain their meaning', () => {
+  const data = dataset([row(0, 80, 100), row(1, 100, 100), row(2, 180, 200, { cooperative: '3025' })]);
+  const withoutSort = { ...filters }; delete withoutSort.sortBy;
+  const result = report(data, { filters: withoutSort });
+  assert.equal(result.sortBy, 'attainment-desc');
+  assert.deepEqual(result.rows.map(item => item.pa), ['1', '2', '0']);
+  assert.deepEqual(scenarioDisplay(result).groups.map(group => group.key), ['1002:3017', '1002:3025', '1002:3017']);
+  assert.deepEqual([...result.html.matchAll(/data-pa-id="([^"]+)"/g)].map(match => match[1]), result.rows.map(item => item.id));
+  const labels = result.rows.map(item => `PA ${item.pa} · ${item.name}`);
+  assert.deepEqual(result.text.split('\n').filter(text => /^PA \d+ ·/.test(text)).map(text => text.split(' | ')[0]), labels);
+  const measure = { font: '', measureText(value) { return { width: value.length * Number(this.font.match(/(\d+)px/)?.[1] || 20) * .52 }; } };
+  const drawn = paScenarioImageLayout(result.parts[0], measure).commands.filter(command => command.type === 'text' && /^PA \d+ ·/.test(command.value)).map(command => command.value);
+  assert.deepEqual(drawn, labels);
+  assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' } }).rows.map(item => item.pa), ['2', '1', '0']);
+  assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' }, sortBy: 'attainment' }).rows.map(item => item.pa), ['0', '2', '1']);
 });

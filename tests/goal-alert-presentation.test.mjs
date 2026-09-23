@@ -25,7 +25,7 @@ test('individual presentation mirrors the actual achievement, month, hierarchy a
   assert.equal(output.dashboard.entityId, alert.entity.id);
   assert.equal(output.html, renderDashboardHtml(output.dashboard, output.subject));
   const imageText = texts(output.dashboard);
-  for (const value of ['AGO/2026', 'Cooperativa Beta', 'Central 1002', 'Cooperativa 3025', 'Venda nova', '31/08/2026', 'Parabéns']) {
+  for (const value of ['AGO/2026', 'Cooperativa Beta', 'Central Bahia teste', 'Cooperativa 3025', 'Venda nova', '31/08/2026', 'Parabéns']) {
     assert.ok(output.text.includes(value), value);
     assert.ok(output.html.includes(value), value);
     assert.ok(imageText.includes(value), value);
@@ -126,7 +126,7 @@ test('filtered dashboard preserves every received unit and metric in order witho
   assert.ok(!cards.some((block) => block.items.some((card) => card.value === money(selection.reduce((total, alert) => total + alert.actual, 0)))));
   const onlyAr = buildGoalAlertsDashboard([selection[1]], { year: 2026, month: 7 });
   assert.equal(onlyAr.blocks.filter((block) => block.type === 'cards').length, 1);
-  assert.doesNotMatch(texts(onlyAr), /Central Bahia|PA Zero|Venda nova/);
+  assert.doesNotMatch(texts(onlyAr), /Central 1002 · Central Bahia|PA Zero|Venda nova/);
 });
 
 test('empty, stale-period and excessive selections fail explicitly without silently omitting rows', () => {

@@ -3,6 +3,11 @@
 .heading>div,.listHeading>div,.cardHeading>div { min-width:0; }
 .heading h2 { margin:8px 0; font-size:1.55rem; letter-spacing:-.025em; }
 .heading p,.listHeading p { margin:0; color:var(--muted); line-height:1.5; font-size:.95rem; }
+.headerActions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.targetFields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; min-width:0; }
+.targetSummary { margin:0; padding:11px 13px; border-radius:8px; background:var(--green-light); color:var(--ink); font-size:.93rem; line-height:1.5; overflow-wrap:anywhere; }
+.success { display:flex; gap:8px; align-items:center; margin:0; padding:13px 15px; background:var(--green-light); color:var(--sicoob-dark); border:1px solid var(--line); border-radius:10px; line-height:1.5; }
+.success svg { flex:0 0 18px; }
 .eyebrow { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:.86rem; font-weight:650; }
 .filters { display:grid; grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,1fr)); gap:14px; }
 .filters label { display:grid; gap:7px; min-width:0; font-size:.94rem; font-weight:650; }
@@ -65,6 +70,7 @@
 .empty h4 { color:var(--ink); }
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media(max-width:760px) { .section{padding:16px;gap:16px}.filters{grid-template-columns:1fr 1fr}.filters>label:first-child{grid-column:1/-1}.appointments{grid-template-columns:1fr}.day{min-height:62px}.heading h2{font-size:1.4rem} }
+@media(max-width:680px) { .targetFields{grid-template-columns:1fr}.headerActions{width:100%}.headerActions>button{flex:1 1 180px;justify-content:center} }
 @media(max-width:900px) { .day{min-height:76px;padding:7px 2px;align-items:center}.dayTop{flex-direction:column;justify-content:flex-start}.dayPreview{display:none} }
 @media(max-width:420px) { .section{padding:12px}.filters{grid-template-columns:1fr}.filters>label:first-child{grid-column:auto}.monthNavigation{padding:8px;gap:5px}.monthPicker select{font-size:16px;padding:8px 4px}.day{min-height:56px;font-size:.87rem}.calendarTable th{font-size:.74rem}.appointment{padding:14px}.section :global(.button){font-size:.87rem}.heading>button{width:100%;justify-content:center} }
 @media(max-width:420px) { .monthNavigation{flex-wrap:wrap}.monthPicker{order:-1;width:100%} }

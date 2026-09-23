@@ -19,7 +19,7 @@ export type PortfolioSection = { metric: Metric; label: string; available: false
 };
 export type PortfolioReport = {
   version: 1; year: number; month: number; period: string; periodLabel: string;
-  source: "base" | "cadence"; uplift: number; entity: RegistryEntity; sections: PortfolioSection[];
+  source: "base" | "cadence"; uplift: number; entity: RegistryEntity; centralName?: string; sections: PortfolioSection[];
 };
 export type PortfolioMessage = { subject: string; text: string; whatsapp: string; html: string; dashboard: PortfolioDashboard };
 export function escapeHtml(value: unknown): string;
