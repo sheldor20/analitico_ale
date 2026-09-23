@@ -149,7 +149,8 @@ test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved d
   await dialog.getByLabel('Incluir Venda Nova e Arrecadação, separadamente').check();
   await step(dialog, 2);
   const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
-  await expect(frame.getByRole('heading', { level: 1 })).toContainText('Cooperativa Alfa');
+  await expect(frame.getByRole('heading', { level: 1 })).toHaveText('Central Bahia teste');
+  await expect(frame.locator('[data-communication-context]')).toContainText('Cooperativa Alfa');
   await expect(frame.getByRole('heading', { name: 'Arrecadação', exact: true })).toBeVisible();
   await emailDelivery(dialog);
   const outlook = new URL(await dialog.getByRole('link', { name: 'Abrir Outlook somente texto', exact: true }).getAttribute('href'));
@@ -194,7 +195,7 @@ test('central and PA use their own responsible contacts and original level', asy
   await step(dialog, 2);
   await dialog.getByRole('button', { name: 'Texto do e-mail', exact: true }).click();
   const centralText = (await dialog.getByLabel('E-mail gerado').inputValue()).replace(/\s+/g, ' ');
-  expect(centralText).toContain('Central 1002 · Central Bahia teste');
+  expect(centralText).toContain('Gestão comercial · Venda nova Central Bahia teste Mensal · AGO/2026');
   // Both cooperative results contribute to the central; PA production is a separate source.
   expect(centralText).toContain('Meta: R$ 200,00 · Realizado: R$ 200,00');
   expect(centralText).toContain('GAP das cooperativas: R$ 50,00');
@@ -210,7 +211,8 @@ test('central and PA use their own responsible contacts and original level', asy
   await composer(page).getByRole('button', { name: 'Texto do e-mail', exact: true }).click();
   const paText = (await composer(page).getByLabel('E-mail gerado').inputValue()).replace(/\s+/g, ' ');
   expect(paText).toContain('PA 0 · PA Alfa zero');
-  expect(paText).toContain('Central 1002 · Cooperativa 3017');
+  expect(paText).toContain('Gestão comercial · Venda nova Central Bahia teste Mensal · AGO/2026');
+  expect(paText).toContain('Cooperativa 3017');
   expect(paText).toContain('Meta: R$ 450,00 · Realizado: R$ 225,00');
   await emailDelivery(composer(page));
   expect(new URL(await composer(page).getByRole('link', { name: 'Abrir Outlook somente texto', exact: true }).getAttribute('href')).searchParams.get('to')).toBe('paula@example.com');

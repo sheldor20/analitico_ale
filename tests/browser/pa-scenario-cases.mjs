@@ -81,6 +81,7 @@ function htmlFromEml(eml) {
 
 export function registerPaScenarioTests({ test, expect, setup }) {
   test('PA sharing: current filters are preserved, full scope is explicit and composite hierarchy preserves PA zero', async ({ page }, info) => {
+    await recordExports(page);
     const { errors, writes, relationshipWrites } = await setup(page, scenarioFixture);
     await selectScope(page);
     await page.getByLabel('Grupo do PA').selectOption('P1');
@@ -102,8 +103,25 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect(reportRow(page, 'pa:2007:3017:0')).toHaveCount(0);
     await expect(emailFrame(page).locator('body')).toContainText('AGO/2026');
     const grouped = await emailFrame(page).locator('body').innerText();
-    for (const common of ['Central 1002', 'Cooperativa 3017', 'Cooperativa 3025', '31/08/2026']) expect(grouped.split(common)).toHaveLength(2);
+    for (const common of ['Central Bahia teste', 'Cooperativa 3025', '31/08/2026']) expect(grouped.split(common)).toHaveLength(2);
+    // Global attainment order crosses parent boundaries; repeat a group label only when returning to that parent.
+    const expectedIds = ['pa:1002:3017:1', 'pa:1002:3017:0', 'pa:1002:3025:0', 'pa:1002:3017:3', 'pa:1002:3017:2', 'pa:1002:3017:5', 'pa:1002:3017:4'];
+    expect(await reportRows(page).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-pa-id')))).toEqual(expectedIds);
+    expect(grouped.split('Cooperativa 3017')).toHaveLength(3);
     await expect(reportRow(page, 'pa:1002:3017:0')).not.toContainText('Central 1002');
+    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await expect(dialog.getByRole('img', { name: 'Cenário dos PAs — parte 1 de 1', exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(1);
+    const drawn = await page.evaluate(() => {
+      const texts = window.__paExports.texts;
+      return texts.slice(texts.lastIndexOf('Gestão comercial · Venda nova')).join(' ');
+    });
+    const orderedNames = ['PA Crescimento exato', 'PA Alfa zero', 'PA Beta zero', 'PA Produção zero', 'PA Ajuste negativo', 'PA Sem meta', 'PA Sem realizado'];
+    const positions = orderedNames.map(name => drawn.indexOf(name));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await dialog.getByRole('radio', { name: 'Somente PAs filtrados', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
@@ -152,17 +170,27 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect.poll(() => page.evaluate(() => window.__paExports.plain.length)).toBe(1);
     const text = await page.evaluate(() => window.__paExports.plain[0]);
     for (const fragment of ['PA Crescimento exato', '1.234,56', '234,56', 'PA Ajuste negativo', '25,50', '125,50', 'PA Produção zero', 'PA Sem realizado', 'PA Sem meta']) expect(text).toContain(fragment);
-    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(text.split(common)).toHaveLength(2);
+    for (const common of ['Central Bahia teste', 'Cooperativa 3017', '31/08/2026']) expect(text.split(common)).toHaveLength(2);
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(1);
     const exported = await page.evaluate(() => window.__paExports);
     expect(exported.png[0].bytes).toEqual(pngMagic); expect(exported.png[0].width).toBe(1200);
-    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(exported.texts.join(' ').split(common)).toHaveLength(2);
+    expect(exported.texts.slice(0, 3)).toEqual(['Gestão comercial · Venda nova', 'Central Bahia teste', 'Mensal · AGO/2026']);
+    expect(exported.texts).not.toContain('Cenário dos PAs');
+    for (const common of ['Central Bahia teste', 'Cooperativa 3017', '31/08/2026']) expect(exported.texts.join(' ').split(common)).toHaveLength(2);
     for (const amount of [1000, 1234.56, 234.56, -25.50, 125.50, 0]) expect(exported.texts.map(value => value.replace(/\s/g, ' '))).toContain(money(amount).replace(/\s/g, ' '));
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(6);
+    const header = emailFrame(page).locator('[data-communication-header]');
+    await expect(header.getByText('Gestão comercial · Venda nova', { exact: true })).toBeVisible();
+    await expect(header.getByRole('heading', { level: 1 })).toHaveText('Central Bahia teste');
+    await expect(header.getByText('Mensal · AGO/2026', { exact: true })).toBeVisible();
+    await expect(header).not.toContainText('Cooperativa 3017');
+    const compactContext = emailFrame(page).locator('[data-communication-context]');
+    await expect(compactContext).toContainText('Cooperativa 3017');
+    await expect(compactContext).toContainText('31/08/2026');
     const commonHeader = await emailFrame(page).locator('body').innerText();
-    for (const common of ['Central 1002', 'Cooperativa 3017', '31/08/2026']) expect(commonHeader.split(common)).toHaveLength(2);
+    for (const common of ['Central Bahia teste', 'Cooperativa 3017', '31/08/2026']) expect(commonHeader.split(common)).toHaveLength(2);
     const growth = reportRow(page, 'pa:1002:3017:1').locator('td');
     await expect(growth).toHaveCount(4);
     await expect(growth.nth(1)).toContainText(money(1000));

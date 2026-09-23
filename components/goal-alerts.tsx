@@ -29,6 +29,7 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [kind, setKind] = useState('all');
+  const [order, setOrder] = useState('attainment-desc');
   const hierarchyScope = `${userId}:${dataset.year}`;
   const [hierarchy, setHierarchy] = useState({ scope: hierarchyScope, central: 'all', cooperative: 'all' });
   const hierarchyOptions = useMemo(() => goalAlertFilterOptions(dataset), [dataset]);
@@ -51,7 +52,10 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
   const stateMap = new Map(states.map((state) => [state.alertKey, state]));
   const scopedAlerts = filterGoalAlerts(alerts, { kind, central, cooperative });
   const newCount = scopedAlerts.filter((alert) => !stateMap.get(alert.key)?.readAt).length;
-  const visible = scopedAlerts.filter((alert) => !onlyNew || !stateMap.get(alert.key)?.readAt);
+  const visible = scopedAlerts.filter((alert) => !onlyNew || !stateMap.get(alert.key)?.readAt).sort((left, right) => {
+    const difference = order === 'production' ? right.actual - left.actual : order === 'attainment' ? left.attainment - right.attainment : order === 'name' ? 0 : right.attainment - left.attainment;
+    return difference || left.entity.name.localeCompare(right.entity.name, 'pt-BR', { numeric: true }) || left.key.localeCompare(right.key);
+  });
   const visibleSnapshot = JSON.stringify(visible);
   const exportView = `${scope}:${kind}:${central}:${cooperative}:${onlyNew}:${visibleSnapshot}`;
 
@@ -77,7 +81,7 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
     if (value === 'central') setHierarchy({ scope: hierarchyScope, central, cooperative: 'all' });
   }
   function clearFilters() {
-    clearCommunication(); setHierarchy({ scope: hierarchyScope, central: 'all', cooperative: 'all' }); setKind('all'); setOnlyNew(false);
+    clearCommunication(); setHierarchy({ scope: hierarchyScope, central: 'all', cooperative: 'all' }); setKind('all'); setOnlyNew(false); setOrder('attainment-desc');
   }
 
   async function mark(alert: GoalAlert, action: 'read' | 'notified') {
@@ -109,8 +113,9 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
       <label>Central<select aria-label="Central" value={central} onChange={(event) => changeCentral(event.target.value)}><option value="all">Todas as centrais</option>{hierarchyOptions.centrals.map((item) => <option key={item.value} value={item.value}>{item.central} · {item.name}</option>)}</select></label>
       <label>Cooperativa<select aria-label="Cooperativa" value={cooperative} disabled={kind === 'central'} onChange={(event) => changeCooperative(event.target.value)}><option value="all">Todas as cooperativas</option>{cooperativeOptions.map((item) => <option key={item.value} value={item.value}>{item.central} / {item.cooperative} · {item.name}</option>)}</select></label>
       <label>Tipo de unidade<select aria-label="Tipo de unidade" value={kind} onChange={(event) => changeKind(event.target.value)}><option value="all">Todas as unidades</option><option value="central">Centrais</option><option value="cooperative">Cooperativas</option><option value="pa">PAs</option></select></label>
+      <label>Ordenar por<select aria-label="Ordem das metas atingidas" value={order} onChange={(event) => { clearCommunication(); setOrder(event.target.value); }}><option value="attainment-desc">Maior atingimento</option><option value="attainment">Menor atingimento</option><option value="production">Maior produção</option><option value="name">Nome da unidade</option></select></label>
       <label className={styles.checkbox}><input type="checkbox" checked={onlyNew} onChange={(event) => { clearCommunication(); setOnlyNew(event.target.checked); }} />Somente não lidas</label>
-      <button type="button" className="button secondary" onClick={clearFilters} disabled={central === 'all' && cooperative === 'all' && kind === 'all' && !onlyNew}>Limpar filtros</button>
+      <button type="button" className="button secondary" onClick={clearFilters} disabled={central === 'all' && cooperative === 'all' && kind === 'all' && !onlyNew && order === 'attainment-desc'}>Limpar filtros</button>
     </div>
     {!!visible.length && <div className={styles.exportToolbar}><p>{visible.length} {visible.length === 1 ? 'resultado no filtro' : 'resultados no filtro'}</p><DashboardImageCopy key={scope} disabled={onlyNew && loading} snapshot={exportView} label="Copiar painel filtrado como imagem" filename={`metas-${dataset.year}-${month + 1}-${kind}-${central}-${cooperative === 'all' ? 'todas' : cooperative.replaceAll(':', '-')}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertsDashboard(visible, { year: dataset.year, month, kindLabel: selectionLabel })} /></div>}
     {error && <p className={styles.error} role="alert">{error}</p>}

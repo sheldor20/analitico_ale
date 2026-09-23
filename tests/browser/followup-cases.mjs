@@ -78,7 +78,8 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
         expect(await dialog.evaluate(n=>n.scrollWidth<=n.clientWidth+1)).toBe(true);
         if(n===2) {
           const frame=dialog.locator('iframe'); await expect(frame).toHaveAttribute('sandbox','allow-same-origin');
-          await expect(page.frameLocator('iframe').getByRole('heading',{level:1})).toContainText('Cooperativa Alfa');
+          await expect(page.frameLocator('iframe').getByRole('heading',{level:1})).toHaveText('Central Bahia teste');
+          await expect(page.frameLocator('iframe').locator('[data-communication-context]')).toContainText('Cooperativa Alfa');
           await expect.poll(()=>frame.evaluate(n=>n.contentDocument.documentElement.scrollHeight<=n.clientHeight+2)).toBe(true);
           expect(await page.evaluate(()=>window.injected)).toBeUndefined();
         }

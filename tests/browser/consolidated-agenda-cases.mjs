@@ -26,6 +26,71 @@ function agendaSeed(owner, created) {
 }
 
 export function registerConsolidatedAgendaTests({ test, expect, setup, owner, created }) {
+  test('consolidated agenda: direct creation accepts a same-day minute and a past visit while preserving compound unit identity', async ({ page }, info) => {
+    const { errors, appointmentRows, relationshipWrites, relationshipReads } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
+    await navigate(page, 'Agenda');
+    const agenda = consolidated(page);
+    await agenda.getByRole('button', { name: '10 de setembro: 0 compromissos', exact: true }).click();
+    await agenda.getByRole('button', { name: 'Novo compromisso', exact: true }).click();
+    const form = agenda.getByRole('form', { name: 'Novo compromisso', exact: true });
+    await expect(form.getByLabel('Início', { exact: true })).toHaveValue('2026-09-10T09:00');
+    await expect(form.getByLabel('Fim', { exact: true })).toHaveValue('2026-09-10T10:00');
+    await form.getByRole('combobox', { name: 'Nível da unidade', exact: true }).selectOption('pa');
+    await form.getByRole('combobox', { name: 'Central do compromisso', exact: true }).selectOption('1002');
+    await form.getByRole('combobox', { name: 'Cooperativa do compromisso', exact: true }).selectOption('cooperative:1002:3017');
+    await form.getByRole('combobox', { name: 'PA do compromisso', exact: true }).selectOption('pa:1002:3017:0');
+    await form.getByLabel('Título do compromisso').fill('Ligação imediata PA zero');
+    await form.getByLabel('Tipo de compromisso').selectOption('call');
+    await form.getByLabel('Início', { exact: true }).fill('2026-09-10T12:00');
+    await form.getByLabel('Fim', { exact: true }).fill('2026-09-10T12:00');
+    await form.getByRole('button', { name: 'Salvar compromisso', exact: true }).click();
+    await expect(form.getByRole('alert')).toContainText('O fim deve ser posterior');
+    expect(relationshipWrites).toHaveLength(0);
+    await form.getByLabel('Fim', { exact: true }).fill('2026-09-10T12:01');
+    await page.setViewportSize({ width: 320, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await form.screenshot({ path: info.outputPath('consolidated-create-minute-320.png') });
+    await form.getByRole('button', { name: 'Salvar compromisso', exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await expect(agenda.getByText('Compromisso salvo na agenda.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Agenda', exact: true })).toBeVisible();
+    await expect(appointmentCard(page, 'Ligação imediata PA zero')).toContainText('PA Alfa zero');
+    const sameDay = appointmentRows.find(row => row.title === 'Ligação imediata PA zero');
+    expect(sameDay).toMatchObject({ owner_id: owner, workspace_year: 2026, entity_id: 'pa:1002:3017:0', entity_kind: 'pa', central: '1002', cooperative: '3017', pa: '0',
+      starts_at: '2026-09-10T15:00:00.000Z', ends_at: '2026-09-10T15:01:00.000Z', timezone: 'America/Sao_Paulo', kind: 'call', status: 'scheduled' });
+    await agenda.getByRole('button', { name: '9 de setembro: 0 compromissos', exact: true }).click();
+    await agenda.getByRole('button', { name: 'Novo compromisso', exact: true }).click();
+    await form.getByRole('combobox', { name: 'Nível da unidade', exact: true }).selectOption('cooperative');
+    await form.getByRole('combobox', { name: 'Central do compromisso', exact: true }).selectOption('2007');
+    const cooperative = form.getByRole('combobox', { name: 'Cooperativa do compromisso', exact: true });
+    await expect(cooperative.locator('option[value="cooperative:1002:3017"]')).toHaveCount(0);
+    await cooperative.selectOption('cooperative:2007:3017');
+    await form.getByLabel('Título do compromisso').fill('Visita registrada do dia anterior');
+    await form.getByLabel('Tipo de compromisso').selectOption('visit');
+    await form.getByLabel('Início', { exact: true }).fill('2026-09-09T09:00');
+    await form.getByLabel('Fim', { exact: true }).fill('2026-09-09T09:01');
+    await form.getByRole('button', { name: 'Salvar compromisso', exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await expect(appointmentCard(page, 'Visita registrada do dia anterior')).toContainText('Outra central');
+    expect(appointmentRows.find(row => row.title === 'Visita registrada do dia anterior')).toMatchObject({ owner_id: owner, workspace_year: 2026,
+      entity_id: 'cooperative:2007:3017', entity_kind: 'cooperative', central: '2007', cooperative: '3017', pa: null,
+      starts_at: '2026-09-09T12:00:00.000Z', ends_at: '2026-09-09T12:01:00.000Z' });
+    expect(relationshipWrites.filter(write => write.table === 'commercial_entity_appointments' && write.method === 'POST')).toHaveLength(2);
+    await page.reload();
+    await navigate(page, 'Agenda');
+    await agenda.getByRole('combobox', { name: 'Central da agenda', exact: true }).selectOption('2007');
+    await agenda.getByRole('button', { name: '9 de setembro: 1 compromisso', exact: true }).click();
+    await expect(agenda.getByRole('article')).toHaveCount(1);
+    await expect(appointmentCard(page, 'Visita registrada do dia anterior')).toContainText('Outra central');
+    await expect(appointmentCard(page, 'Ligação imediata PA zero')).toHaveCount(0);
+    await expect(agenda).not.toContainText('Compromisso privado de outro usuário');
+    await expect(agenda).not.toContainText('Compromisso de outro ano');
+    expect(relationshipReads.filter(read => read.table === 'commercial_entity_appointments').every(read => read.filters.owner_id === `eq.${owner}` && read.filters.workspace_year === 'eq.2026')).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await agenda.screenshot({ path: info.outputPath('consolidated-created-visit-desktop.png') });
+    expect(errors).toEqual([]);
+  });
+
   test('consolidated agenda: owner/year scoped calendar includes central, cooperatives and PA zero with activity, status and month filters', async ({ page }, info) => {
     const { errors, relationshipReads } = await setup(page, value => value, { appointments: agendaSeed(owner, created) });
     await navigate(page, 'Agenda');
@@ -153,6 +218,8 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
     await page.getByRole('button', { name: 'Nova unidade', exact: true }).click();
     const draftName = page.getByRole('textbox', { name: 'Nome da unidade', exact: true });
     await draftName.fill('Unidade em rascunho');
+    await expect(consolidated(page).getByRole('button', { name: 'Novo compromisso', exact: true })).toBeDisabled();
+    await expect(open).toBeEnabled();
     const dismissDialog = page.waitForEvent('dialog');
     const declinedClick = open.click();
     const first = await dismissDialog;

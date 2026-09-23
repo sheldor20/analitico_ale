@@ -99,11 +99,15 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   const [relationshipDirty, setRelationshipDirty] = useState(false);
   const [agendaRevision, setAgendaRevision] = useState(0);
   const [agendaSaving, setAgendaSaving] = useState(false);
+  const [consolidatedDirty, setConsolidatedDirty] = useState(false);
+  const [consolidatedSaving, setConsolidatedSaving] = useState(false);
+  const [entityAgendaRevision, setEntityAgendaRevision] = useState(0);
   const [agendaFocus, setAgendaFocus] = useState<{ date: string; request: number } | null>(requestedAgenda ? { date: requestedAgenda.date, request: requestedAgenda.request } : null);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
   const refreshAgenda = useCallback(() => setAgendaRevision((value) => value + 1), []);
+  const refreshFromConsolidated = useCallback(() => { setAgendaRevision((value) => value + 1); setEntityAgendaRevision((value) => value + 1); }, []);
   const [identityLocked, setIdentityLocked] = useState(false);
-  const locked = busy || saving || agendaSaving;
+  const locked = busy || saving || agendaSaving || consolidatedSaving;
   const selected = entities.find((entity) => entity.id === selectedId) ?? null;
   const hierarchy = selected ? relationshipHierarchy(entities, selected) : { parents: [], children: [] };
   const effectiveMetric = selected?.kind === "pa" ? "VN" : metric;
@@ -125,25 +129,27 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
     if (selectedId && !entities.some((entity) => entity.id === selectedId)) setSelectedId(entities[0]?.id ?? null);
   }, [entities, selectedId]);
   useEffect(() => {
-    onDirtyChange?.(relationshipDirty || entityForm !== null);
+    onDirtyChange?.(relationshipDirty || consolidatedDirty || entityForm !== null);
     return () => onDirtyChange?.(false);
-  }, [relationshipDirty, entityForm, onDirtyChange]);
+  }, [relationshipDirty, consolidatedDirty, entityForm, onDirtyChange]);
   useEffect(() => {
-    onSavingChange?.(saving || agendaSaving);
+    onSavingChange?.(saving || agendaSaving || consolidatedSaving);
     return () => onSavingChange?.(false);
-  }, [saving, agendaSaving, onSavingChange]);
+  }, [saving, agendaSaving, consolidatedSaving, onSavingChange]);
   useEffect(() => {
-    if (!requestedAgenda || !requestKey || requestKey === appliedRequest.current || locked || relationshipDirty || entityForm !== null) return;
+    if (!requestedAgenda || !requestKey || requestKey === appliedRequest.current || locked || relationshipDirty || consolidatedDirty || entityForm !== null) return;
     appliedRequest.current = requestKey;
     setSelectedId(requestedAgenda.entityId); setActiveTab("agenda");
     setAgendaFocus((current) => ({ date: requestedAgenda.date, request: (current?.request ?? 0) + 1 }));
     setDeleting(false); setShowCommunication(false); setCalendarExpanded(false);
     setQuery(""); setKindFilter("all"); setCentralFilter("all"); setCooperativeFilter("all");
-  }, [requestedAgenda, requestKey, locked, relationshipDirty, entityForm]);
+  }, [requestedAgenda, requestKey, locked, relationshipDirty, consolidatedDirty, entityForm]);
 
   function clearFeedback() { setError(""); setNotice(""); }
   function leaveRelationshipForm() {
-    if ((relationshipDirty || entityForm !== null) && !window.confirm("Há alterações não salvas no cadastro, ficha, contatos, agenda ou metas. Deseja sair sem salvar?")) return false;
+    if (locked) return false;
+    if ((relationshipDirty || consolidatedDirty || entityForm !== null) && !window.confirm("Há alterações não salvas no cadastro, ficha, contatos, agenda ou metas. Deseja sair sem salvar?")) return false;
+    if (consolidatedDirty) { setCalendarExpanded(false); setConsolidatedDirty(false); }
     setRelationshipDirty(false); return true;
   }
   function selectEntity(entity: RegistryEntity) {
@@ -211,9 +217,9 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   }
 
   return <section className="registry-manager" aria-label={`Cadastro e metas de ${dataset.year}`}>
-    <details className={profileStyles.agendaDisclosure} aria-label="Agenda das unidades" open={calendarExpanded} onToggle={(event) => setCalendarExpanded(event.currentTarget.open)}>
-      <summary><CalendarDays size={19} aria-hidden="true" /><strong>Agenda das unidades</strong><span>{calendarExpanded ? "Recolher calendário" : "Abrir calendário"}</span></summary>
-      {calendarExpanded && <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} />}
+    <details className={profileStyles.agendaDisclosure} aria-label="Agenda das unidades" open={calendarExpanded}>
+      <summary onClick={(event) => { event.preventDefault(); if (locked) return; if (calendarExpanded && consolidatedDirty && !window.confirm('Descartar este compromisso sem salvar?')) return; setCalendarExpanded((value) => !value); }}><CalendarDays size={19} aria-hidden="true" /><strong>Agenda das unidades</strong><span>{calendarExpanded ? "Recolher calendário" : "Abrir calendário"}</span></summary>
+      {calendarExpanded && <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} creationDisabled={relationshipDirty || entityForm !== null} onDirtyChange={setConsolidatedDirty} onSavingChange={setConsolidatedSaving} onAppointmentsChange={refreshFromConsolidated} />}
     </details>
     <div className="panel-heading">
       <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
@@ -262,12 +268,12 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
             <div className={profileStyles.tabs} aria-label="Seções da ficha">{([{ id: "profile", label: "Ficha da carteira" }, { id: "contacts", label: "Contatos" }, { id: "agenda", label: "Agenda" }, { id: "targets", label: "Metas e produção" }] as const).map((tab) => <button type="button" key={tab.id} aria-pressed={activeTab === tab.id} disabled={locked} onClick={() => { if (tab.id !== activeTab && leaveRelationshipForm()) setActiveTab(tab.id); }}>{tab.label}</button>)}</div>
             {activeTab === "profile" && <div className={profileStyles.section}>
               {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3><p className={profileStyles.muted}>Abra uma ficha para ver contatos, carteira e agenda.</p></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
-              <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} onDirtyChange={setRelationshipDirty} />
+              <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />
             </div>}
-            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked} onDirtyChange={setRelationshipDirty} />}
-            {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}:${agendaFocus?.request ?? 0}`} entity={selected} year={dataset.year} userId={userId} disabled={locked} initialDate={agendaFocus?.date} onDirtyChange={setRelationshipDirty} onAppointmentsChange={refreshAgenda} onSavingChange={setAgendaSaving} />}
+            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />}
+            {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}:${agendaFocus?.request ?? 0}:${entityAgendaRevision}`} entity={selected} year={dataset.year} userId={userId} disabled={locked || consolidatedDirty} initialDate={agendaFocus?.date} onDirtyChange={setRelationshipDirty} onAppointmentsChange={refreshAgenda} onSavingChange={setAgendaSaving} />}
             {activeTab === "targets" && <><label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
-            <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked} centralChildren={centralChildren} onDirtyChange={setRelationshipDirty} onSave={async (input) => {
+            <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked || consolidatedDirty} centralChildren={centralChildren} onDirtyChange={setRelationshipDirty} onSave={async (input) => {
               clearFeedback();
               await persist(upsertPlanRow(normalized, { entityId: selected.id, metric: effectiveMetric, ...input }) as Dataset, "Metas e produção salvas. Todos os períodos e acumulados foram atualizados.");
             }} /></>}
