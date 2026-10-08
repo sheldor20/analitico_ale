@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { ArrowRight, CircleAlert, Flag, TrendingUp } from 'lucide-react';
 import { buildManagementPriorities, type ManagementAnalysis, type ManagementPriority, type ManagementPriorityAction } from '@/lib/management-priorities.mjs';
 import styles from './management-priorities.module.css';
+import PanelToggle from './ui/panel-toggle';
 
 export type { ManagementPriorityAction } from '@/lib/management-priorities.mjs';
 
@@ -12,12 +13,16 @@ export function ManagementPriorities({ analyses, onViewUnits }: {
   onViewUnits: (action: ManagementPriorityAction) => void;
 }) {
   const headingId = useId();
+  const contentId = useId();
+  const [expanded, setExpanded] = useState(true);
   const model = useMemo(() => buildManagementPriorities(analyses), [analyses]);
   return <section className={styles.section} aria-labelledby={headingId}>
-    <div className={styles.heading}><h2 id={headingId}>Prioridades da carteira</h2><span>Com base no realizado da seleção</span></div>
+    <div className={styles.heading}><div><h2 id={headingId}>Prioridades da carteira</h2><span>Com base no realizado da seleção</span></div><PanelToggle expanded={expanded} onToggle={() => setExpanded(value => !value)} controls={contentId} label="prioridades" /></div>
+    <div id={contentId} hidden={!expanded}>
     {model.items.length > 0 ? <div className={styles.grid}>{model.items.map(item => <Priority key={item.kind} item={item} onViewUnits={onViewUnits} />)}</div> : <p className={styles.empty}>{model.empty}</p>}
     {model.notes.map(note => <p className={styles.note} key={note}>{note}</p>)}
     {model.additional.length > 0 && <details className={styles.additional}><summary>Contribuição da produção</summary>{model.additional.map(item => <Priority key={item.kind} item={item} onViewUnits={onViewUnits} />)}</details>}
+    </div>
   </section>;
 }
 

@@ -156,3 +156,35 @@ test('saved cards without attainment retain legacy accent colors while explicit 
   const neutral = dashboardImageLayout(modern, measure);
   assert.equal(neutral.commands.find(command => command.type === 'text' && command.value === primary[1].value).fill, attainmentBand(null).color);
 });
+
+test('email card budgets cover a wider installed font at desktop and every responsive transition', () => {
+  // Independent measurements from DejaVu Sans Bold at 18px. This is the system
+  // fallback that reproduced a 191px amount inside a 187px cell in Chromium.
+  for (const [amount, measuredAt18] of [['R$ 186.000.000,00', 191.03125], ['-R$ 186.000.000,00', 198.5], ['R$ 1.488.000.000,00', 210.40625]]) {
+    const dashboard = model(primary.map(item => ({ ...item, value: amount })));
+    const before = structuredClone(dashboard), html = renderDashboardHtml(dashboard);
+    const panelWidth = Number(html.match(/max-width:(\d+)px;background:#fff/)[1]);
+    const columns = Number(html.match(/data-layout="metric-cards" data-columns="(\d+)"/)[1]);
+    const inlineSize = Number(html.match(/class="metric-value"[^>]*font-size:(\d+)px/)[1]);
+    const fluid = html.match(/@media\(max-width:(\d+)px\)\{\.metric-row-0 \.metric-value\{font-size:clamp\(18px,calc\(([\d.]+)vw - ([\d.]+)px\),(\d+)px\)/);
+    const stacked = html.match(/@media\(max-width:(\d+)px\)\{\.metric-row-0>tbody>tr>\.metric-cell[\s\S]*?\.metric-value\{font-size:clamp\(18px,calc\(([\d.]+)vw - ([\d.]+)px\),26px\)/);
+    assert.ok(panelWidth > 680 && panelWidth <= 760);
+    assert.equal(Number(fluid[1]), panelWidth + 15, 'the fluid range must follow the expanded panel, rather than stop at 679px');
+    assert.ok(inlineSize >= 18);
+    if (!amount.includes('1.488')) assert.equal(columns, 3, 'hundreds of millions fit side by side on a sufficiently wide panel');
+    const clamp = (value, max) => Math.max(18, Math.min(max, value));
+    const widths = new Set([320, 390, 480, 598, 640, 679, 680, 700, 720, 740, 759, 760, 775, 1440, panelWidth + 16, Number(fluid[1]), Number(stacked?.[1] || 0), Number(stacked?.[1] || 0) + 1]);
+    for (const viewport of [...widths].filter(width => width >= 320)) {
+      const isStacked = stacked && viewport <= Number(stacked[1]);
+      const activeColumns = isStacked ? 1 : columns;
+      const fontSize = isStacked ? clamp(Number(stacked[2]) * viewport / 100 - Number(stacked[3]), 26)
+        : viewport <= Number(fluid[1]) ? clamp(Number(fluid[2]) * viewport / 100 - Number(fluid[3]), Number(fluid[4])) : inlineSize;
+      const innerPanel = Math.min(panelWidth, viewport - 16) - (viewport <= 480 ? 28 : 44);
+      const usableCell = innerPanel / activeColumns - (viewport <= 480 ? 17 : 25);
+      assert.ok(measuredAt18 * fontSize / 18 <= usableCell, `${amount} at ${viewport}px uses ${fontSize}px font but exceeds ${usableCell}px cell`);
+    }
+    assert.ok(html.includes(`>${amount}</strong>`));
+    assert.deepEqual(dashboard, before);
+  }
+  assert.match(renderDashboardHtml(model(primary)), /max-width:680px;background:#fff/, 'ordinary amounts retain the compact panel');
+});
