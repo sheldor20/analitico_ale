@@ -66,6 +66,29 @@ test('central aggregation uses cooperative production once and direct central on
   assert.equal(period(direct, 'month').actual, 690);
 });
 
+test('a cooperative grouped by central explicitly labels its partial scope without expanding the fixed cohort', () => {
+  const data = dataset([
+    row({ group: 'P1' }),
+    row({ cooperative: '3025', cooperativeName: 'Beta', group: 'P2', actuals: Array(12).fill(100) }),
+    row({ central: '2007', cooperativeName: 'Outra Alfa', group: 'P1', actuals: Array(12).fill(9999) }),
+  ]);
+  const selected = { central: '1002', coop: '1002:3017', search: 'Alfa', status: 'attention' };
+  const partial = build(data, { ...selected, level: 'central' }, ['central:1002']);
+  assert.match(partial.scopeLabel, /^Central 1002 · .*Recorte parcial: cooperativa 3017 · Alfa$/);
+  assert.doesNotMatch(partial.scopeLabel, /Beta|Outra Alfa/);
+  assert.equal(partial.count, 1);
+  assert.deepEqual(partial.groups, build(data, selected).groups);
+  assert.deepEqual([period(partial, 'month').target, period(partial, 'month').actual], [1000, 690]);
+  assert.deepEqual([period(partial, 'annual').target, period(partial, 'annual').actual], [12000, 6090]);
+  const whole = build(data, { central: '1002', level: 'central' }, ['central:1002']);
+  assert.doesNotMatch(whole.scopeLabel, /Recorte parcial|cooperativa 3017/);
+  assert.deepEqual([period(whole, 'month').target, period(whole, 'month').actual], [2000, 790]);
+  const groupOnly = build(data, { central: '1002', level: 'central', group: 'P1' }, ['central:1002']);
+  assert.match(groupOnly.scopeLabel, /Recorte parcial: grupo P1$/);
+  assert.deepEqual(groupOnly.groups, partial.groups);
+  assert.equal(build(data, { ...selected, level: 'central' }, []).count, 0);
+});
+
 test('PA policy, manual plans and registered units without production retain the shared target rules', () => {
   const data = dataset([row({ source: 'cadence', metric: 'VN', pa: '0', group: 'P3', targetRule: 'group-fixed', targets: Array(12).fill(1), annualTarget: 12 })]);
   const fixed = build(data, { source: 'cadence' }, ['pa:1002:3017:0']);
