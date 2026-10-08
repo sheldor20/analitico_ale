@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { money } from '../lib/analytics.mjs';
+import { attainmentBand } from '../lib/attainment.mjs';
 import { goalVariance } from '../lib/goal-variance.mjs';
 import { paScenarioImageLayout, renderPaScenarioPng } from '../lib/pa-scenario-image.mjs';
 
@@ -20,8 +21,8 @@ function part(rows = [row()], overrides = {}) {
 }
 const amount = (value) => money(value).replace(/\s+/g, ' ');
 const textCommands = (layout) => layout.commands.filter((command) => command.type === 'text');
-function assertGeometry(layout, measure) {
-  assert.equal(layout.width, 1200);
+function assertGeometry(layout, measure, width = 1200) {
+  assert.equal(layout.width, width);
   assert.ok(layout.height > 0 && layout.height <= 12000);
   for (const command of layout.commands) {
     assert.ok(command.x >= 0 && command.y >= 0);
@@ -208,4 +209,77 @@ test('PNG renderer loads the local font, draws complete currencies and releases 
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   }
+});
+
+test('actual cells use unrounded observed attainment bands independently of projected results', () => {
+  const ratios = [null, -.1, 0, .699999, .7, .999999, 1, 1.7];
+  const rows = ratios.map((ratio, index) => row(index, { actual: ratio === null ? null : 1000 * ratio, attainment: ratio,
+    projection: { value: 10_000, attainment: 10, phase: 'Parcial', assumption: 'Estimativa pelo ritmo observado.' } }));
+  const source = part(rows, { showProjection: true });
+  const measure = measurement(), layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  for (const [index, ratio] of ratios.entries()) {
+    const label = drawn.find(command => command.value === `PA ${index} · Unidade ${index}`);
+    const actual = drawn.find(command => command.x === 638 && command.y === label.y);
+    const actualBackground = layout.commands.find(command => command.type === 'rect' && command.x === 622 && command.y === label.y - 10);
+    const projection = drawn.find(command => command.x === 1160 && command.y === label.y);
+    assert.equal(actual.fill, attainmentBand(ratio).color);
+    assert.equal(actualBackground.fill, attainmentBand(ratio).background);
+    assert.equal(projection.fill, '#435c60', 'an estimate stays neutral even when it exceeds the target');
+    assert.notEqual(projection.fill, attainmentBand(10).color);
+  }
+  assertGeometry(layout, measure, 1440);
+});
+
+test('projection is absent by default and appears as a fifth column with exact amounts and its assumptions only when selected', () => {
+  const target = 927_900_000, actual = -12_945_213.17, projected = 1_234_567_890.12;
+  const financial = row(0, { target, actual, attainment: actual / target, variance: goalVariance(actual, target) });
+  const withProjection = { ...financial, projection: { value: projected, attainment: projected / target, phase: 'Parcial', assumption: 'Estimativa pelo ritmo observado até o corte; considera dias úteis, sem descontar feriados.' } };
+  const off = paScenarioImageLayout(part([withProjection]), measurement());
+  assert.deepEqual(off, paScenarioImageLayout(part([financial]), measurement()), 'unselected projection metadata does not affect the export');
+  assert.doesNotMatch(textCommands(off).map(command => command.value).join(' '), /Projeção|Premissa|feriados/);
+  const source = part([withProjection], { showProjection: true }), before = structuredClone(source), measure = measurement();
+  const layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  assert.equal(drawn.filter(command => command.value === 'Projeção').length, 1);
+  const values = [target, actual, financial.variance.value, projected];
+  const amounts = values.map(value => drawn.filter(command => command.value === amount(value)));
+  assert.ok(amounts.every(commands => commands.length === 1), 'every full currency remains an indivisible command');
+  assert.deepEqual(amounts.map(([command]) => command.x), [388, 638, 898, 1160]);
+  assert.equal(new Set(amounts.map(([command]) => command.y)).size, 1);
+  assert.equal(new Set(amounts.map(([command]) => command.size)).size, 1);
+  assert.ok(drawn.some(command => command.value === 'Parcial'));
+  const fullText = drawn.map(command => command.value).join(' ');
+  assert.ok(fullText.includes(withProjection.projection.assumption));
+  assert.ok(fullText.includes('Projeção: estimativa para o encerramento do período.'));
+  assert.deepEqual(source, before);
+  assertGeometry(layout, measure, 1440);
+});
+
+test('twelve projected rows remain complete and different assumptions keep their row references', () => {
+  const assumptions = ['Estimativa pelo ritmo observado.', 'Período encerrado: a estimativa coincide com o realizado.'];
+  const rows = Array.from({ length: 12 }, (_, index) => row(index, {
+    actual: 1250 + index, variance: goalVariance(1250 + index, 1000), projection: {
+      value: index === 0 ? null : 1500 + index, attainment: index === 0 ? null : (1500 + index) / 1000,
+      phase: index === 0 ? 'Dados incompletos' : index % 2 ? 'Parcial' : 'Fechado', assumption: assumptions[index % 2],
+    },
+  }));
+  const source = part(rows, { showProjection: true, index: 2, total: 3, from: 13, to: 24 });
+  const measure = measurement(), layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  assert.equal(drawn.filter(command => /^PA \d+ · Unidade/.test(command.value)).length, 12);
+  assert.equal(drawn.filter(command => command.value === '—' && command.x === 1160).length, 1, 'unknown projection is not currency zero');
+  for (const [index, item] of rows.entries()) {
+    assert.equal(drawn.filter(command => command.value === amount(item.actual) && command.x === 638).length, 1);
+    if (index) assert.equal(drawn.filter(command => command.value === amount(item.projection.value) && command.x === 1160).length, 1);
+  }
+  const fullText = drawn.map(command => command.value).join(' ');
+  for (const [index, assumption] of assumptions.entries()) assert.ok(fullText.includes(`Premissa ${index + 1}: ${assumption}`));
+  assert.equal(drawn.filter(command => command.value === 'Premissa 1').length, 6);
+  assert.equal(drawn.filter(command => command.value === 'Premissa 2').length, 6);
+  assert.ok(layout.height < 2600);
+  assertGeometry(layout, measure, 1440);
+});
+
+test('invalid selected projection is rejected instead of rendering incomplete or infinite financial values', () => {
+  assert.throws(() => paScenarioImageLayout(part([row()], { showProjection: 'false' }), measurement()), /parte.*inválida/);
+  assert.throws(() => paScenarioImageLayout(part([row(0, { projection: { value: Infinity, attainment: 1, phase: 'Parcial', assumption: 'Estimativa.' } })], { showProjection: true }), measurement()), /projeção inválida/);
+  assert.throws(() => paScenarioImageLayout(part([row(0, { projection: { value: 1000, attainment: 1, phase: 'Parcial' } })], { showProjection: true }), measurement()), /projeção inválida/);
 });

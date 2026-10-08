@@ -73,7 +73,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     }
     const plain = await assertHtmlRow();
     await expect(frame.locator('[data-columns="1"]')).toHaveCount(0);
-    const projection = dialog.getByRole('checkbox', { name: /Incluir projeção de fechamento/ });
+    const projection = dialog.getByRole('checkbox', { name: 'Incluir projeção de produção', exact: true });
     await projection.check();
     const projected = frame.locator('td[data-metric="Fechamento apurado"]').first();
     await expect(projected).toBeVisible();
@@ -209,7 +209,8 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     const annual = dialog.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true });
     await expect(frame.locator('[data-communication-header] p').first()).toHaveText('Gestão comercial · Venda nova · Arrecadação');
-    await expect(annual).toBeChecked();
+    await expect(annual).not.toBeChecked();
+    await annual.check();
     for (const period of ['month','quarter','semester','ytd','annual']) {
       await dialog.getByLabel('Período da mensagem').selectOption(period);
       const support = frame.locator('[data-section="annual-support"]');
@@ -293,8 +294,11 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     await dialog.getByLabel('Texto / modelo do e-mail', { exact: true }).fill('Minha abertura preservada.\n{{cenario}}');
     await dialog.getByLabel('Texto / modelo do WhatsApp', { exact: true }).fill('Meu texto comercial.\n{{cenario}}');
     await step(dialog, 2);
-    const projection = dialog.getByRole('checkbox', { name: /Incluir projeção de fechamento/ });
+    const projection = dialog.getByRole('checkbox', { name: 'Incluir projeção de produção', exact: true });
     await expect(projection).not.toBeChecked();
+    const annual = dialog.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true });
+    await expect(annual).not.toBeChecked();
+    await annual.check();
     const frame = page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
     await expect(frame.locator('[data-metric="Projeção de fechamento"]')).toHaveCount(0);
     await expect(frame.locator('body')).toContainText('Minha abertura preservada.');
@@ -323,6 +327,11 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
       window.__imageCopies = [];
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: async (items) => {
         if (!items[0].types.includes('image/png')) return;
+        if (window.__holdNextImage) {
+          window.__holdNextImage = false;
+          await new Promise((resolve, reject) => { window.__settleImage = { resolve, reject }; });
+          window.__settleImage = null;
+        }
         const blob = await items[0].getType('image/png');
         window.__imageCopies.push({ type: blob.type, size: blob.size, bytes: Array.from(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)) });
       } } });
@@ -340,6 +349,34 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     expect(images[0].bytes).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(dialog.getByRole('button', { name: 'Abrir Outlook e colar painel', exact: true })).toBeDisabled();
+    await step(dialog, 2);
+    await dialog.getByRole('button', { name: 'Painel do WhatsApp', exact: true }).click();
+    const projection = dialog.getByRole('checkbox', { name: 'Incluir projeção de produção', exact: true });
+    const preview = dialog.getByRole('img', { name: /Dashboard Mensal/ });
+    const downloads = [];
+    page.on('download', download => downloads.push(download.suggestedFilename()));
+    for (const outcome of ['resolve', 'reject']) {
+      await expect(copy).toBeEnabled();
+      await page.evaluate(() => { window.__holdNextImage = true; window.__settleImage = null; });
+      await copy.click();
+      await expect.poll(() => page.evaluate(() => !!window.__settleImage)).toBe(true);
+      const before = await preview.getAttribute('src');
+      await projection.setChecked(outcome === 'resolve');
+      await expect(preview).not.toHaveAttribute('src', before);
+      await page.evaluate(outcome => {
+        const pending = window.__settleImage;
+        window.__settleImage = null;
+        if (outcome === 'resolve') pending.resolve();
+        else pending.reject(new DOMException('Denied after scenario changed', 'NotAllowedError'));
+      }, outcome);
+      await expect(copy).toBeEnabled();
+      await expect(dialog.getByRole('status').filter({ hasText: /Imagem copiada|painel foi baixado/ })).toHaveCount(0);
+    }
+    const previousCopies = await page.evaluate(() => window.__imageCopies.length);
+    await copy.click();
+    await expect(dialog.getByRole('status')).toContainText('Imagem copiada');
+    await expect.poll(() => page.evaluate(() => window.__imageCopies.length)).toBe(previousCopies + 1);
+    expect(downloads).toEqual([]);
     expect(errors).toEqual([]);
   });
   test('blocked image clipboard downloads PNG without claiming a successful copy', async ({ page }) => {

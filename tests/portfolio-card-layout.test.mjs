@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildPortfolioReport, renderPortfolioCommunication } from '../lib/portfolio-communication.mjs';
 import { renderDashboardHtml, validateDashboard } from '../lib/portfolio-presentation.mjs';
 import { dashboardImageLayout } from '../lib/portfolio-image.mjs';
+import { attainmentBand } from '../lib/attainment.mjs';
 import { portfolioFixture, unit } from './portfolio-fixture.mjs';
 
 const measure = { font: '', measureText(value) { return { width: [...value].length * Number(this.font.match(/(\d+)px/)?.[1] ?? 27) * .55 }; } };
@@ -118,4 +119,40 @@ test('legacy one and two card snapshots render without invented variance or chan
     assert.equal((renderDashboardHtml(dashboard).match(/data-metric=/g) || []).length, count);
     assert.deepEqual(dashboard, before);
   }
+});
+
+test('realized card uses observed attainment metadata including exact band limits and neutral unknowns', () => {
+  for (const ratio of [null, -.2, 0, .699999, .7, .999999, 1, 1.2]) {
+    const items = primary.map((item, index) => index === 1 ? { ...item, attainment: ratio } : item);
+    const dashboard = model(items), before = structuredClone(dashboard), layout = dashboardImageLayout(dashboard, measure);
+    const value = layout.commands.find(command => command.type === 'text' && command.value === primary[1].value);
+    const card = layout.commands.find(command => command.type === 'rect' && command.x > 0 && value.x > command.x && value.x < command.x + command.width && value.y > command.y && value.y < command.y + command.height);
+    assert.equal(value.fill, attainmentBand(ratio).color);
+    assert.equal(card.fill, attainmentBand(ratio).background);
+    const support = layout.commands.find(command => command.type === 'text' && command.value === primary[1].support);
+    assert.equal(support.fill, attainmentBand(ratio).color);
+    assert.deepEqual(dashboard, before);
+  }
+});
+
+test('secondary projection remains neutral while the actual card is colored and retains three aligned primary amounts', () => {
+  const projection = { label: 'Projeção de fechamento', value: 'R$ 1.400,00', support: '140% da meta · estimativa' };
+  const dashboard = model([...primary.map((item, index) => index === 1 ? { ...item, attainment: .65 } : item), projection]);
+  const layout = dashboardImageLayout(dashboard, measure);
+  const values = primary.map(item => layout.commands.find(command => command.type === 'text' && command.value === item.value));
+  assert.equal(new Set(values.map(command => command.y)).size, 1);
+  assert.equal(values[1].fill, attainmentBand(.65).color);
+  const estimate = layout.commands.find(command => command.type === 'text' && command.value === projection.value);
+  assert.ok(estimate.y > values[1].y);
+  assert.equal(estimate.fill, '#003641');
+  assert.notEqual(estimate.fill, attainmentBand(1.4).color);
+  assert.equal(layout.commands.filter(command => command.type === 'text' && command.value === projection.value).length, 1);
+});
+
+test('saved cards without attainment retain legacy accent colors while explicit null opts into neutral', () => {
+  const legacy = dashboardImageLayout(model(primary), measure);
+  assert.equal(legacy.commands.find(command => command.type === 'text' && command.value === primary[1].value).fill, '#ffffff');
+  const modern = model(primary.map((item, index) => index === 1 ? { ...item, attainment: null } : item));
+  const neutral = dashboardImageLayout(modern, measure);
+  assert.equal(neutral.commands.find(command => command.type === 'text' && command.value === primary[1].value).fill, attainmentBand(null).color);
 });

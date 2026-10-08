@@ -17,13 +17,13 @@ import styles from "./portfolio-communication.module.css";
 import OutlookHandoff from "./outlook-handoff";
 import EmailPreview from "./email-preview";
 
-type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; initialFormat?: 'email' | 'image' | 'summary'; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
+type Props = { dataset: Dataset; candidates: RegistryEntity[]; initialKey?: string; initialFormat?: 'email' | 'image' | 'summary'; initialShowProjection?: boolean; scopedUnitIds?: string[]; metric: Metric; month: number; period: string; uplift?: number; onClose: () => void };
 const errorText = (reason: unknown) => reason instanceof Error ? reason.message : "Não foi possível concluir a operação.";
 function attempt<T>(fn: () => T): { value: T | null; error: string } {
   try { return { value: fn(), error: "" }; } catch (reason) { return { value: null, error: errorText(reason) }; }
 }
 
-export default function PortfolioCommunication({ dataset, candidates, initialKey, initialFormat = 'email', metric, month, period, uplift = 0, onClose }: Props) {
+export default function PortfolioCommunication({ dataset, candidates, initialKey, initialFormat = 'email', initialShowProjection = false, scopedUnitIds, metric, month, period, uplift = 0, onClose }: Props) {
   const entities = useMemo(() => [...new Map(candidates.map((candidate) => [candidate.id, dataset.registry?.entities.find((entry) => entry.id === candidate.id) ?? candidate])).values()], [candidates, dataset.registry]);
   const [entityId, setEntityId] = useState(initialKey || entities[0]?.id || "");
   const [owner, setOwner] = useState<string | null>(null);
@@ -61,20 +61,20 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
         <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
           onPeriodChange={setSelectedPeriod} onMonthChange={setSelectedMonth} />
       </div>
-      {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} initialFormat={initialFormat} /> : <p role="alert">Não há unidades neste filtro.</p>}
+      {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} initialFormat={initialFormat} initialShowProjection={initialShowProjection} scopedUnitIds={scopedUnitIds} /> : <p role="alert">Não há unidades neste filtro.</p>}
     </section>
   </div>;
 }
 
-function Composer({ dataset, entity, owner, metric, month, period, uplift, initialFormat }: { dataset: Dataset; entity: RegistryEntity; owner: string | null; metric: Metric; month: number; period: string; uplift: number; initialFormat: 'email' | 'image' | 'summary' }) {
+function Composer({ dataset, entity, owner, metric, month, period, uplift, initialFormat, initialShowProjection, scopedUnitIds }: { dataset: Dataset; entity: RegistryEntity; owner: string | null; metric: Metric; month: number; period: string; uplift: number; initialFormat: 'email' | 'image' | 'summary'; initialShowProjection: boolean; scopedUnitIds?: string[] }) {
   const [contacts, setContacts] = useState<ResponsibleContact[]>([]);
   const [contactIds, setContactIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [contactError, setContactError] = useState("");
   const [extraEmails, setExtraEmails] = useState("");
   const [includeBoth, setIncludeBoth] = useState(false);
-  const [showProjection, setShowProjection] = useState(false);
-  const [showAnnual, setShowAnnual] = useState(initialFormat !== 'summary');
+  const [showProjection, setShowProjection] = useState(initialShowProjection);
+  const [showAnnual, setShowAnnual] = useState(false);
   const [intro, setIntro] = useState("");
   const [signature, setSignature] = useState("");
   const [subject, setSubject] = useState("");
@@ -112,7 +112,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift, initi
   }, [owner, dataset.year, entity.id]);
   const selectedContacts = contacts.filter((contact) => contactIds.includes(contact.id));
   const recipients = attempt(() => normalizeRecipients([...selectedContacts.flatMap((contact) => contact.emails), ...extraEmails.split(/[;,\n]+/)]));
-  const reportResult = useMemo(() => attempt(() => buildPortfolioReport({ dataset, entity, metric, includeBoth, month, period, uplift })), [dataset, entity, metric, includeBoth, month, period, uplift]);
+  const reportResult = useMemo(() => attempt(() => buildPortfolioReport({ dataset, entity, metric, includeBoth, month, period, uplift, scopedUnitIds })), [dataset, entity, metric, includeBoth, month, period, uplift, scopedUnitIds]);
   const report = reportResult.value;
   const baseMessage = report ? renderPortfolioCommunication(report, { names: selectedContacts.map((contact) => contact.name), intro, signature, subject, showProjection, showAnnual }) : null;
   const baseWhatsapp = report ? renderPortfolioCommunication(report, { names: phoneName ? [phoneName] : [], intro, signature, subject, showProjection, showAnnual }) : null;
@@ -121,11 +121,17 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift, initi
   const panelOutlook = attempt(() => message && recipients.value ? buildOutlookLink({ recipients: recipients.value, subject: message.subject, body: "", personal: personalOutlook }) : null);
   const whatsapp = attempt(() => whatsappMessage ? buildWhatsappLink({ phone, body: whatsappMessage.whatsapp }) : null);
 
+  const messageSnapshot = JSON.stringify([owner, dataset.year, entity.id, period, month, metric, includeBoth, showProjection, showAnnual, scopedUnitIds, message?.subject, message?.text, whatsappMessage?.whatsapp]);
+  const latestMessage = useRef(messageSnapshot);
+  latestMessage.current = messageSnapshot;
+  const copyGeneration = useRef(0);
   async function copy(value: string, label: string) {
+    const generation = ++copyGeneration.current;
+    const current = () => mounted.current && generation === copyGeneration.current && latestMessage.current === messageSnapshot;
     setClipboardVersion((version) => version + 1);
     setError(""); setFeedback("");
-    try { await navigator.clipboard.writeText(value); if (mounted.current) setFeedback(label); }
-    catch { if (mounted.current) setError("O navegador bloqueou a cópia. Selecione e copie o texto na prévia ou baixe o arquivo."); }
+    try { await navigator.clipboard.writeText(value); if (current()) setFeedback(label); }
+    catch { if (current()) setError("O navegador bloqueou a cópia. Selecione e copie o texto na prévia ou baixe o arquivo."); }
     finally { if (mounted.current) setClipboardVersion((version) => version + 1); }
   }
   function download(type: "eml" | "html") {
@@ -198,7 +204,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift, initi
     <section hidden={step !== 2} className={styles.stepContent} aria-label="Revisão da comunicação">
       <h3 tabIndex={-1} ref={step === 2 ? stepTitle : null}>Confira antes de compartilhar</h3>
       {period !== "annual" && <label className={styles.contact}><input type="checkbox" aria-label="Incluir cenário anual" checked={showAnnual} onChange={(event) => setShowAnnual(event.target.checked)} /><span><strong>Incluir cenário anual</strong><small>Acrescente a visão do ano ao período escolhido.</small></span></label>}
-      <label className={styles.contact}><input type="checkbox" checked={showProjection} onChange={(event) => setShowProjection(event.target.checked)} /><span><strong>Incluir projeção de fechamento</strong><small>Acrescente a estimativa aos resultados. Textos editados manualmente são preservados.</small></span></label>
+      <label className={styles.contact}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={(event) => setShowProjection(event.target.checked)} /><span><strong>Incluir projeção de produção</strong><small>Acrescente a estimativa aos resultados. Textos editados manualmente são preservados.</small></span></label>
       <div className={styles.tabs} role="group" aria-label="Prévia da comunicação">{[['panel', 'Painel do e-mail'], ['email', 'Texto do e-mail'], ['whatsapp', 'Painel do WhatsApp']].map(([key, label]) => <button key={key} type="button" className={`button ${tab === key ? 'primary' : 'secondary'}`} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
       {noPanel}
       {step === 2 && (tab === 'panel' ? <EmailPreview html={message.html} /> : tab === 'email' ? <label className={styles.textPreview}>E-mail gerado<textarea rows={18} readOnly value={message.text} /></label> : <><WhatsappDashboard onClipboardChange={invalidateClipboard} model={whatsappMessage.dashboard} text={whatsappMessage.whatsapp} subject={whatsappMessage.subject} busy={loading} /><details className={styles.disclosure}><summary>Ver texto do WhatsApp</summary><label>WhatsApp gerado<textarea rows={10} readOnly value={whatsappMessage.whatsapp} /></label></details></>)}

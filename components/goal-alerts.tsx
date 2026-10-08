@@ -1,4 +1,5 @@
 'use client';
+import { attainmentBand } from '@/lib/attainment.mjs';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, Mail, MessageCircle, Trophy } from 'lucide-react';
@@ -127,7 +128,7 @@ export function GoalAlerts({ dataset, userId }: { dataset: Dataset; userId: stri
       return <article key={alert.key} className={styles.card}>
         <div className={styles.cardTop}><span>{kindLabel[alert.entity.kind]} · {alert.metricLabel}</span><span className={styles.badge}>{state?.readAt ? <><Check size={14} /> Lida</> : 'Nova'}</span></div>
         <h3>{alert.entity.name}</h3><p className={styles.path}>Central {alert.entity.central}{alert.entity.cooperative && ` · Cooperativa ${alert.entity.cooperative}`}{alert.entity.pa != null && ` · PA ${alert.entity.pa}`}</p>
-        <div className={styles.amount}><strong>{percent(alert.attainment)}</strong><span>da meta de {MONTHS[month]}/{dataset.year}</span></div>
+        <div className={styles.amount} data-attainment={attainmentBand(alert.attainment).key}><strong>{percent(alert.attainment)}</strong><span>da meta de {MONTHS[month]}/{dataset.year}</span></div>
         <dl><div><dt>Meta do mês</dt><dd>{money(alert.target)}</dd></div><div><dt>Realizado</dt><dd>{money(alert.actual)}</dd></div></dl>
         <p className={styles.cutoff}>Dados até {date(alert.cutoff)}{state?.notifiedAt && ` · Comunicação registrada em ${new Date(state.notifiedAt).toLocaleDateString('pt-BR')}`}</p>
         <div className={styles.actions}>{!state?.readAt && <button className="button secondary" disabled={busy === alert.key || loading} onClick={() => mark(alert, 'read')}><Check size={16} />Marcar como lida</button>}<button className="button secondary" disabled={busy === alert.key} onClick={() => prepareContact(alert)}><MessageCircle size={16} />Preparar WhatsApp</button><button type="button" className="button secondary" aria-expanded={emailPanel?.view === exportView && emailPanel.key === alert.key} onClick={() => { contactRequest.current++; setBusy(''); setContactPanel(null); setEmailPanel((current) => current?.view === exportView && current.key === alert.key ? null : { view: exportView, key: alert.key }); }}><Mail size={16} aria-hidden="true" />Preparar Outlook</button><DashboardImageCopy key={`${userId}:${alert.key}`} snapshot={JSON.stringify(alert)} filename={`meta-${alert.entity.id.replace(/[^a-zA-Z0-9_-]/g, '-')}-${alert.metric}-${alert.year}-${alert.month + 1}.png`} onClipboardChange={invalidateClipboard} buildModel={() => buildGoalAlertPresentation(alert).dashboard} /></div>

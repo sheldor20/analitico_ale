@@ -12,6 +12,7 @@ import { registerPaScenarioTests } from './pa-scenario-cases.mjs';
 import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.mjs';
 import { registerWorkflowTests } from './workflow-cases.mjs';
 import { registerPriorityTests } from './priority-cases.mjs';
+import { registerManagementPeriodTests } from './management-period-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -157,12 +158,18 @@ test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved d
   expect(outlook.hostname).toBe('outlook.office.com');
   expect(outlook.searchParams.get('to').split(';').sort()).toEqual(['ana@example.com', 'extra@example.com']);
   expect(outlook.searchParams.get('body')).toContain('Vamos priorizar');
-  expect(outlook.searchParams.get('body')).toContain('400,00');
+  const emailBody = outlook.searchParams.get('body').replace(/\s+/g, ' ');
+  expect(emailBody).toContain('Meta: R$ 100,00 · Realizado: R$ 50,00');
+  expect(emailBody).toContain('Meta: R$ 1.000,00 · Realizado: R$ 700,00');
+  expect(emailBody).not.toContain('Cenário anual');
   await whatsappDelivery(dialog);
   const wa = new URL(await dialog.getByRole('link', { name: 'Abrir WhatsApp', exact: true }).getAttribute('href'));
   expect(wa.pathname).toBe('/5571999999999');
   expect(wa.searchParams.get('text')).toContain('Olá, Ana Teste!');
-  expect(wa.searchParams.get('text')).toContain('400,00');
+  const whatsappBody = wa.searchParams.get('text').replace(/\s+/g, ' ');
+  expect(whatsappBody).toContain('Meta: R$ 100,00 · Realizado: R$ 50,00');
+  expect(whatsappBody).toContain('Meta: R$ 1.000,00 · Realizado: R$ 700,00');
+  expect(whatsappBody).not.toContain('Cenário anual');
   await dialog.evaluate((node) => { node.scrollTop = 0; });
   await page.screenshot({ path: testInfo.outputPath('desktop-portfolio.png'), fullPage: true });
   await emailDelivery(dialog);
@@ -288,3 +295,5 @@ registerCooperativeScenarioTests({ test, expect, setup });
 registerWorkflowTests({ test, expect, setup });
 
 registerPriorityTests({ test, expect, setup });
+
+registerManagementPeriodTests({ test, expect, setup });

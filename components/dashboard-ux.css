@@ -190,7 +190,7 @@
 .communication-start legend {font-size:14px;font-weight:700;margin-bottom:8px}
 .communication-start label {display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface)}
 .communication-start label:has(input:checked) {background:var(--green-light);border-color:var(--sicoob-turquoise)}
-.communication-start label input[type="radio"] {width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;accent-color:var(--sicoob-dark)}
+.communication-start label input:is([type="radio"],[type="checkbox"]) {width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;accent-color:var(--sicoob-dark)}
 .communication-start small {display:block;font-size:13px;color:var(--muted)}
 .communication-start>.button {justify-self:end}
 @media(max-width:720px) {

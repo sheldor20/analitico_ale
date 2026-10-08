@@ -21,6 +21,19 @@
   --green-deep: var(--sicoob-dark);
   --green-light: #e4f6f2;
   --warning: #655400;
+  /* Observed attainment bands mirror lib/attainment.mjs. */
+  --attainment-red: #B42318;
+  --attainment-red-background: #FEF3F2;
+  --attainment-red-border: #FDA29B;
+  --attainment-yellow: #854D0E;
+  --attainment-yellow-background: #FEF9C3;
+  --attainment-yellow-border: #EAB308;
+  --attainment-blue: #175CD3;
+  --attainment-blue-background: #EFF8FF;
+  --attainment-blue-border: #84CAFF;
+  --attainment-neutral: #526A70;
+  --attainment-neutral-background: #F3F7F7;
+  --attainment-neutral-border: #D9E5E6;
   --chart-target: #afc8cd;
   --chart-actual: var(--sicoob-turquoise);
   --chart-negative: var(--sicoob-purple);
@@ -2349,6 +2362,24 @@ tbody tr:nth-child(even):hover { background: #f0f9f7; }
     font-size: 14px !important;
   }
 }
+/* Apply only to observed attainment; commercial pace/status keeps its meaning. */
+[data-attainment="red"] { --attainment-color: var(--attainment-red); --attainment-background: var(--attainment-red-background); --attainment-border: var(--attainment-red-border); }
+[data-attainment="yellow"] { --attainment-color: var(--attainment-yellow); --attainment-background: var(--attainment-yellow-background); --attainment-border: var(--attainment-yellow-border); }
+[data-attainment="blue"] { --attainment-color: var(--attainment-blue); --attainment-background: var(--attainment-blue-background); --attainment-border: var(--attainment-blue-border); }
+[data-attainment="neutral"] { --attainment-color: var(--attainment-neutral); --attainment-background: var(--attainment-neutral-background); --attainment-border: var(--attainment-neutral-border); }
+.attainment[data-attainment] strong,
+.attainment-value[data-attainment] { color: var(--attainment-color); }
+td.numeric[data-attainment] { color: var(--attainment-color); background: var(--attainment-background); }
+.attainment[data-attainment] .mini-progress i { background: var(--attainment-color); }
+.workspace-content .kpi[data-attainment] { background: var(--attainment-background); border-color: var(--attainment-border); border-top: 3px solid var(--attainment-color); color: var(--attainment-color); }
+.workspace-content .kpi[data-attainment] .kpi-heading,
+.workspace-content .kpi[data-attainment] p,
+.workspace-content .kpi[data-attainment] svg { color: var(--attainment-color); }
+.workspace-content .kpi[data-attainment] .metric-progress { background: var(--attainment-border); }
+.workspace-content .kpi[data-attainment] .metric-progress > span { background: var(--attainment-color); }
+.attainment-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+.attainment-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.attainment-legend i { width: 10px; height: 10px; flex: 0 0 10px; background: var(--attainment-color); border-radius: 50%; }
 @media print {
   .sidebar,
   .topbar,

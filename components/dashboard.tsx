@@ -68,6 +68,9 @@ import type { ActionState, DataRow, Dataset, ImportConfig, RegistryEntity } from
 import "./dashboard-ux.css";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
+import PeriodPerformance from './period-performance';
+import { attainmentBand } from '@/lib/attainment.mjs';
+import AttainmentLegend from './ui/attainment-legend';
 
 import PortalNavigation, { VIEW_TITLES, VIEW_DESCRIPTIONS, type PortalView as View } from './ui/portal-navigation';
 import Kpi from './ui/metric-card';
@@ -134,6 +137,7 @@ export default function Dashboard() {
   const [exportMode, setExportMode] = useState<'filtered' | 'selected'>('filtered');
   const [showCommunicationStart, setShowCommunicationStart] = useState(false);
   const [communicationFormat, setCommunicationFormat] = useState<'email' | 'image' | 'summary'>('email');
+  const [communicationProjection, setCommunicationProjection] = useState(false);
   const [showMoreIndicators, setShowMoreIndicators] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -173,7 +177,7 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
-  const [sharing, setSharing] = useState<{ kind: "pa" | "cooperative"; central?: string; coop?: string; selectedIds?: string[]; mode?: 'all' | 'filtered' | 'selected'; format?: 'email' | 'image' | 'summary' } | null>(null);
+  const [sharing, setSharing] = useState<{ kind: "pa" | "cooperative"; central?: string; coop?: string; selectedIds?: string[]; mode?: 'all' | 'filtered' | 'selected'; format?: 'email' | 'image' | 'summary'; showProjection?: boolean } | null>(null);
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
   const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
@@ -426,6 +430,7 @@ export default function Dashboard() {
   function openCommunicationStart() { communicationOpener.current = document.activeElement as HTMLElement | null; setShowCommunicationStart(true); }
   function startCommunication(choice: CommunicationChoice, fromStart = true) {
     setShowCommunicationStart(false); communicationFromStart.current = fromStart;
+    setCommunicationProjection(choice.showProjection ?? false);
     if (choice.content === 'individual') {
       setCommunicationInitialKey(entityFromAnalysis(selectedRows[0] ?? displayed[0]).id); setCommunicationFormat(choice.format); setShowCommunication(true); return;
     }
@@ -435,7 +440,7 @@ export default function Dashboard() {
       const entities = new Set(chosenRows.map(row => entityFromAnalysis(row).id));
       ids = (dataset?.registry?.entities ?? []).filter(entity => entity.kind === choice.content && (central === 'all' || entity.central === central) && (coop === 'all' || `${entity.central}:${entity.cooperative}` === coop) && (choice.content !== 'pa' || effectiveSource !== 'cadence' || (pa === 'all' || `${entity.central}:${entity.cooperative}:${entity.pa}` === pa) && (group === 'all' || entity.group === group)) && (entities.has(entity.id) || entities.has(`central:${entity.central}`) || (choice.content === 'pa' && entities.has(`cooperative:${entity.central}:${entity.cooperative}`)))).map(entity => entity.id);
     }
-    setSharing({kind:choice.content, format:choice.format, ...(ids ? {selectedIds:ids, mode:'selected'} : {mode: actualLevel === 'central' || choice.content === 'pa' && effectiveSource !== 'cadence' ? 'all' : 'filtered'})});
+    setSharing({kind:choice.content, format:choice.format, showProjection:choice.showProjection ?? false, ...(ids ? {selectedIds:ids, mode:'selected'} : {mode: actualLevel === 'central' || choice.content === 'pa' && effectiveSource !== 'cadence' ? 'all' : 'filtered'})});
   }
   function restoreCommunicationFocus() { if (communicationFromStart.current) (communicationOpener.current?.isConnected ? communicationOpener.current : communicationButton.current)?.focus(); communicationFromStart.current = false; }
   function closeCommunication() { setShowCommunication(false); restoreCommunicationFocus(); }
@@ -782,6 +787,28 @@ export default function Dashboard() {
                               />
                             </label>
                             <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+  </>;
+  const resultContextPanels = <>
+                  {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action => { setSortBy(action.sortBy); setPriorityFocus({context:filterContext,keys:action.keys,label:({pace:'Unidades abaixo do ritmo', 'near-goal':'Próximas da meta', production:'Maiores produções', review:'Dados para conferir'} as const)[action.kind]}); document.querySelector('[aria-label="Lista de unidades"]')?.scrollIntoView({block:'start',behavior:'smooth'}); }} />}
+                  {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
+                    <BellRing size={19} aria-hidden="true" /><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong>
+                    <button className="button quiet" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={16} /></button>
+                  </aside>}
+                  {view === 'overview' && <div className="result-help-row">
+                    <details className="reading-guide"><summary>Como ler estes números</summary><dl>
+                      <div><dt>Meta</dt><dd>O valor que a unidade precisa alcançar no período escolhido.</dd></div>
+                      <div><dt>Realizado</dt><dd>O valor registrado na base até a data informada.</dd></div>
+                      <div><dt>Atingimento</dt><dd>Quanto da meta já foi alcançado. A partir de 100%, a meta foi atingida.</dd></div>
+                      <div><dt>GAP / crescimento</dt><dd>O valor que falta para a meta ou que já ficou acima dela.</dd></div>
+                      <div><dt>Projeção</dt><dd>Uma estimativa de fechamento. Não representa produção já realizada.</dd></div>
+                    </dl></details>
+
+                  </div>}
+                  {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
+                    <Info size={17} aria-hidden="true" /><span><strong>GAP somado: {money(leafSummary.individualGap)}.</strong> A superação de uma unidade não cobre a meta das demais.</span>
+                    {view !== 'actions' && <button className="button quiet" onClick={() => setView('actions')}>Ver plano de ação <ArrowRight size={16} /></button>}
+                  </div>}
+                  {view !== "actions" && dataset && <details className="progressive-panel"><summary>Rede da seleção</summary><NetworkSummary dataset={dataset} filters={{...scenarioFilters, unitIds:displayed.map(row => entityFromAnalysis(row).id)}} /></details>}
   </>;
   const importPanel = (
     <>
@@ -1261,11 +1288,11 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
-                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image"},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
+                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
                 </section>
               ) : (
                 <>
-                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span></div>
+                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span>{view !== 'actions' && <button type="button" className="button quiet" onClick={() => { const panel = document.getElementById('resultados-por-periodo'); panel?.focus({ preventScroll: true }); panel?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}</div>
                   <section className="kpi-grid" aria-label="Resultado do período">
                     <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
                     <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
@@ -1277,26 +1304,7 @@ export default function Dashboard() {
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                   </section>
-                  {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action => { setSortBy(action.sortBy); setPriorityFocus({context:filterContext,keys:action.keys,label:({pace:'Unidades abaixo do ritmo', 'near-goal':'Próximas da meta', production:'Maiores produções', review:'Dados para conferir'} as const)[action.kind]}); document.querySelector('[aria-label="Lista de unidades"]')?.scrollIntoView({block:'start',behavior:'smooth'}); }} />}
-                  {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
-                    <BellRing size={19} aria-hidden="true" /><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong>
-                    <button className="button quiet" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={16} /></button>
-                  </aside>}
-                  {view === 'overview' && <div className="result-help-row">
-                    <details className="reading-guide"><summary>Como ler estes números</summary><dl>
-                      <div><dt>Meta</dt><dd>O valor que a unidade precisa alcançar no período escolhido.</dd></div>
-                      <div><dt>Realizado</dt><dd>O valor registrado na base até a data informada.</dd></div>
-                      <div><dt>Atingimento</dt><dd>Quanto da meta já foi alcançado. A partir de 100%, a meta foi atingida.</dd></div>
-                      <div><dt>GAP / crescimento</dt><dd>O valor que falta para a meta ou que já ficou acima dela.</dd></div>
-                      <div><dt>Projeção</dt><dd>Uma estimativa de fechamento. Não representa produção já realizada.</dd></div>
-                    </dl></details>
-
-                  </div>}
-                  {summary.gap != null && leafSummary.individualGap != null && leafSummary.individualGap > summary.gap + 0.01 && <div className="all-goals-note">
-                    <Info size={17} aria-hidden="true" /><span><strong>GAP somado: {money(leafSummary.individualGap)}.</strong> A superação de uma unidade não cobre a meta das demais.</span>
-                    {view !== 'actions' && <button className="button quiet" onClick={() => setView('actions')}>Ver plano de ação <ArrowRight size={16} /></button>}
-                  </div>}
-                  {view !== "actions" && dataset && <details className="progressive-panel"><summary>Rede da seleção</summary><NetworkSummary dataset={dataset} filters={{...scenarioFilters, unitIds:displayed.map(row => entityFromAnalysis(row).id)}} /></details>}
+                  {view === 'actions' && resultContextPanels}
                   {view === "actions" ? (
                     <section className="panel action-panel" aria-label="Lista de ações">
                       <div className="panel-heading">
@@ -1364,7 +1372,8 @@ export default function Dashboard() {
                                   : "Resultado por cooperativa"}
                             </h2>
                             <p>{displayed.length} de {analyses.length} unidades</p>
-                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image"},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
+                            <AttainmentLegend />
+                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                           </div>
                           <div className="table-controls">
                             {listControls}
@@ -1427,11 +1436,11 @@ export default function Dashboard() {
                                     <td className="numeric">
                                       {money(r.target)}
                                     </td>
-                                    <td className="numeric">
+                                    <td className="numeric" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
                                       {money(r.actual)}
                                     </td>
                                     <td>
-                                      <div className="attainment">
+                                      <div className="attainment" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
                                         <strong>{percent(r.attainment)}</strong>
                                         <span className="mini-progress">
                                           <i
@@ -1467,7 +1476,7 @@ export default function Dashboard() {
                                         <button type="button" className="icon-button" aria-label={`${expandedCoops.includes(r.key) ? 'Recolher' : 'Expandir'} PAs de ${r.name}`} aria-expanded={expandedCoops.includes(r.key)} onClick={() => setExpandedCoops(keys => keys.includes(r.key) ? keys.filter(key => key !== r.key) : [...keys,r.key])}><ChevronDown size={18} /></button>
                                       </>}
                                       <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
-                                        onClick={() => { communicationFromStart.current = false; setCommunicationFormat('email'); setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
+                                        onClick={() => { communicationFromStart.current = false; setCommunicationFormat('email'); setCommunicationProjection(false); setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
                                       <button
                                         className="icon-button"
                                         aria-label={`Detalhar ${r.name}`}
@@ -1488,7 +1497,9 @@ export default function Dashboard() {
                         )}
                         <div className="pagination">{displayed.length} unidades exibidas</div>
                       </section>
+                      {resultContextPanels}
                       {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa" })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
+                      {dataset && <PeriodPerformance dataset={dataset} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">
@@ -1504,8 +1515,7 @@ export default function Dashboard() {
                                 Meta
                               </span>
                               <span>
-                                <i className="legend-actual" />
-                                Realizado
+                                Realizado · cor por atingimento
                               </span>
                             </div>
                           </div>
@@ -1604,11 +1614,11 @@ export default function Dashboard() {
       {showCommunicationStart && dataset && displayed.length > 0 && <Modal title="Gerar comunicação" onClose={() => setShowCommunicationStart(false)}><CommunicationStart level={actualLevel} scope={scopeLabel} period={`${metricName(effectiveMetric)} · ${periodDescription}`} selectedCount={selectedKeys.length} hasCooperatives={effectiveSource === 'base'} hasPas={(analysisRows(dataset).some(row => row.source === 'cadence' && (central === 'all' || row.central === central) && (coop === 'all' || `${row.central}:${row.cooperative}` === coop)))} onContinue={startCommunication} /></Modal>}
       {showExport && dataset && <Modal title="Exportar dados" onClose={() => setShowExport(false)}><ResultExport rows={displayed} selectedIds={selectedKeys} initialMode={exportMode} ownerId={user?.id ?? 'local'} context={{year:dataset.year, month, period, source:effectiveSource, metric:effectiveMetric, level:actualLevel, scopeLabel, filterLabel:[search ? `Busca: ${search}` : '', statusFilter !== 'all' ? `Situação: ${statusFilter}` : '', focus?.label ?? ''].filter(Boolean).join(' · '), uplift}} /></Modal>}
       {showCommunication && dataset && displayed.length > 0 && (
-        <PortfolioCommunication dataset={dataset} candidates={displayed.map(entityFromAnalysis)} initialKey={communicationInitialKey} initialFormat={communicationFormat}
+        <PortfolioCommunication dataset={dataset} candidates={displayed.map(entityFromAnalysis)} initialKey={communicationInitialKey} initialFormat={communicationFormat} initialShowProjection={communicationProjection} scopedUnitIds={visibleLeaves.map(row => entityFromAnalysis({ ...row, kind: row.source === 'cadence' ? 'pa' : row.cooperative ? 'cooperative' : 'central' }).id)}
           metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
           onClose={closeCommunication} />
       )}
-      {sharing && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}:${sharing.kind}`} unitKind={sharing.kind} userId={user.id} dataset={dataset} filters={sharingFilters} initialFormat={sharing.format} initialMode={sharing.mode} initialSelectedIds={sharing.selectedIds} onClose={closeSharing} />}
+      {sharing && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}:${sharing.kind}`} unitKind={sharing.kind} userId={user.id} dataset={dataset} filters={sharingFilters} initialFormat={sharing.format} initialMode={sharing.mode} initialSelectedIds={sharing.selectedIds} initialShowProjection={sharing.showProjection ?? false} onClose={closeSharing} />}
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)} wide>
           <div className="detail-content">
@@ -1686,8 +1696,8 @@ export default function Dashboard() {
                       <tr key={m}>
                         <td>{m}</td>
                         <td className="numeric">{money(a.target)}</td>
-                        <td className="numeric">{money(a.actual)}</td>
-                        <td className="numeric">{percent(a.attainment)}</td>
+                        <td className="numeric" data-attainment={attainmentBand(a.annualConflict ? null : a.attainment).key}>{money(a.actual)}</td>
+                        <td className="numeric" data-attainment={attainmentBand(a.annualConflict ? null : a.attainment).key}>{percent(a.attainment)}</td>
                         <td>{a.phase}</td>
                       </tr>
                     );
@@ -1972,7 +1982,7 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
           return (
             <g key={m.month}>
               <title>
-                {m.month}: meta {money(m.target)}; realizado {money(m.actual)}
+                {m.month}: meta {money(m.target)}; realizado {money(m.actual)}; atingimento {percent(m.attainment)}
               </title>
               {m.target != null && (
                 <rect
@@ -1995,7 +2005,7 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
                   width="17"
                   height={Math.max(1, Math.abs(m.actual) * factor)}
                   rx="3"
-                  fill={m.actual < 0 ? "var(--chart-negative)" : "var(--chart-actual)"}
+                  fill={attainmentBand(m.attainment).color}
                 />
               )}
               <text
@@ -2030,7 +2040,7 @@ function MonthlyChart({ rows, year }: { rows: DataRow[]; year: number }) {
                 <tr key={m.month}>
                   <td>{m.month}</td>
                   <td className="numeric">{money(m.target)}</td>
-                  <td className="numeric">{money(m.actual)}</td>
+                  <td className="numeric" data-attainment={attainmentBand(m.attainment).key}>{money(m.actual)}</td>
                 </tr>
               ))}
             </tbody>

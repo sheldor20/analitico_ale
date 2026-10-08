@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
 
-export type CommunicationChoice = { content: 'cooperative' | 'pa' | 'individual'; format: 'email' | 'image' | 'summary' };
+export type CommunicationChoice = { content: 'cooperative' | 'pa' | 'individual'; format: 'email' | 'image' | 'summary'; showProjection: boolean };
 export default function CommunicationStart({ level, scope, period, selectedCount, hasCooperatives, hasPas, onContinue }: {
   level: string; scope: string; period: string; selectedCount: number; hasCooperatives: boolean; hasPas: boolean; onContinue: (choice: CommunicationChoice) => void;
 }) {
   const [content, setContent] = useState<CommunicationChoice['content']>(level === 'pa' ? 'pa' : 'cooperative');
+  const [showProjection, setShowProjection] = useState(false);
   const [format, setFormat] = useState<CommunicationChoice['format']>('email');
   return <div className="communication-start">
     <p><strong>{scope}</strong><br />{period}</p>
@@ -17,7 +18,8 @@ export default function CommunicationStart({ level, scope, period, selectedCount
     <fieldset><legend>Formato</legend>
       {([['email', 'E-mail'], ['image', 'Imagem para WhatsApp'], ['summary', 'Painel resumido']] as const).map(([value, label]) => <label key={value}><input type="radio" name="communication-format" checked={format === value} onChange={() => setFormat(value)} /><span>{label}</span></label>)}
     </fieldset>
+    <label><input aria-label="Incluir projeção de produção" type="checkbox" checked={showProjection} onChange={event => setShowProjection(event.target.checked)} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, calculada pelo ritmo até a data de corte.</small></span></label>
     <p className="helper">{selectedCount ? `${selectedCount} unidades selecionadas. Você poderá revisar a seleção e a ordem.` : 'Os filtros atuais serão usados. Você poderá revisar as unidades e a mensagem.'}</p>
-    <button type="button" className="button primary" onClick={() => onContinue({content, format})}>Continuar</button>
+    <button type="button" className="button primary" onClick={() => onContinue({content, format, showProjection})}>Continuar</button>
   </div>;
 }

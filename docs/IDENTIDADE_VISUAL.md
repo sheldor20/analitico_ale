@@ -11,7 +11,7 @@ Preferência permanente solicitada por Kim em 09/09/2026: aplicar a identidade v
 
 | Elemento | Aplicação |
 | --- | --- |
-| Turquesa `#00AE9D` | Ações principais, seleção, produção e destaques |
+| Turquesa `#00AE9D` | Ações principais, seleção e destaques de navegação |
 | Verde escuro `#003641` | Navegação, títulos, texto sobre turquesa e indicadores de destaque |
 | Branco `#FFFFFF` | Superfícies e espaço de leitura |
 | Verde médio `#7DB61C` | Apoio em indicadores positivos |
@@ -38,3 +38,7 @@ A fonte Sicoob Sans foi obtida do arquivo público utilizado pela página oficia
 - Evitar textos claros sobre branco; usar `--ink` e `--muted`. Cor complementa o rótulo de situação, sem ser o único sinal.
 - No celular, manter os campos com texto de 16 px, navegação inferior com rolagem horizontal, margem segura e marca completa no cabeçalho.
 - Exportações e novos módulos devem reutilizar os mesmos tokens, nomes, logo e padrão de leitura.
+
+## Faixas de atingimento — atualização de 08/10/2026
+
+A produção realizada recebe uma faixa calculada pela proporção exata entre realizado e meta: **vermelho abaixo de 70%**, **amarelo de 70% a menos de 100%** e **azul a partir de 100%**. Valores sem avaliação, incompletos ou com metas divergentes usam cinza. O helper `lib/attainment.mjs` concentra limites, rótulos e cores para interface, e-mail e PNG. Os números e a legenda continuam visíveis; a cor não substitui texto. Projeções são estimativas separadas e não determinam a cor do realizado. A marca, os logotipos e as cores de navegação permanecem oficiais.

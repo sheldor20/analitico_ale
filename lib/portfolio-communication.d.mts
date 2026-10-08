@@ -19,7 +19,7 @@ export type PortfolioSection = { metric: Metric; label: string; available: false
 };
 export type PortfolioReport = {
   version: 1; year: number; month: number; period: string; periodLabel: string;
-  source: "base" | "cadence"; uplift: number; entity: RegistryEntity; centralName?: string; sections: PortfolioSection[];
+  source: "base" | "cadence"; uplift: number; entity: RegistryEntity; centralName?: string; scopeNote?: string; sections: PortfolioSection[];
 };
 export type PortfolioMessage = { subject: string; text: string; whatsapp: string; html: string; dashboard: PortfolioDashboard };
 export function escapeHtml(value: unknown): string;
@@ -27,7 +27,7 @@ export function entityFromAnalysis(row: { [key: string]: any }): RegistryEntity;
 export function recipientsForContacts(contacts: ResponsibleContact[], year: number, entity: RegistryEntity): ResponsibleContact[];
 export function normalizeRecipients(values: string | string[]): string[];
 export function whatsappNumber(value: string): string;
-export function buildPortfolioReport(options: { dataset: Dataset; entity: RegistryEntity; metric?: Metric; includeBoth?: boolean; month?: number; period?: string; uplift?: number }): PortfolioReport;
+export function buildPortfolioReport(options: { dataset: Dataset; entity: RegistryEntity; metric?: Metric; includeBoth?: boolean; month?: number; period?: string; uplift?: number; scopedUnitIds?: string[] }): PortfolioReport;
 export function renderPortfolioCommunication(report: PortfolioReport, options?: { names?: string[]; intro?: string; signature?: string; subject?: string; showProjection?: boolean; showAnnual?: boolean }): PortfolioMessage;
 export function buildOutlookLink(options: { recipients?: string[]; subject: string; body?: string; personal?: boolean }): { url: string; requiresPaste: boolean };
 export function buildWhatsappLink(options: { phone?: string; body?: string }): { url: string; requiresPaste: boolean };
