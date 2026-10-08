@@ -1,7 +1,7 @@
 "use client";
 import { goalVariance } from '@/lib/goal-variance.mjs';
 import { readWorkbookFile } from "@/lib/xlsx-safety.mjs";
-import { Fragment, useEffect, useMemo, useState, useRef } from "react";
+import { Fragment, useEffect, useId, useMemo, useState, useRef } from "react";
 import {
   Activity,
   ArrowDownToLine,
@@ -71,6 +71,7 @@ import { periodTitle } from '@/lib/periods.mjs';
 import PeriodPerformance from './period-performance';
 import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
+import PanelToggle from './ui/panel-toggle';
 
 import PortalNavigation, { VIEW_TITLES, VIEW_DESCRIPTIONS, type PortalView as View } from './ui/portal-navigation';
 import Kpi from './ui/metric-card';
@@ -139,6 +140,11 @@ export default function Dashboard() {
   const [communicationFormat, setCommunicationFormat] = useState<'email' | 'image' | 'summary'>('email');
   const [communicationProjection, setCommunicationProjection] = useState(false);
   const [showMoreIndicators, setShowMoreIndicators] = useState(false);
+  const [metricsExpanded, setMetricsExpanded] = useState(true);
+  const [unitsExpanded, setUnitsExpanded] = useState(true);
+  const [periodExpandRequest, setPeriodExpandRequest] = useState(0);
+  const metricContentId = useId();
+  const unitContentId = useId();
   const [leaving, setLeaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const communicationButton = useRef<HTMLButtonElement>(null);
@@ -378,6 +384,7 @@ export default function Dashboard() {
   }
   function navigate(next: View) {
     if (next !== view && !canLeaveRegistry()) return false;
+    if (next !== view && (next === 'overview' || next === 'cadence')) setUnitsExpanded(true);
     setSharing(null);
     setDrillHistory([]); setPriorityFocus(null); setPa('all'); setExpandedCoops([]);
     setAgendaRequest(null);
@@ -416,6 +423,7 @@ export default function Dashboard() {
   }
   function openCooperative(row: Analysis, cadence = false) {
     rememberFilters();
+    setUnitsExpanded(true);
     setCentral(row.central); setCoop(`${row.central}:${row.cooperative}`); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setPriorityFocus(null);
     if (cadence) { setView('cadence'); setSource('cadence'); setMetric('VN'); }
     else { setLevel('cooperative'); setExpandedPaKey(`${dataset?.year}:${row.central}:${row.cooperative}`); }
@@ -789,7 +797,7 @@ export default function Dashboard() {
                             <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
   </>;
   const resultContextPanels = <>
-                  {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action => { setSortBy(action.sortBy); setPriorityFocus({context:filterContext,keys:action.keys,label:({pace:'Unidades abaixo do ritmo', 'near-goal':'Próximas da meta', production:'Maiores produções', review:'Dados para conferir'} as const)[action.kind]}); document.querySelector('[aria-label="Lista de unidades"]')?.scrollIntoView({block:'start',behavior:'smooth'}); }} />}
+                  {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action => { setUnitsExpanded(true); setSortBy(action.sortBy); setPriorityFocus({context:filterContext,keys:action.keys,label:({pace:'Unidades abaixo do ritmo', 'near-goal':'Próximas da meta', production:'Maiores produções', review:'Dados para conferir'} as const)[action.kind]}); requestAnimationFrame(() => { const panel = document.querySelector<HTMLElement>('[aria-label="Lista de unidades"]'); panel?.focus({preventScroll:true}); panel?.scrollIntoView({block:'start',behavior:'smooth'}); }); }} />}
                   {dataset && view === 'overview' && monthlyAchievements.length > 0 && <aside className="achievement-notice" aria-label="Alerta de metas atingidas">
                     <BellRing size={19} aria-hidden="true" /><strong>{monthlyAchievements.length} {monthlyAchievements.length === 1 ? 'meta atingida' : 'metas atingidas'} em {MONTHS[achievedMonth]}/{dataset.year}</strong>
                     <button className="button quiet" onClick={() => navigate('alerts')}>Ver conquistas <ArrowRight size={16} /></button>
@@ -1292,8 +1300,10 @@ export default function Dashboard() {
                 </section>
               ) : (
                 <>
-                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span>{view !== 'actions' && <button type="button" className="button quiet" onClick={() => { const panel = document.getElementById('resultados-por-periodo'); panel?.focus({ preventScroll: true }); panel?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}</div>
-                  <section className="kpi-grid" aria-label="Resultado do período">
+                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span>{view !== 'actions' && <button type="button" className="button quiet" onClick={() => { setPeriodExpandRequest(value => value + 1); requestAnimationFrame(() => { const panel = document.getElementById('resultados-por-periodo'); panel?.focus({ preventScroll: true }); panel?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}</div>
+                  <section className="overview-metrics" aria-label="Resultado do período">
+                    <div className="overview-block-heading"><h2>Resultado do período</h2><PanelToggle expanded={metricsExpanded} onToggle={() => setMetricsExpanded(value => !value)} controls={metricContentId} label="indicadores do período" /></div>
+                    <div className="kpi-grid" id={metricContentId} hidden={!metricsExpanded}>
                     <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
                     <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
                       sub={hasGoalConflict ? 'Metas divergentes · confira a base' : displayed.length ? `${percent(summary.attainment)} da meta do período` : 'Nenhuma unidade na seleção'}
@@ -1303,6 +1313,7 @@ export default function Dashboard() {
                       icon={variance.kind === 'growth' ? <TrendingUp size={20} /> : <Flag size={20} />} growth={variance.kind === 'growth'} />
                     <Kpi title="Projeção de fechamento" value={displayed.length ? money(summary.projected) : '—'}
                       sub={displayed.length ? `${percent(summary.projectedAttainment)} da meta${uplift ? ` · simulação +${uplift}%` : ' · estimativa'}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
+                    </div>
                   </section>
                   {view === 'actions' && resultContextPanels}
                   {view === "actions" ? (
@@ -1361,8 +1372,8 @@ export default function Dashboard() {
                     </section>
                   ) : (
                     <>
-                      <section className="panel table-panel" aria-label="Lista de unidades">
-                        <div className="panel-heading table-heading">
+                      <section className="panel table-panel overview-units" aria-label="Lista de unidades" tabIndex={-1}>
+                        <div className="panel-heading table-heading overview-units-heading">
                           <div>
                             <h2>
                               {actualLevel === "pa"
@@ -1372,14 +1383,18 @@ export default function Dashboard() {
                                   : "Resultado por cooperativa"}
                             </h2>
                             <p>{displayed.length} de {analyses.length} unidades</p>
-                            <AttainmentLegend />
-                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                           </div>
-                          <div className="table-controls">
+                          <div className="overview-block-actions">
+                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
+                            <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
+                          </div>
+                        </div>
+                        <div id={unitContentId} hidden={!unitsExpanded}>
+                          <div className="table-controls overview-unit-controls">
                             {listControls}
                             <label className="indicator-toggle"><input type="checkbox" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Mais indicadores</label>
                           </div>
-                        </div>
+                          <div className="overview-table-legend"><AttainmentLegend /></div>
                         <div className="selection-toolbar" aria-live="polite">
                           <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar ou comunicar.'}</span>
                           {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button><button className="button secondary" onClick={openCommunicationStart}>Comunicar selecionadas</button></>}
@@ -1496,10 +1511,11 @@ export default function Dashboard() {
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
                         <div className="pagination">{displayed.length} unidades exibidas</div>
+                        </div>
                       </section>
                       {resultContextPanels}
                       {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa" })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
-                      {dataset && <PeriodPerformance dataset={dataset} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} />}
+                      {dataset && <PeriodPerformance dataset={dataset} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">

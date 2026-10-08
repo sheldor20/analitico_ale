@@ -29,6 +29,13 @@ function managementFixture(dataset) {
   return dataset;
 }
 
+function orderedPeriodFixture(dataset) {
+  dataset = { ...dataset, rows: dataset.rows.map(row => ({ ...row, cutoff: '2026-08-14' })) };
+  const targets = [100, 200, 50, 100, 300, 100, 100, 200, 100, 100, 100, 100];
+  return upsertPlanRow(dataset, { entityId: 'cooperative:1002:3017', metric: 'AR', targets,
+    annualTarget: 1550, actuals: [80, 100, 75, 110, 90, 180, 30, 250, null, null, null, null], cutoff: '2026-08-14' });
+}
+
 async function captureCopies(page) {
   await page.addInitScript(() => {
     window.__managementCopies = { png: [], drawings: [] };
@@ -121,6 +128,77 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await select(page, 'PA').selectOption('1002:3017:0');
     await expect(periodRow(page, 'month', 0).locator('td').nth(1)).toContainText(money(10));
     await expect(periodRow(page, 'annual', 11).locator('td').nth(1)).toContainText(money(360));
+    expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
+  });
+
+  test('compact periods: every criterion orders each group, unknown values stay last and the shortcut restores collapsed groups', async ({ page }, info) => {
+    const { errors, writes, relationshipWrites } = await setup(page, orderedPeriodFixture);
+    await select(page, 'Central').selectOption('1002');
+    await select(page, 'Cooperativa').selectOption('1002:3017');
+    await select(page, 'Carteira').selectOption('AR');
+    await select(page, 'Período').selectOption('month');
+    await select(page, 'Mês de referência').selectOption('7');
+    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+    const panel = periods(page), order = select(panel, 'Ordenar períodos');
+    const groupRows = kind => panel.locator(`tr[data-period="${kind}"]`);
+    const months = kind => groupRows(kind).evaluateAll(rows => rows.map(row => Number(row.dataset.month)));
+    await expect(order).toHaveValue('chronological');
+    expect(await months('month')).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    const unknown = [8, 9, 10, 11];
+    const criteria = [
+      ['attainment-desc', [5, 2, 7, 3, 0, 1, 4, 6], [5, 2, 8, 11], [5, 11]],
+      ['attainment', [4, 6, 1, 0, 3, 7, 2, 5], [8, 2, 5, 11], [11, 5]],
+      ['production', [7, 5, 3, 1, 4, 0, 2, 6], [5, 8, 2, 11], [5, 11]],
+      ['gap', [4, 1, 6, 0, 2, 3, 5, 7], [5, 8, 2, 11], [11, 5]],
+      ['growth', [5, 7, 2, 3, 0, 1, 4, 6], [2, 5, 8, 11], [5, 11]],
+      ['projected', [7, 5, 3, 1, 4, 0, 2, 6], [8, 5, 2, 11], [11, 5]],
+    ];
+    for (const [criterion, monthly, quarterly, halfYear] of criteria) {
+      await order.selectOption(criterion);
+      expect(await months('month')).toEqual([...monthly, ...unknown]);
+      expect(await months('quarter')).toEqual(quarterly);
+      expect(await months('semester')).toEqual(halfYear);
+      expect(await months('annual')).toEqual([11]);
+      await expect(periodRow(page, 'month', 8).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
+    }
+    await expect(periodRow(page, 'month', 7).locator('td').nth(1)).toContainText(money(250));
+    await expect(periodRow(page, 'month', 7).locator('td').nth(3)).toContainText(money(525));
+    await expect(periodRow(page, 'annual', 11).locator('td').nth(1)).toContainText(money(915));
+    await order.selectOption('attainment');
+    for (const label of ['resultados mensais', 'resultados trimestrais', 'resultados semestrais', 'resultado anual']) {
+      const toggle = panel.getByRole('button', { name: `Recolher ${label}`, exact: true });
+      await toggle.click();
+      await expect(panel.getByRole('button', { name: `Expandir ${label}`, exact: true })).toHaveAttribute('aria-expanded', 'false');
+    }
+    for (const table of await panel.locator('table').all()) await expect(table).toBeHidden();
+    await panel.getByRole('button', { name: 'Recolher resultados por período', exact: true }).click();
+    await expect(order).toBeHidden();
+    await expect(panel.getByRole('button', { name: 'Expandir resultados por período', exact: true })).toHaveAttribute('aria-expanded', 'false');
+    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+    await expect(panel).toBeFocused();
+    await expect(order).toHaveValue('attainment');
+    for (const table of await panel.locator('table').all()) await expect(table).toBeVisible();
+    expect(await months('month')).toEqual([4, 6, 1, 0, 3, 7, 2, 5, ...unknown]);
+    await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
+    await expect(select(page, 'Carteira')).toHaveValue('AR');
+    await expect(select(page, 'Mês de referência')).toHaveValue('7');
+    await panel.screenshot({ path: info.outputPath('compact-periods-desktop.png') });
+    await page.setViewportSize({ width: 320, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    const moneyLines = await panel.locator('tbody td').evaluateAll(cells => {
+      const values = cells.flatMap(cell => {
+        const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT), nodes = [];
+        while (walker.nextNode()) if (walker.currentNode.textContent.trim().startsWith('R$')) nodes.push(walker.currentNode);
+        return nodes;
+      });
+      return { count: values.length, wrapped: values.filter(node => { const range = document.createRange(); range.selectNodeContents(node); return range.getClientRects().length !== 1; }).length };
+    });
+    expect(moneyLines.count).toBeGreaterThan(40);expect(moneyLines.wrapped).toBe(0);
+    await panel.screenshot({ path: info.outputPath('compact-periods-320.png'), style: '.sidebar, .skip-link { visibility: hidden !important; }' });
+    await order.selectOption('chronological');
+    expect(await months('month')).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(await months('quarter')).toEqual([2, 5, 8, 11]);
+    expect(await months('semester')).toEqual([5, 11]);
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
 

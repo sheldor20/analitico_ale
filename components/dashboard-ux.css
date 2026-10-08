@@ -200,3 +200,51 @@
   .communication-start label {font-size:16px}
   .communication-start>.button {width:100%}
 }
+
+/* Compact overview: a shared header, quiet controls and uninterrupted data rows. */
+.panel-disclosure-toggle {display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.panel-disclosure-toggle:hover {background:var(--surface-subtle);color:var(--ink);border-color:var(--line)}
+.panel-disclosure-toggle:focus-visible {outline:2px solid var(--sicoob-dark);outline-offset:2px}
+.panel-disclosure-toggle>svg {width:16px;height:16px;flex:0 0 16px}
+.panel-disclosure-toggle[aria-expanded="true"]>svg {transform:rotate(180deg)}
+.workspace-content .overview-metrics {min-width:0;margin:0 0 16px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);overflow:hidden}
+.overview-block-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px}
+.overview-block-heading h2 {font-size:16px;line-height:1.35;margin:0}
+.workspace-content .overview-metrics .kpi-grid {gap:0;margin:0;border-top:1px solid var(--line)}
+.workspace-content .overview-metrics .kpi {border:0;border-inline-end:1px solid var(--line);border-radius:0;padding:16px;min-height:132px}
+.workspace-content .overview-metrics .kpi[data-attainment] {border-top:0}
+.workspace-content .overview-metrics .kpi:last-child {border-inline-end:0}
+.workspace-content .overview-metrics .kpi .kpi-value {margin-top:10px}
+.workspace-content .overview-metrics .kpi p {font-size:15px;line-height:1.45;margin-top:6px}
+.workspace-content .overview-metrics .metric-progress {margin-top:12px;height:4px;min-height:4px}
+.workspace-content .overview-units-heading {align-items:center;justify-content:space-between;padding:12px 16px;gap:10px 16px}
+.overview-units-heading>div:first-child {flex:1 1 180px;min-width:0}
+.workspace-content .overview-units-heading h2 {font-size:18px;line-height:1.35}
+.workspace-content .overview-units-heading p {font-size:13px;margin-top:3px;line-height:1.4}
+.overview-block-actions {display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;min-width:0}
+.workspace-content .overview-block-actions .pa-share-trigger {margin:0;min-height:38px;font-size:13px;padding:8px 12px}
+.workspace-content .overview-unit-controls {padding:12px 16px 10px;border-top:1px solid var(--line);gap:10px}
+.overview-table-legend {padding:0 16px 10px}
+.overview-table-legend .attainment-legend {margin:0;font-size:12px;gap:4px 14px}
+.workspace-content .overview-units .selection-toolbar {padding:8px 16px;font-size:12px}
+.workspace-content .overview-units td {padding-block:12px}
+.workspace-content .overview-units .table-scroll {max-height:none;overflow-x:auto;overflow-y:visible}
+.workspace-content .overview-units .entity-button strong {font-size:15px}
+.workspace-content .overview-units .pagination {padding:10px 16px;border-top:1px solid var(--line);font-size:12px}
+.overview-metrics [hidden],.overview-units [hidden] {display:none!important}
+@media(min-width:721px) and (max-width:1100px) {
+  .workspace-content .overview-metrics .kpi:nth-child(2) {border-inline-end:0}
+  .workspace-content .overview-metrics .kpi:nth-child(n+3) {border-top:1px solid var(--line)}
+}
+@media(max-width:720px) {
+  .overview-block-heading {padding:8px 12px;gap:8px}
+  .overview-block-heading h2 {font-size:15px}
+  .workspace-content .overview-metrics .kpi {border-inline-end:0;border-bottom:1px solid var(--line);min-height:0;padding:14px}
+  .workspace-content .overview-metrics .kpi:last-child {border-bottom:0}
+  .workspace-content .overview-units-heading {padding:12px}
+  .overview-block-actions {justify-content:space-between;width:100%}
+  .workspace-content .overview-unit-controls {padding:12px}
+  .overview-table-legend {padding-inline:12px}
+  .workspace-content .overview-units .selection-toolbar {padding:8px 12px}
+}
+@media print {.panel-disclosure-toggle {display:none}}

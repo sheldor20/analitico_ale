@@ -1,6 +1,80 @@
 import { portfolioFixture } from '../portfolio-fixture.mjs';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 export function registerUxTests({test,expect,setup,owner,created}) {
+ test('compact overview: collapsing panels preserves the filtered selection and priority actions reopen the unit list',async({page},testInfo)=>{
+  const {errors,writes,relationshipWrites}=await setup(page);
+  await page.setViewportSize({width:1440,height:900});
+  await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
+  await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
+  await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
+  await page.getByLabel('Buscar cooperativa ou PA').fill('Cooperativa');
+  await page.getByRole('combobox',{name:'Ordenar análise',exact:true}).selectOption('production');
+  const metrics=page.getByRole('region',{name:'Resultado do período',exact:true});
+  const list=page.getByRole('region',{name:'Lista de unidades',exact:true});
+  const priorities=page.getByRole('region',{name:'Prioridades da carteira',exact:true});
+  const selected=list.getByRole('checkbox',{name:'Selecionar Cooperativa Beta',exact:true});
+  await selected.check();
+  await expect(list.locator('tbody tr')).toHaveCount(2);
+  await expect(list.locator('tbody tr').first()).toContainText('Cooperativa Beta');
+  const before=await metrics.locator('article').allTextContents();
+  const controls=[
+   [metrics,'indicadores do período',metrics.locator('article').first()],
+   [list,'lista de unidades',list.locator('table')],
+   [priorities,'prioridades',priorities.getByRole('button',{name:'Ver unidades: Maior contribuição',exact:true})],
+  ];
+  for(const [panel,label,content] of controls){
+   const toggle=panel.getByRole('button',{name:`Recolher ${label}`,exact:true});
+   await expect(toggle).toHaveAttribute('aria-expanded','true');
+   expect(await toggle.getAttribute('aria-controls')).toBeTruthy();
+   await toggle.focus();await page.keyboard.press('Enter');
+   await expect(panel.getByRole('button',{name:`Expandir ${label}`,exact:true})).toHaveAttribute('aria-expanded','false');
+   await expect(content).toBeHidden();
+  }
+  await page.getByRole('button',{name:'Recolher resultados por período',exact:true}).click();
+  await expect(page.getByRole('combobox',{name:'Central',exact:true})).toHaveValue('1002');
+  await expect(page.getByRole('combobox',{name:'Mês de referência',exact:true})).toHaveValue('7');
+  await expect(list.getByRole('heading',{name:'Resultado por cooperativa',exact:true})).toBeVisible();
+  await expect(list.getByRole('button',{name:'Compartilhar cooperativas',exact:true})).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('compact-overview-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:320,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  for(const [panel,label] of controls){
+   const toggle=panel.getByRole('button',{name:`Expandir ${label}`,exact:true});
+   const box=await toggle.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(320);
+  }
+  await page.screenshot({path:testInfo.outputPath('compact-overview-320.png'),fullPage:true,style:'.sidebar, .skip-link { visibility: hidden !important; }'});
+  for(const [panel,label,content] of controls){
+   await panel.getByRole('button',{name:`Expandir ${label}`,exact:true}).focus();await page.keyboard.press('Space');
+   await expect(panel.getByRole('button',{name:`Recolher ${label}`,exact:true})).toHaveAttribute('aria-expanded','true');
+   await expect(content).toBeVisible();
+  }
+  await expect(selected).toBeChecked();
+  await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('Cooperativa');
+  await expect(page.getByRole('combobox',{name:'Ordenar análise',exact:true})).toHaveValue('production');
+  await expect(page.getByRole('combobox',{name:'Filtrar situação',exact:true})).toHaveValue('all');
+  await expect(list.locator('tbody tr')).toHaveCount(2);
+  await expect(list.locator('tbody tr').first()).toContainText('Cooperativa Beta');
+  expect(await metrics.locator('article').allTextContents()).toEqual(before);
+  await list.getByRole('button',{name:'Recolher lista de unidades',exact:true}).click();
+  await expect(list.locator('table')).toBeHidden();
+  await priorities.getByRole('button',{name:'Ver unidades: Maior contribuição',exact:true}).click();
+  await expect(list.getByRole('button',{name:'Recolher lista de unidades',exact:true})).toHaveAttribute('aria-expanded','true');
+  await expect(list.locator('table')).toBeVisible();
+  await expect(list).toBeFocused();
+  await expect(page.getByRole('button',{name:'Limpar prioridade',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Limpar prioridade',exact:true}).click();
+  await page.getByRole('combobox',{name:'Cooperativa',exact:true}).selectOption('1002:3017');
+  const pas=page.getByRole('region',{name:'PAs da cooperativa',exact:true});
+  await pas.getByRole('button',{name:'Abrir PAs',exact:true}).click();
+  await list.getByRole('button',{name:'Recolher lista de unidades',exact:true}).click();
+  await pas.getByRole('button',{name:'Abrir cadência de Cooperativa Alfa',exact:true}).click();
+  await expect(list.getByRole('heading',{name:'Cadência por PA',exact:true})).toBeVisible();
+  await expect(list.getByRole('button',{name:'Recolher lista de unidades',exact:true})).toHaveAttribute('aria-expanded','true');
+  await expect(list.locator('table')).toBeVisible();
+  await expect(list.locator('tbody tr')).toContainText('PA Alfa zero');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
+ });
  test('UX: primary data comes before optional panels; PAs toggle by keyboard and selected unit',async({page},testInfo)=>{
   const {errors}=await setup(page);
   await page.setViewportSize({width:1440,height:900});
