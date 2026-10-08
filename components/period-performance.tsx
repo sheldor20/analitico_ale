@@ -15,7 +15,7 @@ const varianceLabel = (row: PerformanceRow) => row.variance.kind === 'growth' ? 
 const openGroups = (): Record<PerformancePeriod, boolean> => ({ month: true, quarter: true, semester: true, annual: true });
 
 function FinancialValue({ value }: { value: number | null }) {
-  return value == null ? <span title="Não disponível"><span aria-hidden="true">—</span><span className="sr-only">Não disponível</span></span> : <>{money(value)}</>;
+  return value == null ? <span className={styles.unavailable} title="Não disponível"><span aria-hidden="true">—</span><span className="sr-only">Não disponível</span></span> : <>{money(value)}</>;
 }
 
 export default function PeriodPerformance({ dataset, filters, unitIds, expandRequest }: { dataset: Dataset; filters: PerformanceFilters; unitIds: string[]; expandRequest?: number }) {
