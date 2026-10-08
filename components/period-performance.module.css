@@ -46,3 +46,7 @@
 @media(max-width:900px) { .actual,.variance{flex-direction:column;align-items:flex-end;gap:2px}.variance small{min-width:0}.tableScroll table{min-width:710px} }
 @media(max-width:680px) { .section{padding:14px;gap:12px}.heading h2{font-size:1.14rem}.controls{width:100%;justify-content:space-between;align-items:flex-end}.order{flex:1 1 150px}.order select{width:100%;font-size:16px;min-height:40px}.tableScroll th,.tableScroll td{padding:6px 10px}.context{gap:3px}.groupHeading{padding:5px 10px;gap:4px 8px}.groupHeading h3{flex-basis:calc(100% - 88px);font-size:.88rem}.groupHeading :global(.panel-disclosure-toggle){min-height:38px}.guide :global(.attainment-legend){gap:3px 10px}.periodLabel{display:block}.periodLabel small{display:block;margin-top:2px} }
 @media(max-width:380px) { .section{padding:12px}.heading h2{font-size:1.08rem}.controls{gap:8px}.order{flex-basis:100%}.count{font-size:.7rem} }
+
+.shareButton { min-height:36px; padding:7px 10px; font-size:.78rem; line-height:1.3; white-space:normal; }
+.shareButton svg { flex:0 0 16px; }
+@media(max-width:680px) { .controls>.shareButton{flex:1 1 160px;justify-content:center} }

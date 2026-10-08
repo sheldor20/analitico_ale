@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useId, useMemo, useState } from 'react';
+import { Share2 } from 'lucide-react';
+import { centralHeading } from '@/lib/communication-header.mjs';
+import type { PeriodShareSelection } from '@/lib/period-performance-share.mjs';
+import PeriodScenarioShare from './period-scenario-share';
 import { money, percent } from '@/lib/analytics.mjs';
 import { attainmentBand } from '@/lib/attainment.mjs';
 import { buildPeriodPerformance, type PerformanceFilters, type PerformancePeriod, type PerformanceRow } from '@/lib/period-performance.mjs';
@@ -18,11 +22,12 @@ function FinancialValue({ value }: { value: number | null }) {
   return value == null ? <span className={styles.unavailable} title="Não disponível"><span aria-hidden="true">—</span><span className="sr-only">Não disponível</span></span> : <>{money(value)}</>;
 }
 
-export default function PeriodPerformance({ dataset, filters, unitIds, expandRequest }: { dataset: Dataset; filters: PerformanceFilters; unitIds: string[]; expandRequest?: number }) {
+export default function PeriodPerformance({ dataset, filters, unitIds, expandRequest, ownerId }: { dataset: Dataset; filters: PerformanceFilters; unitIds: string[]; expandRequest?: number; ownerId?: string | null }) {
   const contentId = useId();
   const [expanded, setExpanded] = useState(true);
   const [groups, setGroups] = useState(openGroups);
   const [order, setOrder] = useState<PerformanceOrder>('chronological');
+  const [sharing, setSharing] = useState<{ context: string; period: PeriodShareSelection } | null>(null);
   useEffect(() => {
     if (expandRequest == null) return;
     setExpanded(true);
@@ -33,11 +38,17 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
     catch (reason) { return { model: null, error: reason instanceof Error ? reason.message : 'Não foi possível preparar os resultados por período.' }; }
   }, [dataset, filters, unitIds]);
   const model = result.model;
+  const shareContext = JSON.stringify([ownerId, dataset.year, filters, unitIds, order, model]);
+  useEffect(() => { setSharing(null); }, [shareContext]);
+  const centralIds = new Set(model?.units.map(unit => unit.central));
+  const central = centralIds.size === 1 ? [...centralIds][0] : null;
+  const centralName = centralHeading(central, central ? dataset.registry?.entities.find(entity => entity.id === `central:${central}`)?.name : '');
   return <section id="resultados-por-periodo" tabIndex={-1} aria-label="Resultados por período" className={styles.section}>
     <header className={styles.heading}>
       <div><h2>Resultados por período</h2><p>{model?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {dataset.year} · recorte atual</p></div>
       <div className={styles.controls}>
         {expanded && Boolean(model?.count) && <label className={styles.order}>Ordenar períodos<select aria-label="Ordenar períodos" value={order} onChange={event => setOrder(event.target.value as PerformanceOrder)}>{Object.entries(PERIOD_ORDER_OPTIONS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
+        {Boolean(model?.count) && <button type="button" className={`button secondary ${styles.shareButton}`} onClick={() => setSharing({ context: shareContext, period: 'all' })}><Share2 size={16} aria-hidden="true" />Compartilhar cenário</button>}
         <PanelToggle expanded={expanded} controls={contentId} label="resultados por período" onToggle={() => setExpanded(value => !value)} />
       </div>
     </header>
@@ -71,5 +82,6 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
         })}
       </div>}
     </div>
+    {model && sharing?.context === shareContext && <PeriodScenarioShare key={shareContext} model={model} initialPeriod={sharing.period} order={order} centralName={centralName} ownerId={ownerId} onClose={() => setSharing(null)} />}
   </section>;
 }

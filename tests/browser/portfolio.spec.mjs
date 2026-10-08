@@ -13,6 +13,8 @@ import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.m
 import { registerWorkflowTests } from './workflow-cases.mjs';
 import { registerPriorityTests } from './priority-cases.mjs';
 import { registerManagementPeriodTests } from './management-period-cases.mjs';
+import { registerContactImportTests } from './contact-import-cases.mjs';
+import { registerPeriodShareTests } from './period-share-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -29,6 +31,8 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   const templates = new Map();
   const relationshipWrites = [];
   const relationshipReads = [];
+  const contactReads = [];
+  const contactImports = [];
   const profileRows = structuredClone(relationshipSeed.profiles || []);
   const appointmentRows = structuredClone(relationshipSeed.appointments || []);
   const goalStateRows = structuredClone(relationshipSeed.goalStates || []);
@@ -40,7 +44,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   let nextRelationshipId = 300;
   page.on('pageerror', (error) => errors.push(error.message));
   const names = { 'cooperative:1002:3017': ['Ana Teste', 'ana@example.com'], 'cooperative:1002:3025': ['Bruno Teste','bruno@example.com'], 'central:1002': ['Celia Teste','celia@example.com'], 'pa:1002:3017:0': ['Paula Teste','paula@example.com'] };
-  const contacts = dataset.registry.entities.flatMap((entity, index) => names[entity.id] ? [contact(entity, ...names[entity.id], index)] : []);
+  const contacts = structuredClone(relationshipSeed.contacts ?? dataset.registry.entities.flatMap((entity, index) => names[entity.id] ? [contact(entity, ...names[entity.id], index)] : []));
   await page.route('http://127.0.0.1:4600/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -111,7 +115,28 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
         return answer([]);
       }
     }
-    if (url.pathname === '/rest/v1/commercial_entity_contacts') return answer(contacts.filter((entry) => ['owner_id', 'workspace_year', 'entity_id'].every(column => `eq.${entry[column]}` === url.searchParams.get(column))));
+    if (url.pathname === '/rest/v1/commercial_entity_contacts') {
+      contactReads.push(Object.fromEntries(url.searchParams));
+      if (request.method() !== 'GET') errors.push(`Unexpected contact request: ${request.method()}`);
+      if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Contacts: incorrect owner scope');
+      if (!url.searchParams.get('workspace_year')?.startsWith('eq.')) errors.push('Contacts: missing year scope');
+      if (!url.searchParams.has('entity_id') && url.searchParams.get('entity_kind') !== 'eq.cooperative') errors.push('Contacts: annual import list must be limited to cooperatives');
+      const rows = contacts.filter(entry => [...url.searchParams].every(([column, filter]) => filter.startsWith('eq.') ? String(entry[column]) === filter.slice(3) : true));
+      if (url.searchParams.get('order') === 'id.asc') rows.sort((a, b) => a.id.localeCompare(b.id));
+      const offset = Number(url.searchParams.get('offset')) || 0;
+      const limit = Math.min(Number(url.searchParams.get('limit')) || rows.length, relationshipSeed.contactPageSize || Number.POSITIVE_INFINITY);
+      return answer(rows.slice(offset, offset + limit));
+    }
+    if (url.pathname === '/rest/v1/rpc/import_commercial_contacts') {
+      const payload = request.postDataJSON(); contactImports.push(payload);
+      if (payload.p_expected_owner !== owner || payload.p_year !== dataset.year || payload.p_expected_revision !== 1) errors.push('Contact import: incorrect owner, year or saved revision');
+      if (typeof relationshipSeed.importContacts !== 'function') {
+        errors.push('Unexpected contact import');
+        return route.fulfill({ status: 400, headers, contentType: 'application/json', body: JSON.stringify({ message: 'No synthetic import handler configured.' }) });
+      }
+      const result = await relationshipSeed.importContacts(payload, contacts);
+      return route.fulfill({ status: result.status ?? 200, headers, contentType: 'application/json', body: JSON.stringify(result.body) });
+    }
     if (url.pathname === '/rest/v1/commercial_communication_drafts') {
       if (request.method() === 'POST') {
         const payload = request.postDataJSON(); writes.push(payload);
@@ -131,7 +156,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await expect(login).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Visão geral', level: 1, exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
-  return { errors, writes, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows };
+  return { errors, writes, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
 async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
@@ -297,3 +322,7 @@ registerWorkflowTests({ test, expect, setup });
 registerPriorityTests({ test, expect, setup });
 
 registerManagementPeriodTests({ test, expect, setup });
+
+registerContactImportTests({ test, expect, setup, owner, created });
+
+registerPeriodShareTests({ test, expect, setup });

@@ -7,6 +7,7 @@ import { MONTHS, money, paTargetForGroup } from "@/lib/analytics.mjs";
 import { deleteEntity, distributeAmount, entityId as registryEntityId, getPlanRow, initializeRegistry, upsertEntity, upsertPlanRow } from "@/lib/registry.mjs";
 import type { DataRow, Dataset, Metric, PlanRowInput, RegistryEntity } from "@/lib/types";
 import ResponsibleManager from "@/components/responsible-manager";
+import ContactImport from "@/components/contact-import";
 import EntityProfile from "@/components/entity-profile";
 import EntityAgenda from "@/components/entity-agenda";
 import ConsolidatedAgenda from "@/components/consolidated-agenda";
@@ -19,6 +20,7 @@ type RegistryManagerProps = {
   userId: string;
   onChange: (next: Dataset) => Promise<void>;
   busy?: boolean;
+  workspaceRevision?: number | null;
   initialAgenda?: { entityId: string; date: string; request: number };
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
@@ -76,7 +78,7 @@ function defaultCutoff(dataset: Dataset, metric: Metric, kind: RegistryEntity["k
   return dataset.year === today.getFullYear() ? today.toISOString().slice(0, 10) : `${dataset.year}-${dataset.year < today.getFullYear() ? "12-31" : "01-31"}`;
 }
 
-export default function RegistryManager({ dataset, userId, onChange, busy = false, initialAgenda, onDirtyChange, onSavingChange }: RegistryManagerProps) {
+export default function RegistryManager({ dataset, userId, onChange, busy = false, workspaceRevision, initialAgenda, onDirtyChange, onSavingChange }: RegistryManagerProps) {
   const normalized = useMemo(() => initializeRegistry(dataset) as Dataset, [dataset]);
   const entities = normalized.registry?.entities ?? [];
   const requestedAgenda = initialAgenda && initialAgenda.date.startsWith(`${dataset.year}-`) && /^\d{4}-\d{2}-\d{2}$/.test(initialAgenda.date) && entities.some((entity) => entity.id === initialAgenda.entityId) ? initialAgenda : null;
@@ -92,6 +94,10 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   const [editingId, setEditingId] = useState<string | undefined>();
   const [deleting, setDeleting] = useState(false);
   const [showCommunication, setShowCommunication] = useState(false);
+  const [showContactImport, setShowContactImport] = useState(false);
+  const [contactImportDirty, setContactImportDirty] = useState(false);
+  const [contactImportSaving, setContactImportSaving] = useState(false);
+  const [contactRevision, setContactRevision] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -107,7 +113,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
   const refreshAgenda = useCallback(() => setAgendaRevision((value) => value + 1), []);
   const refreshFromConsolidated = useCallback(() => { setAgendaRevision((value) => value + 1); setEntityAgendaRevision((value) => value + 1); }, []);
   const [identityLocked, setIdentityLocked] = useState(false);
-  const locked = busy || saving || agendaSaving || consolidatedSaving;
+  const locked = busy || saving || agendaSaving || consolidatedSaving || contactImportSaving;
   const selected = entities.find((entity) => entity.id === selectedId) ?? null;
   const hierarchy = selected ? relationshipHierarchy(entities, selected) : { parents: [], children: [] };
   const effectiveMetric = selected?.kind === "pa" ? "VN" : metric;
@@ -129,13 +135,13 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
     if (selectedId && !entities.some((entity) => entity.id === selectedId)) setSelectedId(entities[0]?.id ?? null);
   }, [entities, selectedId]);
   useEffect(() => {
-    onDirtyChange?.(relationshipDirty || consolidatedDirty || entityForm !== null);
+    onDirtyChange?.(relationshipDirty || consolidatedDirty || contactImportDirty || entityForm !== null);
     return () => onDirtyChange?.(false);
-  }, [relationshipDirty, consolidatedDirty, entityForm, onDirtyChange]);
+  }, [relationshipDirty, consolidatedDirty, contactImportDirty, entityForm, onDirtyChange]);
   useEffect(() => {
-    onSavingChange?.(saving || agendaSaving || consolidatedSaving);
+    onSavingChange?.(saving || agendaSaving || consolidatedSaving || contactImportSaving);
     return () => onSavingChange?.(false);
-  }, [saving, agendaSaving, consolidatedSaving, onSavingChange]);
+  }, [saving, agendaSaving, consolidatedSaving, contactImportSaving, onSavingChange]);
   useEffect(() => {
     if (!requestedAgenda || !requestKey || requestKey === appliedRequest.current || locked || relationshipDirty || consolidatedDirty || entityForm !== null) return;
     appliedRequest.current = requestKey;
@@ -223,8 +229,9 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
     </details>
     <div className="panel-heading">
       <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
-      <button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button>
+      <div className="registry-actions"><button type="button" className="button secondary" disabled={locked || !workspaceRevision} onClick={() => { if (!leaveRelationshipForm()) return; setEntityForm(null); setActiveTab('contacts'); setContactRevision(value => value + 1); setCalendarExpanded(false); setShowContactImport(true); }}>Importar contatos</button><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button></div>
     </div>
+    {!workspaceRevision && <p className="helper">Salve a base do ano antes de importar contatos.</p>}
     {error && <div className="message error registry-error" role="alert"><Info size={18} /><span>{error}</span><button type="button" aria-label="Fechar erro" onClick={() => setError("")}><X size={16} /></button></div>}
     {notice && <div className="message success" role="status"><Check size={18} /><span>{notice}</span></div>}
     <div className="registry-toolbar">
@@ -270,7 +277,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
               {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3><p className={profileStyles.muted}>Abra uma ficha para ver contatos, carteira e agenda.</p></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
               <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />
             </div>}
-            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />}
+            {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}:${contactRevision}`} entity={selected} year={dataset.year} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />}
             {activeTab === "agenda" && <EntityAgenda key={`agenda:${selected.id}:${dataset.year}:${userId}:${agendaFocus?.request ?? 0}:${entityAgendaRevision}`} entity={selected} year={dataset.year} userId={userId} disabled={locked || consolidatedDirty} initialDate={agendaFocus?.date} onDirtyChange={setRelationshipDirty} onAppointmentsChange={refreshAgenda} onSavingChange={setAgendaSaving} />}
             {activeTab === "targets" && <><label className="registry-metric">Indicador<select value={effectiveMetric} disabled={locked || selected.kind === "pa"} onChange={(event) => setMetric(event.target.value as Metric)}><option value="VN">Venda Nova</option>{selected.kind !== "pa" && <option value="AR">Arrecadação</option>}</select></label>
             <PlanEditor key={`${selected.id}:${effectiveMetric}`} dataset={normalized} entity={selected} metric={effectiveMetric} row={row} busy={locked || consolidatedDirty} centralChildren={centralChildren} onDirtyChange={setRelationshipDirty} onSave={async (input) => {
@@ -282,6 +289,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
       </div>
     </div>
     {showCommunication && selected && <PortfolioCommunication dataset={normalized} candidates={[selected]} initialKey={selected.id} metric={effectiveMetric} period="ytd" month={Number(defaultCutoff(normalized, effectiveMetric, selected.kind).slice(5, 7)) - 1} onClose={() => setShowCommunication(false)} />}
+    {showContactImport && workspaceRevision != null && workspaceRevision > 0 && <ContactImport key={`import:${userId}:${dataset.year}:${workspaceRevision}`} entities={entities} year={dataset.year} userId={userId} workspaceRevision={workspaceRevision} onDirtyChange={setContactImportDirty} onSavingChange={setContactImportSaving} onImported={() => setContactRevision(value => value + 1)} onClose={() => { setShowContactImport(false); setContactImportDirty(false); }} />}
   </section>;
 }
 

@@ -1067,7 +1067,7 @@ export default function Dashboard() {
           ) : view === "agenda" && dataset && user ? (
             historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} disabled={!!busy} />
           ) : view === "registry" && dataset ? (
-            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/>
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} workspaceRevision={workspaceRevision} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/>
           ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
@@ -1515,7 +1515,7 @@ export default function Dashboard() {
                       </section>
                       {resultContextPanels}
                       {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa" })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
-                      {dataset && <PeriodPerformance dataset={dataset} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest} />}
+                      {dataset && <PeriodPerformance dataset={dataset} ownerId={user?.id ?? null} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">

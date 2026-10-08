@@ -157,6 +157,14 @@ O cabeçalho contém **Gestão comercial · carteira**, **nome da central** e **
 
 As imagens contêm até **12 unidades por parte**, com identificação da seleção e numeração. A mensagem curta acompanha a imagem; o relatório completo fica disponível separadamente. O cenário anual e a projeção são opcionais na comunicação individual. Confira a prévia e os destinatários antes de enviar pelo aplicativo escolhido.
 
+Em **Resultados por período → Compartilhar cenário**, escolha todos os períodos ou somente os meses, trimestres, semestres ou o ano. E-mail e imagens usam as mesmas unidades, valores e ordenação do painel, com projeção opcional. O e-mail pode ser baixado em `.eml` ou copiado com formatação para o Outlook; as imagens numeradas podem ser copiadas ou baixadas para WhatsApp. Os períodos se sobrepõem e não são somados entre si.
+
+### Importar responsáveis das cooperativas
+
+Em **Cadastro e metas → Importar contatos**, selecione um arquivo `.xlsx` e confira a prévia antes de salvar. São reconhecidas as colunas **Central**, **Código da cooperativa / Nº**, **Nome do responsável**, **E-mail** e **Telefone / Celular / WhatsApp**; **Singular**, **Cargo** e **Teams** também são aceitas. Cabeçalhos podem estar após linhas de título, como no layout **BASE – REGIONAL I**. As colunas de metas e produção são ignoradas nesta importação.
+
+A cooperativa precisa existir no cadastro anual salvo. Nomes de responsáveis ausentes recebem o rótulo editável **Contato comercial**, sem inferir uma pessoa pelo e-mail. Corrija dados inválidos e escolha um telefone quando a célula tiver mais de um. Linhas repetidas, unidades desconhecidas e correspondências ambíguas são sinalizadas. Campos vazios preservam os dados existentes e os e-mails são unidos sem duplicatas. A gravação é transacional: um conflito cancela toda a seleção e pede nova conferência. A planilha original e seus contatos não fazem parte do código ou do deploy.
+
 ## Gestão e extração do recorte
 
 - **Prioridades da carteira** usa a meta proporcional ao corte para distinguir atraso, proximidade da meta e registros que precisam de conferência. Cada ação mostra as unidades exatas do fato.
