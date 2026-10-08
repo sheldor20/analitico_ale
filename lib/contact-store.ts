@@ -28,6 +28,19 @@ export type ResponsibleContactInput = {
   emails: string[];
 };
 
+export type ResponsibleContactImportRow = {
+  entity: RegistryEntity;
+  input: ResponsibleContactInput;
+  contactId?: string;
+  expectedUpdatedAt?: string;
+};
+
+export type ResponsibleContactImportResult = {
+  created: number;
+  updated: number;
+  unchanged: number;
+};
+
 type ContactRow = {
   id: string;
   owner_id: string;
@@ -56,6 +69,18 @@ async function ownerId() {
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error("Entre na sua conta para cadastrar responsáveis.");
   return data.user.id;
+}
+
+async function assertImportOwner(expectedOwnerId: string) {
+  const owner = await ownerId();
+  if (!expectedOwnerId || owner !== expectedOwnerId)
+    throw new Error("A conta mudou. Abra novamente a importação de contatos.");
+  return owner;
+}
+
+function validateImportYear(year: number) {
+  if (!Number.isInteger(year) || year < 2020 || year > 2100)
+    throw new Error("Selecione um ano válido para importar os contatos.");
 }
 
 function mapRow(row: ContactRow): ResponsibleContact {
@@ -100,6 +125,66 @@ export async function listResponsibleContacts(year: number, entityId: string): P
     .order("name");
   if (error) throw new Error(error.message);
   return ((data ?? []) as ContactRow[]).map(mapRow);
+}
+
+/** Complete, owner-scoped snapshot for the import preview, including large registries. */
+export async function listWorkspaceResponsibleContacts(year: number, expectedOwnerId: string): Promise<ResponsibleContact[]> {
+  validateImportYear(year);
+  const owner = await assertImportOwner(expectedOwnerId);
+  const contacts: ResponsibleContact[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; ;) {
+    const { data, error } = await db().from("commercial_entity_contacts")
+      .select("id,owner_id,workspace_year,entity_id,entity_kind,central,cooperative,pa,name,job_title,teams,whatsapp,emails,created_at,updated_at")
+      .eq("owner_id", owner).eq("workspace_year", year).eq("entity_kind", "cooperative")
+      .order("id").range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as ContactRow[];
+    if (!page.length) break;
+    contacts.push(...page.map(mapRow));
+    offset += page.length;
+  }
+  await assertImportOwner(expectedOwnerId);
+  return contacts;
+}
+
+/** The server revalidates the preview and commits the whole selection atomically. */
+export async function importResponsibleContacts(
+  year: number,
+  rows: ResponsibleContactImportRow[],
+  expectedOwnerId: string,
+  expectedRevision: number,
+): Promise<ResponsibleContactImportResult> {
+  validateImportYear(year);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+    throw new Error("Salve ou recarregue o cadastro antes de importar contatos.");
+  if (!rows.length || rows.length > 1000)
+    throw new Error("Selecione de 1 a 1.000 contatos para importar.");
+  const items = rows.map(({ entity, input, contactId, expectedUpdatedAt }) => {
+    if (entity.kind !== "cooperative") throw new Error("A importação aceita contatos de cooperativas.");
+    if (Boolean(contactId) !== Boolean(expectedUpdatedAt))
+      throw new Error("Recarregue a prévia para conferir os contatos existentes.");
+    return {
+      entity_id: entity.id,
+      ...clean(input),
+      ...(contactId ? { contact_id: contactId, expected_updated_at: expectedUpdatedAt } : {}),
+    };
+  });
+  await assertImportOwner(expectedOwnerId);
+  const { data, error } = await db().rpc("import_commercial_contacts", {
+    p_year: year,
+    p_items: items,
+    p_expected_owner: expectedOwnerId,
+    p_expected_revision: expectedRevision,
+  });
+  if (error?.code === "40P01")
+    throw new Error("Outro salvamento ocorreu ao mesmo tempo. Esta importação não foi salva. Recarregue a prévia e tente novamente.");
+  if (error) throw new Error(error.message);
+  const result = data as ResponsibleContactImportResult | null;
+  if (!result || ![result.created, result.updated, result.unchanged].every(value => Number.isSafeInteger(value) && value >= 0)
+    || result.created + result.updated + result.unchanged !== rows.length)
+    throw new Error("Não foi possível confirmar a importação. Recarregue a prévia antes de tentar novamente.");
+  return result;
 }
 
 export async function saveResponsibleContact(year: number, entity: RegistryEntity, input: ResponsibleContactInput, contactId?: string): Promise<ResponsibleContact> {

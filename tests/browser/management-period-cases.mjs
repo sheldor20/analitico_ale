@@ -13,7 +13,7 @@ const exportedRows = page => frame(page).locator('tr[data-cooperative-id]');
 const exportedRow = (page, id) => frame(page).locator(`tr[data-cooperative-id="${id}"]`);
 const pngMagic = [137, 80, 78, 71, 13, 10, 26, 10];
 
-function managementFixture(dataset) {
+export function managementFixture(dataset) {
   dataset = { ...dataset, rows: dataset.rows.map(row => ({ ...row, cutoff: '2026-08-14' })) };
   dataset = upsertEntity(dataset, { kind: 'cooperative', central: '1002', cooperative: '3030', name: 'Cooperativa Delta' });
   dataset = upsertEntity(dataset, { kind: 'pa', central: '2007', cooperative: '3017', pa: '0', name: 'PA Nordeste zero', group: 'P1' });
