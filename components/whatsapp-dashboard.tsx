@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Download, Share2 } from 'lucide-react';
 import { renderDashboardPng } from '@/lib/portfolio-image.mjs';
 import { validateDashboard } from '@/lib/portfolio-presentation.mjs';
@@ -12,6 +12,11 @@ export default function WhatsappDashboard({ model, text, subject, saved = false,
   model: PortfolioDashboard; text: string; subject: string; saved?: boolean; busy?: boolean; onClipboardChange?: () => void;
 }) {
   const key = JSON.stringify(model);
+  const contentKey = JSON.stringify([key, text, subject]);
+  const latest = useRef(contentKey);
+  latest.current = contentKey;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [ready, setReady] = useState<Ready | null>(null);
   const [issue, setIssue] = useState({ key: '', message: '' });
   const [feedback, setFeedback] = useState('');
@@ -41,30 +46,34 @@ export default function WhatsappDashboard({ model, text, subject, saved = false,
   }
   async function copyImage() {
     if (!current || copying) return;
+    const stillCurrent = () => mounted.current && latest.current === contentKey;
     setCopying(true); setFeedback(''); onClipboardChange?.();
     try {
       if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Clipboard unavailable');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': current.file })]);
-      setFeedback('Imagem copiada. Abra a conversa no WhatsApp e cole para revisar antes de enviar.');
+      if (stillCurrent()) setFeedback('Imagem copiada. Abra a conversa no WhatsApp e cole para revisar antes de enviar.');
     } catch {
+      if (!stillCurrent()) return;
       download();
       setFeedback('O navegador não permitiu copiar a imagem. O painel foi baixado em PNG para anexar na conversa.');
-    } finally { setCopying(false); onClipboardChange?.(); }
+    } finally { if (mounted.current) { setCopying(false); onClipboardChange?.(); } }
   }
   async function share() {
     if (!current || sharing) return;
     setFeedback('');
+    const stillCurrent = () => mounted.current && latest.current === contentKey;
     const payload = { files: [current.file], text, title: subject };
     try {
       if (!navigator.share || !navigator.canShare?.({ files: payload.files })) { download(); return; }
       setSharing(true);
       await navigator.share(payload);
-      setFeedback('Painel encaminhado ao compartilhamento do aparelho. Confirme o destinatário e o envio no WhatsApp; não há confirmação de entrega no sistema.');
+      if (stillCurrent()) setFeedback('Painel encaminhado ao compartilhamento do aparelho. Confirme o destinatário e o envio no WhatsApp; não há confirmação de entrega no sistema.');
     } catch (error: unknown) {
+      if (!stillCurrent()) return;
       setFeedback(error instanceof Error && error.name === 'AbortError'
         ? 'Compartilhamento cancelado. Nenhum envio foi confirmado.'
         : 'O aparelho não concluiu o compartilhamento. Use Baixar painel e anexe a imagem no WhatsApp.');
-    } finally { setSharing(false); }
+    } finally { if (mounted.current) setSharing(false); }
   }
   return <section className={styles.imagePanel} aria-label={saved ? 'Painel WhatsApp salvo' : 'Painel do WhatsApp'}>
     <h3>{saved ? 'Painel do rascunho' : 'Painel pronto para WhatsApp'}</h3>

@@ -16,6 +16,14 @@ Em **Cadastro e metas**, inclua, edite ou exclua Centrais, Cooperativas e PAs. A
 
 A identidade Sicoob e as diretrizes para futuras melhorias estão em [docs/IDENTIDADE_VISUAL.md](docs/IDENTIDADE_VISUAL.md) e `AGENTS.md`.
 
+## Painel de gestão e comunicação
+
+Na **Visão geral**, a lista de resultados aparece imediatamente após Meta → Realizado → GAP/superação → Projeção. As prioridades ficam abaixo da lista. O atalho **Ver todos os períodos** leva ao painel **Resultados por período**, que reúne 12 meses, quatro trimestres, dois semestres e o ano na mesma tela. Os filtros de central, cooperativa, PA, carteira, busca e situação definem uma única seleção; o painel acompanha essas unidades ao longo do ano, sem reavaliar o filtro de situação em cada período. Na fonte Cooperativas, use **Agrupar por** para consultar centrais; na fonte Cadência PA, escolha o PA ou grupo desejado.
+
+As faixas de **atingimento realizado** são vermelha abaixo de 70%, amarela de 70% a menos de 100% e azul a partir de 100%. Dados sem avaliação ficam neutros. A classificação usa a proporção exata, antes do arredondamento visual; ela não altera os alertas de ritmo nem os valores financeiros.
+
+**Gerar comunicação** usa o recorte e a ordem atuais. A opção **Incluir projeção de produção** adiciona a estimativa, separada do realizado, ao e-mail, resumo, texto e imagem, tanto de uma unidade quanto das listas de cooperativas/PAs. A comunicação individual de uma central também respeita as cooperativas filtradas. Os materiais identificam as premissas, inclusive simulações de ritmo. A compatibilidade do banco foi verificada diretamente, sem necessidade de migração: [evidências de Supabase](docs/OVERVIEW_COMMUNICATION_SQL_VERIFICATION.md).
+
 ## Funcionalidades
 
 - Importação em dois campos XLSX independentes: base de cooperativas/centrais e cadência dos PAs, por cabeçalho, com leitura de todas as abas compatíveis.
@@ -56,7 +64,7 @@ Em **Cadência dos PAs → Compartilhar PAs**, prepare uma lista consolidada com
 
 Em **Visão geral → Resultado por cooperativa → Compartilhar cooperativas**, prepare a parcial da central com todas as cooperativas selecionadas. O relatório usa **Venda Nova ou Arrecadação**, conforme a carteira e o período da tela, e permite aplicar a busca e a situação da lista. No agrupamento por centrais, o comando de cada central abre suas cooperativas. A fonte é a base de cooperativas; a produção dos PAs não é somada ao resultado.
 
-Os relatórios usam cabeçalho comum para unidade, carteira, período e data. As linhas mostram apenas identificação e resultados, com indicação de dados pendentes. Cooperativas ou centrais distintas formam grupos identificados; datas divergentes continuam explícitas. Assim, central, cooperativa e atualização não se repetem em cada PA. Os painéis individuais também concentram o contexto e removem aberturas e recomendações genéricas repetidas. A opção **Incluir cenário anual** começa marcada e permite encurtar o envio; a projeção permanece desmarcada inicialmente.
+Os relatórios usam cabeçalho comum para unidade, carteira, período e data. As linhas mostram apenas identificação e resultados, com indicação de dados pendentes. Cooperativas ou centrais distintas formam grupos identificados; datas divergentes continuam explícitas. Assim, central, cooperativa e atualização não se repetem em cada PA. Os painéis individuais também concentram o contexto e removem aberturas e recomendações genéricas repetidas. A comunicação começa apenas com a carteira e o período escolhidos. **Incluir cenário anual**, **Incluir as duas carteiras** e **Incluir projeção de produção** são opções desmarcadas inicialmente; o cenário pode ser ampliado conscientemente antes do envio.
 
 O painel completo pode ser copiado para o Outlook ou baixado em `.eml`. Para WhatsApp, copie o texto ou a imagem PNG; listas com mais de 12 unidades geram partes numeradas e compactas, cada uma com o contexto necessário, sem omitir unidades. Se o navegador bloquear a cópia da imagem, use o PNG baixado. Links extensos de WhatsApp exigem colar o texto depois de abrir o aplicativo. Destinatários são informados para cada envio; o sistema prepara o conteúdo e o usuário revisa e envia. A exportação é local, sem novo armazenamento, sem link público dos dados e sem necessidade de migração SQL. A verificação do banco está em [COMMUNICATION_SQL_VERIFICATION.md](docs/COMMUNICATION_SQL_VERIFICATION.md).
 

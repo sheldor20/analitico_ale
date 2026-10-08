@@ -7,6 +7,7 @@ import { buildCooperativeScenarioReport, renderCooperativeScenarioPng } from '@/
 import { buildEmailFile, buildOutlookLink, buildWhatsappLink, normalizeRecipients } from '@/lib/portfolio-communication.mjs';
 import type { Dataset } from '@/lib/types';
 import { money, percent } from '@/lib/analytics.mjs';
+import { attainmentBand } from '@/lib/attainment.mjs';
 import { SORT_OPTIONS } from '@/lib/scenarios.mjs';
 import type { ScenarioFilters } from './scenario-panels';
 import EmailPreview from './email-preview';
@@ -16,10 +17,10 @@ import styles from './pa-scenario-share.module.css';
 type UnitKind = 'pa' | 'cooperative';
 type Format = 'image' | 'email' | 'summary';
 type SelectionMode = 'all' | 'filtered' | 'selected';
-type UnitOrder = 'name' | 'production' | 'attainment-desc' | 'attainment' | 'gap';
+type UnitOrder = keyof typeof SORT_OPTIONS;
 export type PaScenarioShareProps = {
   dataset: Dataset; filters: ScenarioFilters; userId: string; onClose: () => void; unitKind?: UnitKind;
-  initialFormat?: Format; initialMode?: SelectionMode; initialSelectedIds?: string[];
+  initialFormat?: Format; initialMode?: SelectionMode; initialSelectedIds?: string[]; initialShowProjection?: boolean;
 };
 type Report = ReturnType<typeof buildPaScenarioReport> | ReturnType<typeof buildCooperativeScenarioReport>;
 type Part = Report['parts'][number];
@@ -42,12 +43,12 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function PaScenarioShare({ dataset, filters, userId, onClose, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds }: PaScenarioShareProps) {
+export default function PaScenarioShare({ dataset, filters, userId, onClose, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, initialShowProjection = false }: PaScenarioShareProps) {
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const invalidateClipboard = useCallback(() => setClipboardVersion((value) => value + 1), []);
-  const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds]);
+  const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds, initialShowProjection]);
 
   useLayoutEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -70,16 +71,17 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
         <h2 id={titleId}>{UNITS[unitKind].title}</h2>
         <button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento" onClick={onClose}><X size={22} aria-hidden="true" /></button>
       </header>
-      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
+      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} initialShowProjection={initialShowProjection} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
     </section>
   </div>;
 }
 
-function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, clipboardVersion, onClipboardChange }: Omit<PaScenarioShareProps, 'onClose'> & { clipboardVersion: number; onClipboardChange: () => void }) {
+function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, initialShowProjection = false, clipboardVersion, onClipboardChange }: Omit<PaScenarioShareProps, 'onClose'> & { clipboardVersion: number; onClipboardChange: () => void }) {
   const unit = UNITS[unitKind];
   const countUnits = (count: number) => `${count} ${count === 1 ? unit.singular : unit.plural}`;
   const scopeName = useId();
   const channelName = useId();
+  const [showProjection, setShowProjection] = useState(initialShowProjection);
   const [mode, setMode] = useState<SelectionMode>(initialMode);
   const [channel, setChannel] = useState<Format>(initialFormat);
   const [selectedIds, setSelectedIds] = useState<string[] | null>(initialSelectedIds ?? (initialMode === 'selected' ? [] : null));
@@ -100,9 +102,9 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const baseBuilt = useMemo(() => attempt(() => unitKind === 'cooperative' ? buildCooperativeScenarioReport({ dataset, filters, mode: 'all', sortBy }) : buildPaScenarioReport({ dataset, filters, mode: 'all', sortBy })), [dataset, filters, sortBy, unitKind]);
   const baseReport = baseBuilt.value;
   const built = useMemo(() => attempt(() => {
-    const options = { dataset, filters, mode, selectedIds: selectedIds ?? [], sortBy, customization: { subject: subject ?? undefined, intro: intro ?? undefined, cta: cta ?? undefined } };
+    const options = { dataset, filters, mode, showProjection, selectedIds: selectedIds ?? [], sortBy, customization: { subject: subject ?? undefined, intro: intro ?? undefined, cta: cta ?? undefined } };
     return unitKind === 'cooperative' ? buildCooperativeScenarioReport(options) : buildPaScenarioReport(options);
-  }), [dataset, filters, mode, selectedIds, sortBy, subject, intro, cta, unitKind]);
+  }), [dataset, filters, mode, selectedIds, sortBy, subject, intro, cta, unitKind, showProjection]);
   const report = built.value;
   const page = Math.min(partIndex, Math.max(0, (report?.parts.length ?? 0) - 1));
   const part = report?.parts[page];
@@ -253,6 +255,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
       <div className={styles.summary}><strong>{countUnits(report?.count ?? 0)} no painel</strong><span>{report?.selectionLabel || (mode === 'selected' ? 'Somente as unidades marcadas.' : mode === 'all' ? 'Todas as unidades do escopo.' : 'Filtros atuais da lista aplicados.')}</span></div>
       <label className={styles.field}>Ordem das unidades<select aria-label="Ordem das unidades" value={sortBy} onChange={(event) => { setSortBy(event.target.value as UnitOrder); setPartIndex(0); }}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option key={value} value={value}>{String(label)}</option>)}</select></label>
     </div>
+    <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, calculada pelo ritmo até o corte.</small></span></label>
     <details className={styles.messageEditor}><summary>Editar mensagem</summary><div className={styles.editorFields}>
       <label className={styles.field}>Assunto da mensagem<input value={subject ?? report?.subject ?? baseReport.subject} maxLength={300} onChange={(event) => setSubject(event.target.value)} /></label>
       <label className={styles.field}>Introdução da mensagem<textarea value={intro ?? report?.intro ?? baseReport.intro} rows={2} maxLength={1000} onChange={(event) => setIntro(event.target.value)} /></label>
@@ -320,10 +323,11 @@ function SummaryPreview({ report, unitKind, onFormat }: { report: Report; unitKi
   return <section className={styles.channelPanel} aria-label="Prévia do painel resumido">
     <div className={styles.pageNavigation}><h3>Painel resumido</h3><div className={styles.actions}><button type="button" className="button secondary" onClick={() => onFormat('image')}>Preparar imagem</button><button type="button" className="button secondary" onClick={() => onFormat('email')}>Preparar e-mail</button></div></div>
     <div className={styles.summaryCards}>{counts.map((item) => <div key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}</div>
-    <div className={styles.summaryTable}><table><thead><tr><th scope="col">{unitKind === 'pa' ? 'PA' : 'Cooperativa'}</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">Crescimento / GAP</th></tr></thead><tbody>{report.rows.map((row) => <tr key={row.id}>
+    <div className={styles.summaryTable}><table><thead><tr><th scope="col">{unitKind === 'pa' ? 'PA' : 'Cooperativa'}</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">Crescimento / GAP</th>{report.showProjection && <th scope="col">Projeção de produção</th>}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.id}>
       <th scope="row"><strong>{unitKind === 'pa' ? row.pa : row.cooperative} · {row.name}</strong><small>{unitKind === 'pa' ? `Coop. ${row.cooperative} · ` : ''}Central {row.central}</small></th>
-      <td>{money(row.target)}</td><td>{money(row.actual)}</td><td>{percent(row.attainment)}</td><td>{money(row.variance.value)}<small>{row.variance.label}</small></td>
+      <td>{money(row.target)}</td><td>{money(row.actual)}</td><td data-attainment-band={attainmentBand(row.attainment).key} style={{ background: attainmentBand(row.attainment).background, color: attainmentBand(row.attainment).color }}>{percent(row.attainment)}</td><td>{money(row.variance.value)}<small>{row.variance.label}</small></td>{report.showProjection && <td>{money(row.projection?.value ?? null)}<small>{percent(row.projection?.attainment ?? null)} da meta · {row.projection?.phase}</small></td>}
     </tr>)}</tbody></table></div>
+    {report.showProjection && [...new Set(report.rows.map(row => row.projection?.assumption).filter(Boolean))].map(text => <p className={styles.helper} key={text}>{text}</p>)}
     <p className={styles.helper}>Valores por unidade, sem somar carteiras diferentes. Sem avaliação indica dados insuficientes.</p>
   </section>;
 }

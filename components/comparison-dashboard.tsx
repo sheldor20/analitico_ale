@@ -4,6 +4,8 @@ import { MONTHS, money, percent } from '@/lib/analytics.mjs';
 import { chartDomain, comparisonDashboard, signedBar } from '@/lib/comparison-dashboard.mjs';
 import type { compareYears } from '@/lib/scenarios.mjs';
 import styles from './scenario-panels.module.css';
+import { attainmentBand } from '@/lib/attainment.mjs';
+import AttainmentLegend from './ui/attainment-legend';
 type Comparison = ReturnType<typeof compareYears>;
 const points = (value: number | null) => value == null ? 'Sem base' : `${value > 0 ? '+' : ''}${value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p.`;
 const change = (value: number | null) => value == null ? 'Sem base comparável' : value === 0 ? 'Sem variação' : value > 0 ? 'Aumento de produção' : 'Redução de produção';
@@ -16,13 +18,14 @@ export default function ComparisonDashboard({ comparison, currentYear, previousY
   return <div className={styles.comparisonDashboard} aria-label="Dashboard comparativo">
     <div className={styles.comparisonKpis}>
       {yearSides.map(side => <article key={side.year} aria-label={`Resumo de ${side.year}`}>
-        <span>Produção {side.year}</span><strong>{money(side.values.actual)}</strong>
+        <span>Produção {side.year}</span><strong className="attainment-value" data-attainment={attainmentBand(side.values.attainment).key}>{money(side.values.actual)}</strong>
         <small>Meta {money(side.values.target)}</small><small>GAP {money(side.values.gap)}</small>
         {side.values.observed < side.values.count && <small className={styles.warning}>Dados incompletos: {side.values.observed} de {side.values.count} unidades com produção.</small>}
       </article>)}
       <article aria-label="Variação da produção" className={styles.highlightCard}><span>{change(model.productionDelta)}</span><strong>{money(model.productionDelta)}</strong><small>{percent(model.growth)} em relação a {previousYear}</small><small>{model.compositionChanged ? 'Considera a rede de cada ano.' : 'Mesmas unidades nos dois anos.'}</small></article>
-      <article aria-label="Comparação do atingimento"><span>Atingimento · {currentYear}</span><strong>{percent(model.current.attainment)}</strong><small>{previousYear}: {percent(model.previous.attainment)} · {points(model.attainmentDelta)}</small><small>Soma da produção ÷ soma das metas.</small></article>
+      <article aria-label="Comparação do atingimento"><span>Atingimento · {currentYear}</span><strong className="attainment-value" data-attainment={attainmentBand(model.current.attainment).key}>{percent(model.current.attainment)}</strong><small>{previousYear}: <span className="attainment-value" data-attainment={attainmentBand(model.previous.attainment).key}>{percent(model.previous.attainment)}</span> · {points(model.attainmentDelta)}</small><small>Soma da produção ÷ soma das metas.</small></article>
     </div>
+    <AttainmentLegend />
     <div className={styles.membership} aria-label="Composição dos anos">
       <span><strong>{comparison.common}</strong> nos dois anos</span>
       <span><strong>{comparison.currentOnly}</strong> somente no cadastro de {currentYear}</span>

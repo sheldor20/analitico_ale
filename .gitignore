@@ -6,6 +6,8 @@ node_modules/
 *.xls
 *.csv
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 .vercel/
 data/

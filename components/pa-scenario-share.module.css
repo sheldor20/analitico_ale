@@ -100,3 +100,8 @@
   .imageActions .actions > * { flex: 1 1 120px; }
   .channelPanel > .actions > *, .destination .actions > * { flex: 1 1 180px; }
 }
+
+.projectionOption { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; cursor: pointer; font-size: 16px; }
+.projectionOption input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 2px 0 0; padding: 0; accent-color: #00776b; }
+.projectionOption span { display: grid; gap: 4px; }
+.projectionOption small { color: var(--muted); font-size: 13px; line-height: 1.4; }

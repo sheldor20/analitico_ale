@@ -12,6 +12,7 @@ import { registerPaScenarioTests } from './pa-scenario-cases.mjs';
 import { registerCooperativeScenarioTests } from './cooperative-scenario-cases.mjs';
 import { registerWorkflowTests } from './workflow-cases.mjs';
 import { registerPriorityTests } from './priority-cases.mjs';
+import { registerManagementPeriodTests } from './management-period-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -288,3 +289,5 @@ registerCooperativeScenarioTests({ test, expect, setup });
 registerWorkflowTests({ test, expect, setup });
 
 registerPriorityTests({ test, expect, setup });
+
+registerManagementPeriodTests({ test, expect, setup });

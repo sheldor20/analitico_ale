@@ -24,7 +24,10 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
   await expect(page.getByRole('heading',{level:1,name:'Visão geral',exact:true})).toBeVisible();
   const result=page.getByRole('region',{name:'Resultado do período',exact:true}),list=page.getByRole('region',{name:'Lista de unidades',exact:true});
-  expect((await result.boundingBox()).y).toBeLessThan((await list.boundingBox()).y);
+  const resultBox=await result.boundingBox(),listBox=await list.boundingBox();
+  expect(listBox.y).toBeGreaterThanOrEqual(resultBox.y+resultBox.height);
+  expect(listBox.y-resultBox.y-resultBox.height).toBeLessThan(100);
+  expect(listBox.y).toBeLessThan((await page.getByRole('region',{name:'Prioridades da carteira',exact:true}).boundingBox()).y);
   expect((await list.boundingBox()).y).toBeLessThan((await page.getByRole('region',{name:'Comparativo entre anos',exact:true}).boundingBox()).y);
   await expect(list.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
   await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toHaveCount(0);
