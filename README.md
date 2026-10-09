@@ -1,10 +1,12 @@
 # Analítico Comercial
 
-Aplicação Node.js / Next.js para acompanhar metas, resultados e ações das centrais Sicoob Bahia (`1002`) e Nordeste (`2007`). Preparada para Vercel e Supabase.
+Aplicação Node.js / Next.js para acompanhar metas, resultados e ações das centrais, cooperativas e PAs cadastrados por cada usuário. Preparada para Vercel e Supabase.
 
 ## Cadastro fixo anual e atualização da produção
 
 Em **Cadastro e metas**, inclua, edite ou exclua Centrais, Cooperativas e PAs. A hierarquia é validada, inclusive PA 0 e 97. A exclusão informa os cadastros e valores vinculados e pede confirmação dentro do aplicativo. Mudanças recalculam os indicadores de todos os períodos.
+
+Cada conta começa com sua própria rede vazia. Cadastre as centrais pelo código e nome ou faça a primeira importação com as centrais do arquivo, sem restrição regional. Quando já existe cadastro no ano, a importação respeita suas centrais; para incluir outra central, cadastre-a antes de importar. Os filtros e as comunicações usam os nomes do cadastro. Dados e nomes das redes existentes são preservados.
 
 - **Base fixa:** em Importações, escolha “Cadastrar base fixa · unidades e metas”. O arquivo cadastra novas unidades e metas sem carregar produção nem substituir metas já cadastradas. Uma base só com meta anual recebe distribuição mensal em centavos, identificada na conferência.
 - **Atualização:** escolha “Atualizar produção”. Os valores mensais informados substituem os meses correspondentes, sem somar o mesmo acumulado novamente. Meses vazios, fontes não enviadas, unidades ausentes e metas cadastradas são preservados. Cortes anteriores ao já salvo são rejeitados. Uma correção manual de realizado prevalece em reenvio do mesmo corte; um corte posterior com valor informado atualiza a correção.
