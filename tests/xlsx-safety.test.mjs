@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
-import { assertSafeXlsx, readWorkbookFile } from '../lib/xlsx-safety.mjs';
+import ExcelJS from 'exceljs';
+import { assertSafeXlsx, readWorkbookFile, XLSX_FILE_LIMIT_BYTES, XLSX_FILE_LIMIT_MB } from '../lib/xlsx-safety.mjs';
+import { sizedXlsx } from './helpers/sized-xlsx.mjs';
 function zip({ lie=false, method=8, path='xl/workbook.xml', flags=0, declaredSize, localMismatch=false }={}) {
   const entries=['[Content_Types].xml',path]; let offset=0;
   const local=[],central=[];
@@ -22,6 +24,27 @@ test('XLSX ZIP: declared bombs, encryption, traversal, duplicates and mismatched
   await assert.rejects(()=>assertSafeXlsx(new Uint8Array(20)));
   await assert.rejects(()=>assertSafeXlsx(zip().subarray(0,30)));
 });
-test('XLSX file size is checked before reading into memory',async()=>{
-  let read=false;await assert.rejects(()=>readWorkbookFile({name:'large.xlsx',size:11*1024*1024,arrayBuffer:()=>{read=true;}}),/10 MB/);assert.equal(read,false);
+test('XLSX accepts exactly 40 MiB through file reading and ZIP validation', async () => {
+  assert.equal(XLSX_FILE_LIMIT_MB, 40);
+  assert.equal(XLSX_FILE_LIMIT_BYTES, 40 * 1024 * 1024);
+  const book = new ExcelJS.Workbook();
+  book.addWorksheet('Dados').addRow(['Planilha de 40 MiB']);
+  const buffer = await sizedXlsx(book, 40 * 1024 * 1024);
+  let reads = 0;
+  const result = await readWorkbookFile({
+    name: 'limite.xlsx', size: buffer.byteLength,
+    arrayBuffer: async () => { reads++; return buffer; },
+  });
+  assert.equal(reads, 1);
+  assert.equal(result, buffer);
+  await assertSafeXlsx(result);
+});
+test('XLSX rejects 40 MiB plus one byte before reading into memory', async () => {
+  let read = false;
+  await assert.rejects(() => readWorkbookFile({
+    name: 'large.xlsx', size: 40 * 1024 * 1024 + 1,
+    arrayBuffer: () => { read = true; },
+  }), /40 MB/);
+  assert.equal(read, false);
+  await assert.rejects(() => assertSafeXlsx(new Uint8Array(40 * 1024 * 1024 + 1)), /40 MB/);
 });
