@@ -208,7 +208,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
   });
 
   test('reference periods: annual summary and period cards retain exact large, negative and unknown amounts across desktop and mobile', async ({ page }, info) => {
-    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertPlanRow(dataset, {
+    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertPlanRow({ ...dataset, rows: dataset.rows.map(row => ({ ...row, cutoff: '2026-08-14' })) }, {
       entityId: 'cooperative:1002:3017', metric: 'AR', targets: Array(12).fill(9279000), annualTarget: 111348000,
       actuals: [12345000, 6495300, 6495299.99, -12945213.17, 0, 0, 186000000, 1, null, null, null, null], cutoff: '2026-08-14',
     }));
