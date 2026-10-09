@@ -98,7 +98,7 @@ test('output uses only commercial result fields and excludes contact, ownership 
   assert.doesNotMatch(JSON.stringify(output), /private-owner|private-read|private-notified|private@example/);
 });
 
-test('filtered dashboard preserves every received unit and metric in order without sums or implicit filtering', () => {
+test('filtered dashboard groups VN before AR and preserves every received unit and its order within the portfolio', () => {
   const base = sample();
   const selection = [
     sample({ entity: { id: 'central:1002', kind: 'central', central: '1002', name: 'Central Bahia' }, target: 2000, actual: 2500, attainment: 1.25 }),
@@ -110,16 +110,17 @@ test('filtered dashboard preserves every received unit and metric in order witho
   const dashboard = buildGoalAlertsDashboard(selection, { year: 2026, month: 7, kindLabel: 'Seleção atual' });
   assert.deepEqual(selection, before);
   assert.equal(dashboard.hierarchy, 'Seleção atual');
-  assert.equal(dashboard.blocks.length, 8);
+  assert.deepEqual(dashboard.blocks.filter(block => block.type === 'heading').map(block => block.text), ['Venda nova', 'Arrecadação']);
   assert.deepEqual(dashboard.notes, ['Dados até 20/08/2026.']);
   const cards = dashboard.blocks.filter((block) => block.type === 'cards');
   assert.equal(cards.length, selection.length);
-  for (const [index, alert] of selection.entries()) {
+  const groupedSelection = [selection[0], selection[2], selection[3], selection[1]];
+  for (const [index, alert] of groupedSelection.entries()) {
     assert.equal(cards[index].items[0].value, money(alert.target));
     assert.equal(cards[index].items[1].value, money(alert.actual));
   }
   const captions = dashboard.blocks.filter((block) => block.type === 'text' && block.tone === 'action').map((block) => block.text);
-  assert.deepEqual(captions, ['Central 1002 · Central Bahia · Venda nova', 'Cooperativa 3025 · Cooperativa Beta · Arrecadação · Central 1002', 'Cooperativa 3025 · Cooperativa Beta · Venda nova · Central 1002', 'PA 0 · PA Zero · Venda nova · Central 1002 · Cooperativa 3025']);
+  assert.deepEqual(captions, ['Central 1002 · Central Bahia', 'Cooperativa 3025 · Cooperativa Beta · Central 1002', 'PA 0 · PA Zero · Central 1002 · Cooperativa 3025', 'Cooperativa 3025 · Cooperativa Beta · Central 1002']);
   const text = texts(dashboard);
   assert.match(text, /4 metas atingidas/);
   assert.doesNotMatch(text, /Projeç|Total realizado|Total da meta/);
@@ -129,6 +130,32 @@ test('filtered dashboard preserves every received unit and metric in order witho
   assert.doesNotMatch(texts(onlyAr), /Central 1002 · Central Bahia|PA Zero|Venda nova/);
 });
 
+
+test('portfolio grouping is stable for any incoming ranking and keeps exceptional cutoffs with the correct unit', () => {
+  const alert = (name, metric, actual, cutoff) => sample({entity:{...sample().entity,name},metric,actual,attainment:actual/1200,cutoff,cutoffMin:cutoff});
+  const input = [alert('AR líder','AR',3000,'2026-08-19'), alert('VN líder','VN',2400,'2026-08-20'), alert('AR seguinte','AR',1800,'2026-08-18'), alert('VN seguinte','VN',1500,'2026-08-17')];
+  for (const selection of [input, [...input].reverse()]) {
+    const before = structuredClone(selection);
+    const panel = buildGoalAlertsDashboard(selection,{year:2026,month:7});
+    const expected = ['VN','AR'].flatMap(metric=>selection.filter(item=>item.metric===metric));
+    assert.deepEqual(selection,before);
+    const actuals = panel.blocks.filter(block=>block.type==='cards').map(block=>block.items[1].value);
+    assert.deepEqual(actuals,expected.map(item=>money(item.actual)));
+    const cuts = panel.blocks.filter(block=>block.type==='text'&&block.tone==='muted').map(block=>block.text);
+    assert.deepEqual(cuts,expected.map(item=>`Dados até ${item.cutoff.split('-').reverse().join('/')}.`));
+    const html = renderDashboardHtml(panel,'Metas por carteira');
+    const png = texts(panel);
+    for (const rendered of [html,png]) {
+      const names = expected.map(item=>rendered.indexOf(item.entity.name));
+      assert.ok(names.every((position,index)=>position>=0&&(index===0||position>names[index-1])));
+    }
+    assert.equal(panel.blocks.filter(block=>block.type==='heading').length,2);
+  }
+  const onlyAr = buildGoalAlertsDashboard(input.filter(item=>item.metric==='AR'),{year:2026,month:7});
+  assert.equal(onlyAr.blocks.filter(block=>block.type==='heading').length,0);
+  assert.doesNotMatch(texts(onlyAr),/Venda nova/);
+});
+
 test('empty, stale-period and excessive selections fail explicitly without silently omitting rows', () => {
   assert.throws(() => buildGoalAlertsDashboard([], { year: 2026, month: 7 }), /Não há metas/);
   assert.throws(() => buildGoalAlertsDashboard([sample()], { year: 2026, month: 8 }), /outro período/);
@@ -136,6 +163,10 @@ test('empty, stale-period and excessive selections fail explicitly without silen
   assert.throws(() => buildGoalAlertsDashboard(Array(27).fill(sample()), { year: 2026, month: 7 }), /muitas metas.*Nenhuma unidade foi removida/);
   const complete = buildGoalAlertsDashboard(Array(26).fill(sample()), { year: 2026, month: 7 });
   assert.equal(complete.blocks.filter((block) => block.type === 'cards').length, 26);
+  const mixed = Array.from({length:26},(_,index)=>sample({metric:index%2?'AR':'VN',cutoff:index%2?'2026-08-19':'2026-08-20',cutoffMin:index%2?'2026-08-19':'2026-08-20'}));
+  const full = buildGoalAlertsDashboard(mixed,{year:2026,month:7});
+  assert.equal(full.blocks.length,80);
+  assert.equal(full.blocks.filter(block=>block.type==='cards').length,26);
   const longNamed = sample({ entity: { ...sample().entity, name: 'Cooperativa regional '.repeat(30).trim() } });
   const oversized = buildGoalAlertsDashboard(Array(26).fill(longNamed), { year: 2026, month: 7 });
   assert.throws(() => dashboardImageLayout(oversized, measure), /muito longo/);
@@ -144,6 +175,7 @@ test('empty, stale-period and excessive selections fail explicitly without silen
 test('invalid achievements and unsupported context do not produce a shareable recognition panel', () => {
   for (const change of [{ year: 2019 }, { month: 12 }, { month: -1 }, { metric: 'OTHER' }, { actual: 1100 }, { target: 0 }, { actual: NaN }, { attainment: Infinity }, { cutoff: '2026-02-31' }, { cutoffMin: '2026-08-31' }]) {
     assert.throws(() => buildGoalAlertPresentation(sample(change)));
+    assert.throws(() => buildGoalAlertsDashboard([sample(), sample(change)], {year:2026,month:7}));
   }
 });
 
