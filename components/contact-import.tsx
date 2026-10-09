@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle, Upload, X } from 'lucide-react';
 import { buildContactImportPreview, readContactWorkbook, type ContactImportSourceRow, type ContactImportWorkbook } from '@/lib/contact-import.mjs';
-import { readWorkbookFile } from '@/lib/xlsx-safety.mjs';
+import { readWorkbookFile, XLSX_FILE_LIMIT_MB } from '@/lib/xlsx-safety.mjs';
 import { importResponsibleContacts, listWorkspaceResponsibleContacts, type ResponsibleContact } from '@/lib/contact-store';
 import type { RegistryEntity } from '@/lib/types';
 import styles from './contact-import.module.css';
@@ -120,7 +120,7 @@ export default function ContactImport({ entities, year, userId, workspaceRevisio
       else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
     }}>
       <header className={styles.header}><div><h2 id="contact-import-title">Importar contatos das cooperativas</h2><p>Cadastro de {year}. Revise os contatos antes de salvar.</p></div><button ref={closeButton} type="button" className="icon-button" aria-label="Fechar importação de contatos" disabled={locked} onClick={close}><X size={21} aria-hidden="true" /></button></header>
-      <div className={styles.file}><label>Planilha de contatos<input ref={fileInput} type="file" accept=".xlsx" aria-label="Planilha de contatos" disabled={locked} onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = ''; }} /></label><p>Arquivo .xlsx, até 10 MB e 1.000 contatos. Use Central, Código da cooperativa (ou Nº), Nome, E-mail e Telefone. As demais colunas não alteram metas ou produção.</p></div>
+      <div className={styles.file}><label>Planilha de contatos<input ref={fileInput} type="file" accept=".xlsx" aria-label="Planilha de contatos" disabled={locked} onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = ''; }} /></label><p>Arquivo .xlsx, até {XLSX_FILE_LIMIT_MB} MB e 1.000 contatos. Use Central, Código da cooperativa (ou Nº), Nome, E-mail e Telefone. As demais colunas não alteram metas ou produção.</p></div>
       {(error || notice) && <div ref={feedback} tabIndex={-1} className={styles.feedback}>{error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}</div>}
       {loading && <p role="status" className={styles.loading}><LoaderCircle size={17} className="spin" aria-hidden="true" />Preparando prévia…</p>}
       {rows.length > 0 && <div className={styles.actions}><span>{filename} · {rows.length} linhas</span><button type="button" className="button secondary" disabled={locked} onClick={() => void reloadPreview()}>Recarregar prévia</button></div>}

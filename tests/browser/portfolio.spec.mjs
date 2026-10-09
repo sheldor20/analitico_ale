@@ -17,6 +17,7 @@ import { registerContactImportTests } from './contact-import-cases.mjs';
 import { registerPeriodShareTests } from './period-share-cases.mjs';
 import { registerFilteredSharingTests } from './filtered-sharing-cases.mjs';
 import { registerRegistryOnboardingTests } from './registry-onboarding-cases.mjs';
+import { registerUploadLimitTests } from './upload-limit-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -348,3 +349,5 @@ registerPeriodShareTests({ test, expect, setup });
 registerFilteredSharingTests({ test, expect, setup });
 
 registerRegistryOnboardingTests({ test, expect, setup, owner });
+
+registerUploadLimitTests({ test, expect, setup, owner });

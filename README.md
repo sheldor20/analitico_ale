@@ -131,7 +131,7 @@ As migrações aplicadas constam no histórico do Supabase. Os snapshots origina
 
 ## Importar as bases
 
-1. No campo **Cooperativas e centrais**, selecione `base atualizada.xlsx`. No campo **Cadência comercial PA**, selecione `CADENCIA COMERCIAL PA.xlsx`. É possível analisar uma única fonte, mas o conjunto completo usa as duas (até 10 MB por arquivo).
+1. No campo **Cooperativas e centrais**, selecione `base atualizada.xlsx`. No campo **Cadência comercial PA**, selecione `CADENCIA COMERCIAL PA.xlsx`. É possível analisar uma única fonte, mas o conjunto completo usa as duas (até 40 MB por arquivo).
 2. Informe o ano das metas e a data de corte de cada fonte enviada. As planilhas não contêm uma data comercial inequívoca; por isso nenhum corte é inferido da data do arquivo ou do relógio do servidor.
 3. Para mês fechado, informe o último dia do mês. Para parcial, informe a posição efetiva do resultado acumulado no mês. Meses anteriores são tratados como fechados conforme essa confirmação. O corte deve pertencer ao ano informado.
 4. Clique em **Analisar planilhas**. Revise **Conferência da base** e depois **Salvar análise** para guardar o conjunto e as ações.
@@ -208,7 +208,7 @@ A leitura XLSX acontece no navegador após o login. O conjunto normalizado é en
 
 Não são usados localStorage/IndexedDB para dados comerciais; sem salvar, a análise é perdida ao recarregar/fechar a página. A sessão de autenticação é gerenciada pelo cliente oficial Supabase. Ao sair, dados e ações abertos são removidos da interface.
 
-Limites de leitura: 2 arquivos, 10 MB por arquivo, 64 MB declarados descompactados, 2.000 entradas ZIP, 50.000 linhas e 300 colunas por aba. A versão foi dimensionada e reconciliada com as duas fontes fornecidas; volumes muito maiores exigem processamento em worker/background.
+Limites de leitura: 2 arquivos, 40 MB por arquivo (40 × 1.024 × 1.024 bytes), 64 MB descompactados (tamanho declarado e expansão real), 2.000 entradas ZIP, 50.000 linhas e 300 colunas por aba. O limite de 40 MB também vale para a planilha de contatos, que mantém o máximo de 1.000 contatos por importação. A leitura ocorre no navegador; os limites de expansão protegem a memória durante o processamento. Os dados extraídos continuam sujeitos aos limites do cadastro salvo.
 
 ## Validação
 

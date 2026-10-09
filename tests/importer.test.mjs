@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import { parseWorkbook, combineImports, number } from "../lib/importer.mjs";
 import { MONTHS } from "../lib/analytics.mjs";
 import { createEmptyDataset, initializeRegistry, mergeProduction, upsertEntity } from "../lib/registry.mjs";
+import { sizedXlsx } from "./helpers/sized-xlsx.mjs";
 const config = {
   year: 2026,
   vnCutoff: "2026-09-08",
@@ -23,6 +24,7 @@ async function fixture({
   centralHeader = "CENTRAL",
   otherCentral = 9998,
   footer = false,
+  byteLength,
 } = {}) {
   const book = new ExcelJS.Workbook(),
     s = book.addWorksheet("Cadência");
@@ -92,8 +94,25 @@ async function fixture({
     0,
   ]);
   if (footer) s.addRow([null, "TOTAL", null, null]);
-  return book.xlsx.writeBuffer();
+  return byteLength ? sizedXlsx(book, byteLength) : book.xlsx.writeBuffer();
 }
+test("a real 40 MiB XLSX imports with the same results as a small workbook", async () => {
+  const options = { central: 3456, centralLabel: "Central Exemplo", negative: true, blank: true };
+  const expected = await parseWorkbook(await fixture(options), "cadencia.xlsx", config);
+  const large = await fixture({ ...options, byteLength: 40 * 1024 * 1024 });
+  const actual = await parseWorkbook(large, "cadencia.xlsx", config);
+  assert.deepEqual(actual.rows, expected.rows);
+  assert.deepEqual(actual.issues, expected.issues);
+  assert.equal(actual.skipped, expected.skipped);
+  assert.equal(actual.rows[0].actuals[0], -100);
+  assert.equal(actual.rows[0].actuals[5], null);
+});
+test("workbook parsing rejects one byte over 40 MiB before parsing an invalid ZIP", async () => {
+  await assert.rejects(
+    () => parseWorkbook(new Uint8Array(40 * 1024 * 1024 + 1), "cadencia.xlsx", config),
+    /40 MB/,
+  );
+});
 test("Brazilian numeric conversion preserves missing/zero/negative", () => {
   assert.equal(number("1.234,56"), 1234.56);
   assert.equal(number(0), 0);
@@ -190,7 +209,7 @@ test("explicit valid source date required; invalid calendar dates rejected", asy
 test("malformed or non-xlsx data fails clearly", async () => {
   await assert.rejects(
     () => parseWorkbook(new Uint8Array([1, 2, 3]).buffer, "test.xlsx", config),
-    /inválido/,
+    /inválid[ao]/,
   );
   await assert.rejects(
     () => parseWorkbook(new ArrayBuffer(1), "test.xls", config),

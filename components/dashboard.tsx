@@ -1,6 +1,6 @@
 "use client";
 import { goalVariance } from '@/lib/goal-variance.mjs';
-import { readWorkbookFile } from "@/lib/xlsx-safety.mjs";
+import { readWorkbookFile, XLSX_FILE_LIMIT_MB } from "@/lib/xlsx-safety.mjs";
 import { Fragment, useEffect, useId, useMemo, useState, useRef } from "react";
 import {
   Activity,
@@ -525,7 +525,6 @@ export default function Dashboard() {
       const allowedCentrals = current?.registry?.entities.filter((entity) => entity.kind === "central").map((entity) => entity.central) ?? [];
       const parts = [];
       for (const [expectedSource, file] of selectedFiles) {
-        if (file.size > 10 * 1024 * 1024) throw new Error("Cada arquivo pode ter até 10 MB.");
         const parsed = await parseWorkbook(
           await readWorkbookFile(file),
           file.name,
@@ -867,7 +866,7 @@ export default function Dashboard() {
         />
       </div>
       <p className="upload-count">
-        {selectedFileCount}/2 fontes selecionadas · até 10 MB por arquivo
+        {selectedFileCount}/2 fontes selecionadas · até {XLSX_FILE_LIMIT_MB} MB por arquivo
       </p>
       <div className="import-guidance">
         <Info size={18} />
