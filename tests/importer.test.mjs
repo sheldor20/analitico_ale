@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { parseWorkbook, combineImports, number } from "../lib/importer.mjs";
 import { MONTHS } from "../lib/analytics.mjs";
+import { createEmptyDataset, initializeRegistry, mergeProduction, upsertEntity } from "../lib/registry.mjs";
 const config = {
   year: 2026,
   vnCutoff: "2026-09-08",
@@ -18,6 +19,8 @@ async function fixture({
   sourceMonthly = 450,
   sourceAnnual = 5400,
   central = 1002,
+  centralLabel = "CENTRAL BA",
+  centralHeader = "CENTRAL",
   otherCentral = 9998,
   footer = false,
 } = {}) {
@@ -26,7 +29,7 @@ async function fixture({
   s.addRow([
     "GRUPO",
     "Nº CENTRAL",
-    "CENTRAL",
+    centralHeader,
     "Nº COOP",
     "NOME COOP",
     "Nº PA",
@@ -47,7 +50,7 @@ async function fixture({
   const values = [
     group,
     central,
-    "CENTRAL BA",
+    centralLabel,
     9999,
     "COOP TESTE",
     code,
@@ -211,6 +214,44 @@ test("first import accepts new centrals without an allowlist, including an expli
     assert.equal(result.rows[0].actuals[0], 123);
     assert.equal(result.rows[0].pa, "0");
   }
+});
+test("the optional CENTRAL name reaches the new registry while registered names retain precedence", async () => {
+  const part = await parseWorkbook(await fixture({ central: 3456, centralLabel: "  Sicoob Central Sudeste  " }), "cadencia.xlsx", config);
+  assert.equal(part.rows[0].centralName, "Sicoob Central Sudeste");
+  const incoming = combineImports([part], config);
+  const first = initializeRegistry(incoming);
+  assert.equal(first.registry.entities.find(entity => entity.id === "central:3456").name, "Sicoob Central Sudeste");
+  const existing = upsertEntity(createEmptyDataset(2026), { kind: "central", central: "3456", name: "Nome oficial cadastrado" });
+  const updated = mergeProduction(existing, incoming);
+  assert.equal(updated.registry.entities.find(entity => entity.id === "central:3456").name, "Nome oficial cadastrado");
+  assert.equal(updated.rows.find(row => row.central === "3456").centralName, "Nome oficial cadastrado");
+  assert.equal(updated.rows.find(row => row.central === "3456").actuals[0], 123);
+});
+test("missing, blank or erroneous CENTRAL cells keep generic and historical name fallbacks", async () => {
+  for (const overrides of [{ centralHeader: "" }, { centralLabel: "  " }, { centralLabel: { error: "#N/A" } }, { centralLabel: { formula: "NA()", result: { error: "#N/A" } } }]) {
+    for (const [central, expected] of [[3456, "Central 3456"], [1002, "Sicoob Central Bahia"]]) {
+      const part = await parseWorkbook(await fixture({ central, ...overrides }), "cadencia.xlsx", config);
+      assert.equal(Object.hasOwn(part.rows[0], "centralName"), false);
+      const dataset = initializeRegistry(combineImports([part], config));
+      assert.equal(dataset.registry.entities.find(entity => entity.id === `central:${central}`).name, expected);
+    }
+  }
+});
+test("a cadence central name also labels an earlier unnamed base row without mutating the imported parts", async () => {
+  const book = new ExcelJS.Workbook(), sheet = book.addWorksheet("Metas");
+  sheet.addRow(["Nº CENTRAL", "CENTRAL", "Nº COOP", "SIGLA COOPERATIVA", "META", "G COOP", "META ANUAL"]);
+  sheet.addRow([3456, "", 9999, "Cooperativa teste", "VENDA NOVA", "P1", 1200]);
+  sheet.addRow([6789, "Central da base", 8888, "Outra cooperativa", "VENDA NOVA", "P1", 600]);
+  const base = await parseWorkbook(await book.xlsx.writeBuffer(), "metas.xlsx", config);
+  const cadence = await parseWorkbook(await fixture({ central: 3456, centralLabel: "Central da cadência" }), "cadencia.xlsx", config);
+  const before = structuredClone([base, cadence]);
+  assert.equal(base.rows[1].centralName, "Central da base");
+  const combined = combineImports([base, cadence], config);
+  assert.deepEqual([base, cadence], before);
+  const dataset = initializeRegistry(combined);
+  assert.equal(dataset.registry.entities.find(entity => entity.id === "central:3456").name, "Central da cadência");
+  assert.equal(dataset.registry.entities.find(entity => entity.id === "central:6789").name, "Central da base");
+  assert.ok(dataset.rows.filter(row => row.central === "3456").every(row => row.centralName === "Central da cadência"));
 });
 test("an explicit non-empty scope imports exactly its centrals without adding Bahia or Nordeste", async () => {
   for (const legacy of [1002, 2007]) {
