@@ -177,7 +177,10 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     expect(await rows(page).evaluateAll(nodes => nodes.map(node => node.dataset.periodShareId))).toEqual(['quarter:2', 'quarter:5', 'quarter:8', 'quarter:11']);
     await expect(row(page, 'quarter:8').locator('td[data-label="Realizado"]')).toContainText(money(1700));
     await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"]')).toContainText(money(3454.84));
+    await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"]')).toContainText('115,2% da meta');
+    await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"] [data-attainment-band]')).toHaveCount(0);
     await expect(row(page, 'quarter:11').locator('td[data-label="Projeção de produção"]')).toContainText('—');
+    await expect(row(page, 'quarter:11').locator('td[data-label="Projeção de produção"]')).toContainText('Sem avaliação');
     const recipients = dialog.getByRole('textbox', { name: 'Destinatários do e-mail', exact: true });
     await recipients.fill('endereco-invalido');
     await expect(dialog.getByRole('button', { name: 'Copiar painel', exact: true })).toBeDisabled();
