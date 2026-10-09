@@ -98,6 +98,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const report = built.value;
   const page = Math.min(partIndex, Math.max(0, (report?.parts.length ?? 0) - 1));
   const part = report?.parts[page];
+  const partLabel = report?.metric === 'both' ? `de ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · parte ${part?.index ?? 1} de ${part?.total ?? 1}` : `da parte ${part?.index ?? page + 1}`;
   const whatsappText = whatsappContent === 'caption' ? report?.caption ?? '' : report?.whatsapp ?? '';
   const snapshot = JSON.stringify([userId, dataset.year, filters, unitKind, unitIdsByMetric, subject, intro, cta, report?.html, page, channel, phone, addresses, personal, whatsappContent, whatsappText]);
   const current = useRef(snapshot);
@@ -175,12 +176,12 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
         void guardedPng.catch(() => {});
         // Keep the clipboard call in the click gesture, including Safari.
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': guardedPng })]);
-        if (isCurrent(captured)) setFeedback({ snapshot: captured, text: `Imagem da parte ${page + 1} copiada. Cole na conversa.`, error: false });
+        if (isCurrent(captured)) setFeedback({ snapshot: captured, text: `Imagem ${partLabel} copiada. Cole na conversa.`, error: false });
       } else {
         const blob = await png;
         if (!isCurrent(captured)) return;
         downloadBlob(blob, filename);
-        setFeedback({ snapshot: captured, text: `Imagem da parte ${page + 1} baixada. Anexe o arquivo na conversa.`, error: false });
+        setFeedback({ snapshot: captured, text: `Imagem ${partLabel} baixada. Anexe o arquivo na conversa.`, error: false });
       }
     } catch (reason) {
       if (!isCurrent(captured)) return;
@@ -255,7 +256,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
         </div>
         </div>
         {actionFeedback}
-        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={page + 1} total={report.parts.length} title={report.metric === 'both' ? `${unit.preview} · ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}` : unit.preview} />
+        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={part?.index ?? page + 1} total={part?.total ?? report.parts.length} title={report.metric === 'both' ? `${unit.preview} · ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}` : unit.preview} />
       </section> : channel === 'email' ? <section className={styles.channelPanel} aria-label="Compartilhar por e-mail">
         <div className={styles.emailFields}>
           <label className={styles.field}>Destinatários do e-mail<textarea value={addresses} rows={2} onChange={(event) => setAddresses(event.target.value)} placeholder="nome@cooperativa.com.br; outro@cooperativa.com.br" /></label>

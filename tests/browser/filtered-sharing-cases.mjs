@@ -167,11 +167,17 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     for (const value of ['Gestão comercial · Venda nova', 'Gestão comercial · Arrecadação', '10/09/2026', '05/09/2026', money(95), money(-25.5), money(700)]) expect(text).toContain(value);
     await modal.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__filteredCopies.png.length)).toBe(1);
+    await expect(modal.getByText('Imagem de Venda Nova · parte 1 de 1 copiada. Cole na conversa.', {exact:true})).toBeVisible();
     const vn = await page.evaluate(() => window.__filteredCopies.drawings.at(-1));
     expect(vn).toContain('Gestão comercial · Venda nova');expect(vn).toContain(numeric(-25.5));expect(vn).not.toContain(numeric(700));
     expect(await page.evaluate(() => window.__filteredCopies.png[0].magic)).toEqual(pngMagic);
     await modal.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     await expect(modal.getByText(/Arrecadação · Parte 1 de 1/)).toBeVisible();
+    await expect(modal.getByRole('img', {name:/Arrecadação — parte 1 de 1/})).toBeVisible();
+    const directPng = page.waitForEvent('download');
+    await modal.getByRole('button', {name:'Baixar imagem desta parte',exact:true}).click();
+    expect((await directPng).suggestedFilename()).toContain('-AR-');
+    await expect(modal.getByText('Imagem de Arrecadação · parte 1 de 1 baixada. Anexe o arquivo na conversa.', {exact:true})).toBeVisible();
     await page.evaluate(() => { window.__filteredCopies.denied = true; });
     const pngDownload = page.waitForEvent('download');await modal.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     const png = await pngDownload, bytes = await readFile(await png.path());expect([...bytes.slice(0, 8)]).toEqual(pngMagic);
