@@ -1,6 +1,93 @@
 import { portfolioFixture } from '../portfolio-fixture.mjs';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
+import { money } from '../../lib/analytics.mjs';
 export function registerUxTests({test,expect,setup,owner,created}) {
+ test('cooperative table: exact large and negative values, optional indicators and row actions fit without horizontal scrolling',async({page},testInfo)=>{
+  const betaName='Cooperativa Beta de Desenvolvimento Regional e Apoio Comercial';
+  const {errors,writes,relationshipWrites}=await setup(page,dataset=>{
+   dataset=upsertEntity(dataset,{kind:'cooperative',central:'1002',cooperative:'3025',name:betaName},'cooperative:1002:3025');
+   return {...dataset,rows:dataset.rows.map(row=>row.source==='base'&&row.central==='1002'&&row.metric==='VN'
+    ? {...row,targets:Array(12).fill(9279000),annualTarget:9279000*12,actuals:row.actuals.map(value=>value==null?null:row.cooperative==='3017'?186000000.17:-186000000.17)}:row)};
+  });
+  await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
+  await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
+  await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
+  await page.getByRole('combobox',{name:'Ordenar análise',exact:true}).selectOption('production');
+  const list=page.getByRole('region',{name:'Lista de unidades',exact:true});
+  const table=list.locator('.table-scroll > table').first(),wrapper=table.locator('..');
+  const rows=table.locator('tbody > tr:has(> td[data-field="actual"])');
+  const beta=rows.filter({has:page.getByRole('checkbox',{name:`Selecionar ${betaName}`,exact:true})});
+  const alfa=rows.filter({has:page.getByRole('checkbox',{name:'Selecionar Cooperativa Alfa',exact:true})});
+  const selection=beta.getByRole('checkbox',{name:`Selecionar ${betaName}`,exact:true});
+  async function inlinePasFit(){
+   await list.getByRole('button',{name:'Expandir PAs de Cooperativa Alfa',exact:true}).click();
+   const nested=list.getByRole('region',{name:'PAs da cooperativa',exact:true});
+   await expect(nested.getByRole('table')).toBeVisible();await expect(nested).toContainText('PA Alfa zero');
+   for(const node of [wrapper,table])expect(await node.evaluate(element=>element.scrollWidth<=element.clientWidth+1)).toBe(true);
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+   await list.getByRole('button',{name:'Recolher PAs de Cooperativa Alfa',exact:true}).click();
+   await expect(nested).toHaveCount(0);
+  }
+  await selection.check();
+  await expect(alfa.locator('[data-field="target"]')).toContainText(money(9279000));
+  await expect(alfa.locator('[data-field="actual"]')).toContainText(money(186000000.17));
+  await expect(beta.locator('[data-field="actual"]')).toContainText(money(-186000000.17));
+  await expect(beta.locator('[data-field="variance"]')).toContainText(money(195279000.17));
+  for(const width of [1440,1280,1024,390,320]){
+   await page.setViewportSize({width,height:width<=390?844:1000});
+   for(const more of [false,true]){
+    await list.getByRole('checkbox',{name:'Mais indicadores',exact:true}).setChecked(more);
+    await expect(rows).toHaveCount(2);await expect(selection).toBeChecked();
+    await expect(table.locator('dt').filter({hasText:/^Projeção$/})).toHaveCount(more?2:0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`document at ${width}/${more}`).toBe(true);
+    for(const node of [wrapper,table]){
+     const box=await node.evaluate(element=>({scroll:element.scrollWidth,client:element.clientWidth,left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right}));
+     expect(box.scroll,`table or wrapper at ${width}/${more}`).toBeLessThanOrEqual(box.client+1);
+     expect(box.left).toBeGreaterThanOrEqual(0);expect(box.right).toBeLessThanOrEqual(width+1);
+    }
+    const amounts=await table.evaluate(element=>{
+     const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),values=[];let node;
+     while((node=walker.nextNode())){
+      if(!/R\$\s*[\d.,]+/.test(node.textContent||''))continue;
+      const range=document.createRange();range.selectNodeContents(node);
+      const rects=[...range.getClientRects()].filter(rect=>rect.width&&rect.height),parent=node.parentElement.closest('dd,td');
+      if(!parent||!rects.length)continue;
+      const cell=parent.getBoundingClientRect();values.push({text:node.textContent.trim(),lines:rects.length,left:Math.min(...rects.map(rect=>rect.left)),right:Math.max(...rects.map(rect=>rect.right)),cellLeft:cell.left,cellRight:cell.right});
+     }
+     return values;
+    });
+    expect(amounts.length,`financial values inspected at ${width}/${more}`).toBeGreaterThanOrEqual(more?9:6);
+    for(const value of amounts){
+     expect(value.lines,`${width}: ${value.text}`).toBe(1);
+     expect(value.left,`${width}: ${value.text}`).toBeGreaterThanOrEqual(value.cellLeft-1);
+     expect(value.right,`${width}: ${value.text}`).toBeLessThanOrEqual(value.cellRight+1);
+    }
+    for(const name of ['Cooperativa Alfa',betaName])for(const action of ['Ver PAs de','Detalhar']){
+     const button=list.getByRole('button',{name:`${action} ${name}`,exact:true});await expect(button).toBeVisible();
+     const box=await button.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width+1);
+    }
+    if((width===1440&&!more)||(width===1024&&more))await list.screenshot({path:testInfo.outputPath(`cooperative-table-${width}-${more?'details':'primary'}.png`)});
+    if(width===390&&more){
+     await alfa.evaluate(element=>element.scrollIntoView({block:'start'}));
+     await page.screenshot({path:testInfo.outputPath('cooperative-table-390.png'),fullPage:false});
+    }
+    if(width===1440&&more)await inlinePasFit();
+   }
+  }
+  await inlinePasFit();
+  await list.getByRole('button',{name:`Detalhar ${betaName}`,exact:true}).focus();await page.keyboard.press('Enter');
+  const detail=page.getByRole('dialog',{name:betaName,exact:true});await expect(detail).toBeVisible();
+  await expect(detail.getByRole('table',{name:`Detalhamento mensal de ${betaName}`,exact:true}).locator('tbody tr').nth(7)).toContainText(money(-186000000.17));
+  await page.keyboard.press('Escape');await expect(detail).toHaveCount(0);await expect(selection).toBeChecked();
+  await list.getByRole('button',{name:'Ver PAs de Cooperativa Alfa',exact:true}).click();
+  const pas=page.getByRole('region',{name:'PAs da cooperativa',exact:true});
+  await expect(pas).toContainText('PA Alfa zero');await expect(pas).not.toContainText('PA Beta zero');
+  await page.getByRole('button',{name:'Voltar ao recorte anterior',exact:true}).click();
+  await expect(page.getByRole('combobox',{name:'Central',exact:true})).toHaveValue('1002');
+  await expect(page.getByRole('combobox',{name:'Mês de referência',exact:true})).toHaveValue('7');
+  await expect(rows).toHaveCount(2);
+  expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
+ });
  test('compact overview: collapsing panels preserves the filtered selection and priority actions reopen the unit list',async({page},testInfo)=>{
   const {errors,writes,relationshipWrites}=await setup(page);
   await page.setViewportSize({width:1440,height:900});
@@ -105,7 +192,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   expect((await list.boundingBox()).y).toBeLessThan((await page.getByRole('region',{name:'Comparativo entre anos',exact:true}).boundingBox()).y);
   await expect(list.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
   await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toHaveCount(0);
-  await list.getByLabel('Mais indicadores').check();await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toBeVisible();
+  await list.getByLabel('Mais indicadores').check();await expect(list.locator('dt').filter({hasText:/^Projeção$/}).first()).toBeVisible();
   await list.getByLabel('Mais indicadores').uncheck();
   await page.screenshot({path:testInfo.outputPath('ux-overview-desktop.png'),fullPage:true});
   await page.getByRole('combobox',{name:'Cooperativa',exact:true}).selectOption('1002:3017');

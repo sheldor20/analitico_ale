@@ -138,6 +138,18 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     const betaAr = portfolio(page, 'AR').locator('tr[data-unit-id="cooperative:1002:3025"]');
     await expect(betaAr.locator('[data-field="actual"]')).toContainText('Não disponível');await expect(betaAr.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
     await expect(portfolio(page, 'VN').locator('tr[data-unit-id="cooperative:1002:3025"] [data-field="actual"]')).toContainText(money(-25.5));
+    for (const width of [1440, 1280, 1024, 390]) {
+      await page.setViewportSize({width, height:width===390?844:1100});
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      for (const metric of ['VN', 'AR']) {
+        const units = portfolio(page, metric).getByRole('table');
+        const geometry = await units.evaluate(node => ({table:node.scrollWidth, tableWidth:node.clientWidth, wrapper:node.parentElement.scrollWidth, wrapperWidth:node.parentElement.clientWidth, right:node.getBoundingClientRect().right}));
+        expect(geometry.table, `${metric} at ${width}`).toBeLessThanOrEqual(geometry.tableWidth + 1);
+        expect(geometry.wrapper, `${metric} wrapper at ${width}`).toBeLessThanOrEqual(geometry.wrapperWidth + 1);
+        expect(geometry.right).toBeLessThanOrEqual(width + 1);
+      }
+    }
+    await page.setViewportSize({width:1440, height:1100});
     await page.getByRole('region', { name: 'Venda Nova e Arrecadação', exact: true }).screenshot({ path: info.outputPath('both-portfolios-desktop.png') });
     await generate(page);const modal = dialog(page);await noScopePicker(expect, modal);
     await expect(frame(page).locator('[data-scenario-metric]')).toHaveCount(2);
