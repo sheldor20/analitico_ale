@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money } from '../lib/analytics.mjs';
+import { money, percent } from '../lib/analytics.mjs';
 import { buildPeriodPerformance } from '../lib/period-performance.mjs';
 import { buildPeriodPerformanceShare, PERIOD_SHARE_PAGE_SIZE } from '../lib/period-performance-share.mjs';
 import { sortPerformancePeriods } from '../lib/period-performance-order.mjs';
@@ -89,6 +89,14 @@ test('projection is absent by default and optional outputs retain exact engine f
   assert.ok(on.text.includes(`Projeção de produção: ${money(august.projected)}`));
   assert.ok(on.html.includes(money(august.projected)));
   assert.ok(on.parts.every(part => part.showProjection));
+  for (const row of on.rows.filter(row => ['quarter', 'semester'].includes(row.period))) {
+    const card = on.html.split(`data-period-share-id="${row.id}"`)[1].split('data-period-share-id=')[0];
+    const projection = card.match(/<td data-label="Projeção de produção"[^>]*>([\s\S]*?)<\/td>/)[1];
+    const evaluation = row.projectedAttainment == null ? 'Sem avaliação' : `${percent(row.projectedAttainment)} da meta`;
+    assert.ok(projection.includes(row.projected == null ? '—' : money(row.projected)), `${row.id}: exact projected amount`);
+    assert.ok(projection.includes(`>${evaluation}</div>`), `${row.id}: exact projected percentage context`);
+    assert.doesNotMatch(projection, /data-attainment-band/, 'projection must not acquire the observed attainment color');
+  }
   const eml = buildEmailFile({ recipients: ['pessoa@example.com'], subject: on.subject, text: on.text, html: on.html });
   const encoded = [...eml.matchAll(/Content-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)(?=\r\n--)/g)].map(match => Buffer.from(match[1].replace(/\s/g, ''), 'base64').toString('utf8'));
   assert.ok(encoded.includes(on.text)); assert.ok(encoded.includes(on.html));
