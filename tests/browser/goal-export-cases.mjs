@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
+import { money } from '../../lib/analytics.mjs';
 
 const pngMagic = [137, 80, 78, 71, 13, 10, 26, 10];
 const alertRegion = page => page.getByRole('region', { name: 'Metas atingidas no mês', exact: true });
@@ -75,8 +76,8 @@ export function registerGoalExportTests({ test, expect, setup, owner, created })
       const text = exported.texts.join(' '), positions = expected.map(name => text.indexOf(name));
       expect(positions.every(position => position >= 0)).toBe(true);
       expect(positions[0]).toBeLessThan(positions[1]); expect(positions[1]).toBeLessThan(positions[2]);
-      expect(text).toContain('Cooperativa 3017 · Cooperativa Alfa · Venda nova · Central 1002');
-      expect(text).toContain('Cooperativa 3017 · Outra central · Venda nova · Central 2007');
+      expect(text).toContain('Cooperativa 3017 · Cooperativa Alfa · Central 1002');
+      expect(text).toContain('Cooperativa 3017 · Outra central · Central 2007');
     }
     await kind.selectOption('all');
     await central.selectOption('1002');
@@ -166,6 +167,77 @@ export function registerGoalExportTests({ test, expect, setup, owner, created })
     expect(text).not.toContain('2007');
     expect(text).toContain('450,00');
     expect(errors).toEqual([]);
+  });
+
+  test('goal exports: mixed portfolios keep Venda nova before Arrecadação and preserve each ranking, cutoff and exact result', async ({ page }, info) => {
+    await recordExports(page, true);
+    const values = {
+      'VN:3017': { name: 'Cooperativa Alfa', target: 100, actual: 150, cutoff: '2026-08-31' },
+      'VN:3025': { name: 'Cooperativa Beta', target: 1000, actual: 1100, cutoff: '2026-08-25' },
+      'AR:3017': { name: 'Cooperativa Alfa', target: 100, actual: 300, cutoff: '2026-08-20' },
+      'AR:3025': { name: 'Cooperativa Beta', target: 1000, actual: 2000, cutoff: '2026-08-28' },
+    };
+    const { errors, writes, relationshipWrites } = await setup(page, dataset => {
+      // A missing AR row is added through the registry API; source rows then receive the synthetic cuts.
+      dataset = upsertPlanRow(dataset, { entityId: 'cooperative:1002:3025', metric: 'AR', targets: Array(12).fill(1000), annualTarget: 12000,
+        actuals: [...Array(8).fill(2000), null, null, null, null], cutoff: '2026-08-31' });
+      return { ...dataset, rows: dataset.rows.map(row => {
+        const result = row.source === 'base' && row.central === '1002' ? values[`${row.metric}:${row.cooperative}`] : null;
+        return result ? { ...row, targets: Array(12).fill(result.target), annualTarget: result.target * 12,
+          actuals: [...Array(8).fill(result.actual), null, null, null, null], cutoff: result.cutoff } : row;
+      }) };
+    });
+    await page.getByRole('button', { name: 'Metas atingidas', exact: true }).click();
+    const alerts = alertRegion(page), order = alerts.getByRole('combobox', { name: 'Ordem das metas atingidas', exact: true });
+    await alerts.getByRole('combobox', { name: 'Tipo de unidade', exact: true }).selectOption('cooperative');
+    await alerts.getByRole('combobox', { name: 'Central', exact: true }).selectOption('1002');
+    await expect(alerts.getByText('4 metas atingidas', { exact: true })).toBeVisible();
+    await expect(order).toHaveValue('attainment-desc');
+    const labels = key => `Cooperativa ${key.split(':')[1]} · ${values[key].name} · Central 1002`;
+    const amount = value => money(value).replace(/\s/g, ' ');
+    for (const [sort, groups] of [
+      ['attainment-desc', [['VN:3017', 'VN:3025'], ['AR:3017', 'AR:3025']]],
+      ['name', [['VN:3017', 'VN:3025'], ['AR:3017', 'AR:3025']]],
+      ['production', [['VN:3025', 'VN:3017'], ['AR:3025', 'AR:3017']]],
+    ]) {
+      await order.selectOption(sort);
+      if (sort === 'attainment-desc') {
+        // The UI's global rank starts with AR; export deliberately groups VN first.
+        await expect(alerts.getByRole('article').first()).toContainText('Arrecadação');
+        await expect(alerts.getByRole('article').first()).toContainText(money(300));
+      }
+      await page.evaluate(() => { window.__goalExports.texts = []; window.__goalExports.draws = []; });
+      const downloadEvent = page.waitForEvent('download');
+      await alerts.getByRole('button', { name: 'Copiar painel filtrado como imagem', exact: true }).click();
+      const file = await downloadEvent, bytes = await readFile(await file.path());
+      expect([...bytes.slice(0, 8)]).toEqual(pngMagic);
+      const { texts, draws } = await page.evaluate(() => window.__goalExports);
+      const vn = texts.indexOf('Venda nova'), ar = texts.indexOf('Arrecadação');
+      expect(vn).toBeGreaterThan(0);expect(ar).toBeGreaterThan(vn);
+      expect(texts.filter(text => text === 'Venda nova')).toHaveLength(1);
+      expect(texts.filter(text => text === 'Arrecadação')).toHaveLength(1);
+      for (const [index, keys] of groups.entries()) {
+        const section = texts.slice(index ? ar + 1 : vn + 1, index ? undefined : ar);
+        expect(section.filter(text => text.startsWith('Cooperativa '))).toEqual(keys.map(labels));
+        for (const [rowIndex, key] of keys.entries()) {
+          const start = section.indexOf(labels(key)), next = keys[rowIndex + 1];
+          const block = section.slice(start, next ? section.indexOf(labels(next)) : undefined), result = values[key];
+          for (const value of [result.target, result.actual, result.actual - result.target]) expect(block).toContain(amount(value));
+          expect(block.join(' ')).toContain(result.cutoff.split('-').reverse().join('/'));
+        }
+      }
+      expect(texts.join(' ')).toContain('AGO/2026');expect(texts.join(' ')).toContain('4 metas atingidas');
+      for (const excluded of ['Outra central', 'Central Nordeste teste', 'PA Alfa zero', '9.999,00']) expect(texts.join(' ')).not.toContain(excluded);
+      expect(texts.filter(text => text.startsWith('Cooperativa '))).toHaveLength(4);
+      expect(texts.filter(text => text.startsWith('Cooperativa ')).some(text => /Venda nova|Arrecadação/.test(text))).toBe(false);
+      const dimensions = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      for (const draw of draws) {
+        expect(draw.right, draw.text).toBeLessThanOrEqual(dimensions.getUint32(16));
+        expect(draw.bottom, draw.text).toBeLessThanOrEqual(dimensions.getUint32(20));
+      }
+      if (sort === 'production') await file.saveAs(info.outputPath('goal-mixed-portfolios-production.png'));
+    }
+    expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
   });
 
   test('goal exports: a unit without contacts can copy its actual achievement as a real PNG', async ({ page }) => {
