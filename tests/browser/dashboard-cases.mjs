@@ -135,6 +135,7 @@ export function registerDashboardTests({ setup, composer, selectAugust }) {
     const summary = await openIndividualCommunication(page, 'Painel resumido');
     await summary.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017');
     await selectAugust(summary);
+    await step(summary, 2);
     await expect(summary.getByRole('checkbox', { name: 'Incluir cenário anual', exact: true })).not.toBeChecked();
     await expect(frame.locator('[data-layout="metric-cards"]')).toHaveCount(1);
     await assertCompactHeader(frame);

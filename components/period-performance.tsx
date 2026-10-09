@@ -95,7 +95,7 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
     </header>
     <div id={contentId} hidden={!expanded}>
       {result.error ? <p role="alert" className={styles.empty}>{result.error}</p> : model && !model.count ? <p className={styles.empty}>Nenhuma unidade no recorte atual. Ajuste os filtros para comparar os períodos.</p> : model && <div className={styles.content}>
-        <div className={styles.context}><strong>{model.scopeLabel}</strong><span>{model.cutoffMin === model.cutoff ? `Atualizado até ${dateLabel(model.cutoff)}` : `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}`}</span></div>
+        <div className={styles.context}>{model.scopeLabel !== model.countLabel && <strong>{model.scopeLabel}</strong>}<span>{model.cutoffMin === model.cutoff ? `Atualizado até ${dateLabel(model.cutoff)}` : `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}`}</span></div>
         {GROUP_ORDER.map(period => {
           const group = model.groups.find(item => item.period === period);
           if (!group) return null;

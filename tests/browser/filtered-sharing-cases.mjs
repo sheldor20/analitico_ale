@@ -134,6 +134,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
       expect(await sourceRows(page, metric).evaluateAll(nodes => nodes.map(node => node.dataset.unitId))).toEqual(expectedIds);
     }
     await expect(portfolio(page, 'VN')).toContainText('10/09/2026');await expect(portfolio(page, 'AR')).toContainText('05/09/2026');
+    await expect(portfolio(page, 'AR').locator('header')).toContainText('Dados incompletos');
     const betaAr = portfolio(page, 'AR').locator('tr[data-unit-id="cooperative:1002:3025"]');
     await expect(betaAr.locator('[data-field="actual"]')).toContainText('Não disponível');await expect(betaAr.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
     await expect(portfolio(page, 'VN').locator('tr[data-unit-id="cooperative:1002:3025"] [data-field="actual"]')).toContainText(money(-25.5));
@@ -144,6 +145,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await expect(report(page, 'VN').locator('tr[data-cooperative-id="cooperative:1002:3017"] td[data-label="Realizado / % da meta"]')).toContainText(money(95));
     await expect(report(page, 'VN').locator('tr[data-cooperative-id="cooperative:1002:3025"] td[data-label="Realizado / % da meta"]')).toContainText(money(-25.5));
     await expect(report(page, 'AR').locator('tr[data-cooperative-id="cooperative:1002:3017"] td[data-label="Realizado / % da meta"]')).toContainText(money(700));
+    await expect(report(page, 'AR').locator('[data-communication-context]')).toContainText('Dados incompletos');
     const unknown = report(page, 'AR').locator('tr[data-cooperative-id="cooperative:1002:3025"] td[data-label="Realizado / % da meta"]');
     await expect(unknown).toContainText('—');await expect(unknown).not.toContainText('0,00');
     await expect(frame(page).locator('body')).not.toContainText('PA Alfa zero');await expect(frame(page).locator('body')).not.toContainText(money(999999));
@@ -175,10 +177,16 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     const png = await pngDownload, bytes = await readFile(await png.path());expect([...bytes.slice(0, 8)]).toEqual(pngMagic);
     const ar = await page.evaluate(() => window.__filteredCopies.drawings.at(-1));
     expect(ar).toContain('Gestão comercial · Arrecadação');expect(ar).toContain(numeric(700));expect(ar).not.toContain(numeric(95));expect(ar).not.toContain(numeric(-25.5));
+    expect(ar.join(' ')).toContain('Dados incompletos');
     await png.saveAs(info.outputPath('both-portfolios-ar-fallback.png'));
     expect(await page.evaluate(() => window.__filteredCopies.png.length)).toBe(1);
     await modal.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
-    await page.getByRole('region', { name: 'Venda Nova e Arrecadação', exact: true }).screenshot({ path: info.outputPath('both-portfolios-320.png') });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    for (const metric of ['VN', 'AR']) {
+      await portfolio(page, metric).evaluate(node => node.scrollIntoView({ block: 'start' }));
+      await page.screenshot({ path: info.outputPath(`both-portfolios-${metric.toLowerCase()}-320.png`), fullPage: false });
+    }
     await select(page, 'Filtrar situação').selectOption('missing');
     await expect(sourceRows(page, 'VN')).toHaveCount(0);await expect(sourceRows(page, 'AR')).toHaveCount(1);
     await expect(portfolio(page, 'AR')).toContainText('Sem data de atualização');

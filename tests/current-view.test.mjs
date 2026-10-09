@@ -27,6 +27,7 @@ test('both yields independent portfolios, real cutoffs and unknown registry-only
   assert.equal(ar.rows[0].actual,200); assert.equal(ar.rows[1].actual,null); assert.equal(ar.rows[1].target,null);
   assert.deepEqual([ar.summary.actual,ar.summary.target,ar.summary.projected,ar.cutoff],[null,null,null,'2026-03-15']);
   assert.equal(ar.attainment,null); assert.equal(ar.variance.kind,'unknown');
+  assert.equal(ar.phaseLabel,'Dados incompletos');
   assert.deepEqual(vn.unitIds,['cooperative:1002:3017','cooperative:1002:3025']);
   assert.deepEqual(data,before);
 });

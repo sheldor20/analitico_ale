@@ -229,7 +229,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertEntity(upsertPlanRow(workflowFixture(dataset), {
       entityId: 'pa:1002:3017:0', metric: 'VN', targets: Array(12).fill(100), annualTarget: 1200,
       actuals: [...Array(8).fill(225), null, null, null, null], cutoff: '2026-08-31',
-    }), { kind: 'pa', central: '1002', cooperative: '3017', pa: '3', name: 'PA Sem produção informada', group: 'P2' }));
+    }), { kind: 'pa', central: '1002', cooperative: '3017', pa: '3', name: 'PA Sem produção informada', group: 'P2' }, 'pa:1002:3017:3'));
     await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await august(page);
     await select(page, 'Central').selectOption('1002');

@@ -1509,7 +1509,6 @@ export default function Dashboard() {
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
-                        <div className="pagination">{displayed.length} unidades exibidas</div>
                         </div>
                       </section>
                       {resultContextPanels}
