@@ -15,6 +15,7 @@ import { registerPriorityTests } from './priority-cases.mjs';
 import { registerManagementPeriodTests } from './management-period-cases.mjs';
 import { registerContactImportTests } from './contact-import-cases.mjs';
 import { registerPeriodShareTests } from './period-share-cases.mjs';
+import { registerFilteredSharingTests } from './filtered-sharing-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -326,3 +327,5 @@ registerManagementPeriodTests({ test, expect, setup });
 registerContactImportTests({ test, expect, setup, owner, created });
 
 registerPeriodShareTests({ test, expect, setup });
+
+registerFilteredSharingTests({ test, expect, setup });

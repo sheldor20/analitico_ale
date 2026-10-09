@@ -7,7 +7,8 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     const result = page.getByRole('region', { name: 'Resultado do período', exact: true });
     await expect(result.getByRole('article', { name: 'Realizado até o corte', exact: true })).toContainText('50,00');
     await expect(result.getByRole('article', { name: 'Meta do período', exact: true })).toContainText('100,00');
-    await expect(page.locator('.result-scope')).toContainText('1 cooperativa');
+    await expect(page.locator('.overview-units-heading').getByRole('heading')).toHaveText('Resultado por cooperativa');
+    await expect(page.locator('.overview-units-heading')).toContainText('1 de 3 unidades');
     await expect(page.getByRole('region', { name: 'Lista de unidades' }).locator('tbody tr')).toHaveCount(1);
     await expect(page.getByRole('meter', { name: 'Atingimento da meta' })).toHaveAttribute('aria-valuenow', '50');
     await page.getByLabel('Buscar cooperativa ou PA').fill('inexistente');

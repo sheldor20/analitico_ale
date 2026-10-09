@@ -63,9 +63,9 @@ function PeriodCard({ row }: { row: PerformanceRow }) {
   </article>;
 }
 
-export default function PeriodPerformance({ dataset, filters, unitIds, expandRequest, ownerId }: { dataset: Dataset; filters: PerformanceFilters; unitIds: string[]; expandRequest?: number; ownerId?: string | null }) {
+export default function PeriodPerformance({ dataset, filters, unitIds, expandRequest, ownerId, sectionId = 'resultados-por-periodo', initialExpanded = true }: { dataset: Dataset; filters: PerformanceFilters; unitIds: string[]; expandRequest?: number; ownerId?: string | null; sectionId?: string; initialExpanded?: boolean }) {
   const contentId = useId();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [groups, setGroups] = useState(openGroups);
   const [order, setOrder] = useState<PerformanceOrder>('chronological');
   const [sharing, setSharing] = useState<{ context: string; period: PeriodShareSelection } | null>(null);
@@ -84,7 +84,7 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
   const centralIds = new Set(model?.units.map(unit => unit.central));
   const central = centralIds.size === 1 ? [...centralIds][0] : null;
   const centralName = centralHeading(central, central ? dataset.registry?.entities.find(entity => entity.id === `central:${central}`)?.name : '');
-  return <section id="resultados-por-periodo" tabIndex={-1} aria-label="Resultados por período" className={styles.section}>
+  return <section id={sectionId} tabIndex={-1} aria-label="Resultados por período" className={styles.section}>
     <header className={styles.heading}>
       <div><h2>Resultados por período</h2><p>{model?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {dataset.year}{model && <span className={styles.scopeCount}>{model.countLabel}</span>}</p></div>
       <div className={styles.controls}>
@@ -95,7 +95,7 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
     </header>
     <div id={contentId} hidden={!expanded}>
       {result.error ? <p role="alert" className={styles.empty}>{result.error}</p> : model && !model.count ? <p className={styles.empty}>Nenhuma unidade no recorte atual. Ajuste os filtros para comparar os períodos.</p> : model && <div className={styles.content}>
-        <div className={styles.context}><strong>{model.scopeLabel}</strong><span>{model.cutoffMin === model.cutoff ? `Atualizado até ${dateLabel(model.cutoff)}` : `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}`}</span></div>
+        <div className={styles.context}>{model.scopeLabel !== model.countLabel && <strong>{model.scopeLabel}</strong>}<span>{model.cutoffMin === model.cutoff ? `Atualizado até ${dateLabel(model.cutoff)}` : `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}`}</span></div>
         {GROUP_ORDER.map(period => {
           const group = model.groups.find(item => item.period === period);
           if (!group) return null;

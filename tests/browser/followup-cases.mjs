@@ -62,7 +62,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
   });
   test('followup: three-step composer preserves fields, scales to mobile and previews without inner scroll',async({page},info)=>{
     const {errors}=await setup(page);
-    const trigger=page.getByRole('button',{name:'Gerar comunicação',exact:true}); await openIndividualCommunication(page);
+    const trigger=page.getByRole('button',{name:/^Gerar comunicação de /}).first(); await openIndividualCommunication(page);
     const dialog=composer(page); await dialog.getByLabel('Unidade selecionada').selectOption('cooperative:1002:3017'); await selectAugust(dialog);
     await expect(dialog.getByRole('heading',{name:'Quem vai receber?'})).toBeVisible();
     await expect(dialog.locator('iframe')).toHaveCount(0);

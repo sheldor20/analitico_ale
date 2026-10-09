@@ -2,34 +2,33 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, ImageIcon, LayoutDashboard, Mail, X } from 'lucide-react';
-import { buildPaScenarioReport, renderPaScenarioPng } from '@/lib/pa-scenario-share.mjs';
-import { buildCooperativeScenarioReport, renderCooperativeScenarioPng } from '@/lib/cooperative-scenario-share.mjs';
+import { renderPaScenarioPng } from '@/lib/pa-scenario-share.mjs';
+import { buildScenarioBundleReport, type ScenarioBundleReport } from '@/lib/scenario-share-bundle.mjs';
 import { buildEmailFile, buildOutlookLink, buildWhatsappLink, normalizeRecipients } from '@/lib/portfolio-communication.mjs';
 import type { Dataset } from '@/lib/types';
 import { money, percent } from '@/lib/analytics.mjs';
 import { attainmentBand } from '@/lib/attainment.mjs';
-import { SORT_OPTIONS } from '@/lib/scenarios.mjs';
 import type { ScenarioFilters } from './scenario-panels';
 import EmailPreview from './email-preview';
 import OutlookHandoff from './outlook-handoff';
 import styles from './pa-scenario-share.module.css';
 
-type UnitKind = 'pa' | 'cooperative';
+type UnitKind = 'pa' | 'cooperative' | 'central';
 type Format = 'image' | 'email' | 'summary';
 type SelectionMode = 'all' | 'filtered' | 'selected';
-type UnitOrder = keyof typeof SORT_OPTIONS;
 export type PaScenarioShareProps = {
   dataset: Dataset; filters: ScenarioFilters; userId: string; onClose: () => void; unitKind?: UnitKind;
+  unitIdsByMetric?: Partial<Record<'VN' | 'AR', string[]>>;
   initialFormat?: Format; initialMode?: SelectionMode; initialSelectedIds?: string[]; initialShowProjection?: boolean;
 };
-type Report = ReturnType<typeof buildPaScenarioReport> | ReturnType<typeof buildCooperativeScenarioReport>;
+type Report = ScenarioBundleReport;
 type Part = Report['parts'][number];
 const UNITS = {
-  pa: { title: 'Compartilhar cenário dos PAs', preview: 'Cenário dos PAs', plural: 'PAs', singular: 'PA', group: 'PAs no compartilhamento', all: 'Todos os PAs da seleção', filtered: 'Somente PAs filtrados', empty: 'Nenhum PA nesta seleção.', filename: 'pas' },
-  cooperative: { title: 'Compartilhar cenário das cooperativas', preview: 'Cenário das cooperativas', plural: 'cooperativas', singular: 'cooperativa', group: 'Cooperativas no compartilhamento', all: 'Todas as cooperativas da seleção', filtered: 'Somente cooperativas filtradas', empty: 'Nenhuma cooperativa nesta seleção.', filename: 'cooperativas' },
+  central: { title: 'Compartilhar cenário das centrais', preview: 'Cenário das centrais', plural: 'centrais', singular: 'central', empty: 'Nenhuma central neste recorte.', filename: 'centrais' },
+  pa: { title: 'Compartilhar cenário dos PAs', preview: 'Cenário dos PAs', plural: 'PAs', singular: 'PA', group: 'PAs no compartilhamento', all: 'Todos os PAs da seleção', filtered: 'Somente PAs filtrados', empty: 'Nenhum PA neste recorte.', filename: 'pas' },
+  cooperative: { title: 'Compartilhar cenário das cooperativas', preview: 'Cenário das cooperativas', plural: 'cooperativas', singular: 'cooperativa', group: 'Cooperativas no compartilhamento', all: 'Todas as cooperativas da seleção', filtered: 'Somente cooperativas filtradas', empty: 'Nenhuma cooperativa neste recorte.', filename: 'cooperativas' },
 } as const;
 const messageOf = (reason: unknown) => reason instanceof Error ? reason.message : 'Não foi possível preparar o compartilhamento.';
-const searchText = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 
 function attempt<T>(operation: () => T): { value: T | null; error: string } {
   try { return { value: operation(), error: '' }; }
@@ -43,12 +42,12 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function PaScenarioShare({ dataset, filters, userId, onClose, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, initialShowProjection = false }: PaScenarioShareProps) {
+export default function PaScenarioShare({ dataset, filters, userId, onClose, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, initialShowProjection = false, unitIdsByMetric }: PaScenarioShareProps) {
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const invalidateClipboard = useCallback(() => setClipboardVersion((value) => value + 1), []);
-  const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds, initialShowProjection]);
+  const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds, initialShowProjection, unitIdsByMetric]);
 
   useLayoutEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -71,22 +70,18 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
         <h2 id={titleId}>{UNITS[unitKind].title}</h2>
         <button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento" onClick={onClose}><X size={22} aria-hidden="true" /></button>
       </header>
-      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} initialShowProjection={initialShowProjection} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
+      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} unitIdsByMetric={unitIdsByMetric} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} initialShowProjection={initialShowProjection} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
     </section>
   </div>;
 }
 
-function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', initialMode = 'all', initialSelectedIds, initialShowProjection = false, clipboardVersion, onClipboardChange }: Omit<PaScenarioShareProps, 'onClose'> & { clipboardVersion: number; onClipboardChange: () => void }) {
+function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', unitIdsByMetric, initialShowProjection = false, clipboardVersion, onClipboardChange }: Omit<PaScenarioShareProps, 'onClose'> & { clipboardVersion: number; onClipboardChange: () => void }) {
   const unit = UNITS[unitKind];
   const countUnits = (count: number) => `${count} ${count === 1 ? unit.singular : unit.plural}`;
-  const scopeName = useId();
   const channelName = useId();
   const [showProjection, setShowProjection] = useState(initialShowProjection);
-  const [mode, setMode] = useState<SelectionMode>(initialMode);
+  const mode = 'filtered';
   const [channel, setChannel] = useState<Format>(initialFormat);
-  const [selectedIds, setSelectedIds] = useState<string[] | null>(initialSelectedIds ?? (initialMode === 'selected' ? [] : null));
-  const [selectionSearch, setSelectionSearch] = useState('');
-  const [sortBy, setSortBy] = useState<UnitOrder>(Object.hasOwn(SORT_OPTIONS, filters.sortBy) ? filters.sortBy as UnitOrder : 'attainment-desc');
   const [subject, setSubject] = useState<string | null>(null);
   const [intro, setIntro] = useState<string | null>(null);
   const [cta, setCta] = useState<string | null>(null);
@@ -99,17 +94,13 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const [whatsappCopied, setWhatsappCopied] = useState('');
   const [manualWhatsapp, setManualWhatsapp] = useState('');
   const [feedback, setFeedback] = useState({ snapshot: '', text: '', error: false });
-  const baseBuilt = useMemo(() => attempt(() => unitKind === 'cooperative' ? buildCooperativeScenarioReport({ dataset, filters, mode: 'all', sortBy }) : buildPaScenarioReport({ dataset, filters, mode: 'all', sortBy })), [dataset, filters, sortBy, unitKind]);
-  const baseReport = baseBuilt.value;
-  const built = useMemo(() => attempt(() => {
-    const options = { dataset, filters, mode, showProjection, selectedIds: selectedIds ?? [], sortBy, customization: { subject: subject ?? undefined, intro: intro ?? undefined, cta: cta ?? undefined } };
-    return unitKind === 'cooperative' ? buildCooperativeScenarioReport(options) : buildPaScenarioReport(options);
-  }), [dataset, filters, mode, selectedIds, sortBy, subject, intro, cta, unitKind, showProjection]);
+  const built = useMemo(() => attempt(() => buildScenarioBundleReport({ dataset, filters, kind: unitKind, unitIdsByMetric, showProjection, customization: { subject: subject ?? undefined, intro: intro ?? undefined, cta: cta ?? undefined } })), [dataset, filters, unitKind, unitIdsByMetric, showProjection, subject, intro, cta]);
   const report = built.value;
   const page = Math.min(partIndex, Math.max(0, (report?.parts.length ?? 0) - 1));
   const part = report?.parts[page];
+  const partLabel = report?.metric === 'both' ? `de ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · parte ${part?.index ?? 1} de ${part?.total ?? 1}` : `da parte ${part?.index ?? page + 1}`;
   const whatsappText = whatsappContent === 'caption' ? report?.caption ?? '' : report?.whatsapp ?? '';
-  const snapshot = JSON.stringify([userId, dataset.year, filters, unitKind, mode, selectedIds, sortBy, subject, intro, cta, report?.html, page, channel, phone, addresses, personal, whatsappContent, whatsappText]);
+  const snapshot = JSON.stringify([userId, dataset.year, filters, unitKind, unitIdsByMetric, subject, intro, cta, report?.html, page, channel, phone, addresses, personal, whatsappContent, whatsappText]);
   const current = useRef(snapshot);
   current.current = snapshot;
   const alive = useRef(true);
@@ -134,7 +125,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const getImage = useCallback(() => {
     if (!part) return Promise.reject(new Error(unit.empty));
     if (imageCache.current?.part === part) return imageCache.current.promise;
-    const promise = unitKind === 'cooperative' ? renderCooperativeScenarioPng(part) : renderPaScenarioPng(part);
+    const promise = renderPaScenarioPng(part);
     // The preview and clipboard can consume the same promise at different times.
     void promise.catch(() => { if (imageCache.current?.part === part) imageCache.current = null; });
     imageCache.current = { part, promise };
@@ -146,15 +137,9 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
   const whatsapp = attempt(() => report ? buildWhatsappLink({ phone, body: whatsappText }) : null);
   const isCurrent = (captured: string) => alive.current && current.current === captured;
   const notice = feedback.snapshot === snapshot ? feedback : null;
-  const filename = `cenario-${unit.filename}-${dataset.year}-${filters.month + 1}-${mode}-parte-${page + 1}-de-${report?.parts.length ?? 1}.png`;
+  const filename = `cenario-${unit.filename}-${part?.metric || 'VN'}-${dataset.year}-${filters.month + 1}-${mode}-parte-${part?.index ?? 1}-de-${part?.total ?? 1}.png`;
 
   function changeChannel(next: Format) { setChannel(next); setWhatsappCopied(''); }
-  function changeMode(next: SelectionMode) {
-    if (next === 'selected' && selectedIds === null) setSelectedIds(report?.rows.map((row) => row.id) ?? []);
-    setMode(next); setPartIndex(0); setWhatsappCopied('');
-  }
-  function updateSelection(ids: string[]) { setSelectedIds(ids); setPartIndex(0); setWhatsappCopied(''); }
-
   async function copyText() {
     if (!report?.count || busy) return;
     const captured = snapshot;
@@ -191,12 +176,12 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
         void guardedPng.catch(() => {});
         // Keep the clipboard call in the click gesture, including Safari.
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': guardedPng })]);
-        if (isCurrent(captured)) setFeedback({ snapshot: captured, text: `Imagem da parte ${page + 1} copiada. Cole na conversa.`, error: false });
+        if (isCurrent(captured)) setFeedback({ snapshot: captured, text: `Imagem ${partLabel} copiada. Cole na conversa.`, error: false });
       } else {
         const blob = await png;
         if (!isCurrent(captured)) return;
         downloadBlob(blob, filename);
-        setFeedback({ snapshot: captured, text: `Imagem da parte ${page + 1} baixada. Anexe o arquivo na conversa.`, error: false });
+        setFeedback({ snapshot: captured, text: `Imagem ${partLabel} baixada. Anexe o arquivo na conversa.`, error: false });
       }
     } catch (reason) {
       if (!isCurrent(captured)) return;
@@ -217,52 +202,28 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
     if (!report?.count || !recipients.value || recipients.error) return;
     try {
       const content = buildEmailFile({ recipients: recipients.value, subject: report.subject, text: report.text, html: report.html });
-      downloadBlob(new Blob([content], { type: 'message/rfc822' }), `cenario-${unit.filename}-${dataset.year}-${filters.month + 1}-${mode}.eml`);
+      downloadBlob(new Blob([content], { type: 'message/rfc822' }), `cenario-${unit.filename}-${report.metric}-${dataset.year}-${filters.month + 1}-${mode}.eml`);
       setFeedback({ snapshot, text: 'E-mail baixado com o painel completo. Abra no Outlook e revise.', error: false });
     } catch (reason) { setFeedback({ snapshot, text: messageOf(reason), error: true }); }
   }
 
-  if (!baseReport) return <p role="alert" className={styles.error}>{baseBuilt.error}</p>;
-  const selected = new Set(selectedIds ?? []);
-  const visibleCandidates = baseReport.candidates.filter((row) => searchText(`${row.name} ${row.central} ${row.cooperative} ${row.pa} ${row.group}`).includes(searchText(selectionSearch.trim())));
-  const candidateTitle = (row: Report['rows'][number]) => unitKind === 'pa' ? `PA ${row.pa} · ${row.name}` : `Cooperativa ${row.cooperative} · ${row.name}`;
-  const candidateParent = (row: Report['rows'][number]) => `${unitKind === 'pa' ? `Coop. ${row.cooperative} · ` : ''}Central ${row.central}`;
+  if (!report) return <p role="alert" className={styles.error}>{built.error}</p>;
   const actionFeedback = <>
     {busy && <p role="status" className={styles.feedback}>Preparando compartilhamento…</p>}
     {notice?.text && <p role={notice.error ? 'alert' : 'status'} className={notice.error ? styles.error : styles.feedback}>{notice.text}</p>}
   </>;
 
   return <div className={styles.content}>
-    <div className={styles.context}><strong>{baseReport.scopeLabel}</strong><span>{baseReport.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {baseReport.periodLabel}</span></div>
-    <fieldset className={styles.scope}><legend>{unit.group}</legend>
-      <label className={mode === 'all' ? styles.selectedScope : ''}><input type="radio" aria-label={unit.all} name={scopeName} checked={mode === 'all'} onChange={() => changeMode('all')} /><span><strong>{unit.all}</strong><small>{countUnits(baseReport.allCount)} na seleção</small></span></label>
-      <label className={mode === 'filtered' ? styles.selectedScope : ''}><input type="radio" aria-label={unit.filtered} name={scopeName} checked={mode === 'filtered'} onChange={() => changeMode('filtered')} /><span><strong>{unit.filtered}</strong><small>{countUnits(baseReport.filteredCount)} após os filtros</small></span></label>
-      <label className={mode === 'selected' ? styles.selectedScope : ''}><input type="radio" aria-label="Selecionar unidades" name={scopeName} checked={mode === 'selected'} onChange={() => changeMode('selected')} /><span><strong>Selecionar unidades</strong><small>{selectedIds === null ? 'Escolha na lista' : `${countUnits(selectedIds.length)} marcadas`}</small></span></label>
-    </fieldset>
-    {mode === 'selected' && <section className={styles.unitSelector} aria-label="Seleção de unidades">
-      <label className={styles.field}>Buscar unidades para selecionar<input type="search" value={selectionSearch} onChange={(event) => setSelectionSearch(event.target.value)} placeholder="Nome, código, cooperativa ou central" /></label>
-      <div className={styles.selectionToolbar}><p className={styles.helper}>{visibleCandidates.length} visíveis · {selected.size} marcadas. A busca mantém as escolhas.</p><div className={styles.actions}>
-        <button type="button" className="button secondary" disabled={!visibleCandidates.length} onClick={() => updateSelection([...new Set([...(selectedIds ?? []), ...visibleCandidates.map((row) => row.id)])])}>Selecionar unidades visíveis</button>
-        <button type="button" className="button quiet" disabled={!selected.size} onClick={() => updateSelection([])}>Limpar seleção</button>
-      </div></div>
-      <div className={styles.unitOptions}>{visibleCandidates.map((row) => <label key={row.id} className={selected.has(row.id) ? styles.checkedUnit : ''}>
-        <input type="checkbox" aria-label={`Selecionar ${candidateTitle(row)} · ${candidateParent(row)}`} checked={selected.has(row.id)} onChange={(event) => updateSelection(event.target.checked ? [...selected, row.id] : [...selected].filter((id) => id !== row.id))} />
-        <span><strong>{candidateTitle(row)}</strong><small>{candidateParent(row)}</small></span>
-      </label>)}</div>
-      {!visibleCandidates.length && <p role="status" className={styles.empty}>Nenhuma unidade corresponde à busca.</p>}
-    </section>}
-    <div className={styles.selectionSettings}>
-      <div className={styles.summary}><strong>{countUnits(report?.count ?? 0)} no painel</strong><span>{report?.selectionLabel || (mode === 'selected' ? 'Somente as unidades marcadas.' : mode === 'all' ? 'Todas as unidades do escopo.' : 'Filtros atuais da lista aplicados.')}</span></div>
-      <label className={styles.field}>Ordem das unidades<select aria-label="Ordem das unidades" value={sortBy} onChange={(event) => { setSortBy(event.target.value as UnitOrder); setPartIndex(0); }}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option key={value} value={value}>{String(label)}</option>)}</select></label>
-    </div>
+    <div className={styles.context}><strong>{report.scopeLabel}</strong><span>{report.metric === 'both' ? 'Venda Nova e Arrecadação' : report.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {report.periodLabel}</span></div>
+    <p className={styles.helper}>{countUnits(report.count)} no painel · Filtros e ordem da Visão geral.</p>
     <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, calculada pelo ritmo até o corte.</small></span></label>
     <details className={styles.messageEditor}><summary>Editar mensagem</summary><div className={styles.editorFields}>
-      <label className={styles.field}>Assunto da mensagem<input value={subject ?? report?.subject ?? baseReport.subject} maxLength={300} onChange={(event) => setSubject(event.target.value)} /></label>
-      <label className={styles.field}>Introdução da mensagem<textarea value={intro ?? report?.intro ?? baseReport.intro} rows={2} maxLength={1000} onChange={(event) => setIntro(event.target.value)} /></label>
-      <label className={styles.field}>Chamada para ação<textarea value={cta ?? report?.cta ?? baseReport.cta} rows={2} maxLength={1000} onChange={(event) => setCta(event.target.value)} /></label>
+      <label className={styles.field}>Assunto da mensagem<input value={subject ?? report.subject} maxLength={300} onChange={(event) => setSubject(event.target.value)} /></label>
+      <label className={styles.field}>Introdução da mensagem<textarea value={intro ?? report.intro} rows={2} maxLength={1000} onChange={(event) => setIntro(event.target.value)} /></label>
+      <label className={styles.field}>Chamada para ação<textarea value={cta ?? report.cta} rows={2} maxLength={1000} onChange={(event) => setCta(event.target.value)} /></label>
       <div className={styles.selectionToolbar}><p className={styles.helper}>Os textos acompanham o e-mail e a mensagem curta. Os indicadores permanecem calculados pela base.</p><button type="button" className="button quiet" disabled={subject === null && intro === null && cta === null} onClick={() => { setSubject(null); setIntro(null); setCta(null); }}>Restaurar textos padrão</button></div>
     </div></details>
-    {!report ? <p role="alert" className={styles.error}>{built.error}</p> : !report.count ? <p role="status" className={styles.empty}>{unit.empty} Marque unidades ou ajuste o escopo.</p> : <>
+    {!report.count ? <p role="status" className={styles.empty}>{unit.empty} Ajuste os filtros na Visão geral.</p> : <>
       <fieldset className={styles.channels}><legend>Canal de compartilhamento</legend>
         <label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'image'} onChange={() => changeChannel('image')} /><ImageIcon size={18} aria-hidden="true" />WhatsApp e imagem</label>
         <label className={channel === 'email' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'email'} onChange={() => changeChannel('email')} /><Mail size={18} aria-hidden="true" />E-mail</label>
@@ -270,7 +231,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
       </fieldset>
       {channel === 'image' ? <section className={styles.channelPanel} aria-label="Compartilhar por WhatsApp e imagem">
         <div className={styles.pageNavigation}>
-          <div><h3>Imagem do cenário</h3><p aria-live="polite">Parte {page + 1} de {report.parts.length}{part ? ` · ${unit.plural} ${part.from} a ${part.to}` : ''}</p></div>
+          <div><h3>Imagem do cenário</h3><p aria-live="polite">{report.metric === 'both' ? `${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · ` : ''}Parte {report.metric === 'both' ? part?.index : page + 1} de {report.metric === 'both' ? part?.total : report.parts.length}{part ? ` · ${unit.plural} ${part.from} a ${part.to}` : ''}</p></div>
           <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page >= report.parts.length - 1} onClick={() => setPartIndex(page + 1)} >Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>
         </div>
         <div className={styles.deliveryControls}>
@@ -295,7 +256,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
         </div>
         </div>
         {actionFeedback}
-        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={page + 1} total={report.parts.length} title={unit.preview} />
+        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={part?.index ?? page + 1} total={part?.total ?? report.parts.length} title={report.metric === 'both' ? `${unit.preview} · ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}` : unit.preview} />
       </section> : channel === 'email' ? <section className={styles.channelPanel} aria-label="Compartilhar por e-mail">
         <div className={styles.emailFields}>
           <label className={styles.field}>Destinatários do e-mail<textarea value={addresses} rows={2} onChange={(event) => setAddresses(event.target.value)} placeholder="nome@cooperativa.com.br; outro@cooperativa.com.br" /></label>
@@ -314,6 +275,10 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
 }
 
 function SummaryPreview({ report, unitKind, onFormat }: { report: Report; unitKind: UnitKind; onFormat: (format: Format) => void }) {
+  return <>{report.reports.map(item => <div key={item.metric} data-scenario-metric={item.metric}>{report.metric === 'both' && <h3>{item.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}</h3>}<SingleSummaryPreview report={item} unitKind={unitKind} onFormat={onFormat} /></div>)}</>;
+}
+
+function SingleSummaryPreview({ report, unitKind, onFormat }: { report: Report['reports'][number]; unitKind: UnitKind; onFormat: (format: Format) => void }) {
   const counts = [
     { label: 'Unidades no painel', value: report.count },
     { label: 'Meta atingida', value: report.summary.achievedCount },
@@ -323,8 +288,8 @@ function SummaryPreview({ report, unitKind, onFormat }: { report: Report; unitKi
   return <section className={styles.channelPanel} aria-label="Prévia do painel resumido">
     <div className={styles.pageNavigation}><h3>Painel resumido</h3><div className={styles.actions}><button type="button" className="button secondary" onClick={() => onFormat('image')}>Preparar imagem</button><button type="button" className="button secondary" onClick={() => onFormat('email')}>Preparar e-mail</button></div></div>
     <div className={styles.summaryCards}>{counts.map((item) => <div key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}</div>
-    <div className={styles.summaryTable}><table><thead><tr><th scope="col">{unitKind === 'pa' ? 'PA' : 'Cooperativa'}</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">Crescimento / GAP</th>{report.showProjection && <th scope="col">Projeção de produção</th>}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.id}>
-      <th scope="row"><strong>{unitKind === 'pa' ? row.pa : row.cooperative} · {row.name}</strong><small>{unitKind === 'pa' ? `Coop. ${row.cooperative} · ` : ''}Central {row.central}</small></th>
+    <div className={styles.summaryTable}><table><thead><tr><th scope="col">{unitKind === 'pa' ? 'PA' : unitKind === 'central' ? 'Central' : 'Cooperativa'}</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">Crescimento / GAP</th>{report.showProjection && <th scope="col">Projeção de produção</th>}</tr></thead><tbody>{report.rows.map((row) => <tr key={row.id}>
+      <th scope="row"><strong>{unitKind === 'pa' ? row.pa : unitKind === 'central' ? row.central : row.cooperative} · {row.name}</strong>{unitKind !== 'central' && <small>{unitKind === 'pa' ? `Coop. ${row.cooperative} · ` : ''}Central {row.central}</small>}</th>
       <td>{money(row.target)}</td><td>{money(row.actual)}</td><td data-attainment-band={attainmentBand(row.attainment).key} style={{ background: attainmentBand(row.attainment).background, color: attainmentBand(row.attainment).color }}>{percent(row.attainment)}</td><td>{money(row.variance.value)}<small>{row.variance.label}</small></td>{report.showProjection && <td>{money(row.projection?.value ?? null)}<small>{percent(row.projection?.attainment ?? null)} da meta · {row.projection?.phase}</small></td>}
     </tr>)}</tbody></table></div>
     {report.showProjection && [...new Set(report.rows.map(row => row.projection?.assumption).filter(Boolean))].map(text => <p className={styles.helper} key={text}>{text}</p>)}

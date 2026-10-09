@@ -91,7 +91,7 @@ export function registerPeriodTests({test,expect,setup,composer}) {
     await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
     await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–OUT/2026');
     await expect(target(page)).toContainText('1.000,00');
-    await expect(page.locator('.position-line')).toContainText('31/08/2026');
+    await expect(page.locator('.overview-cutoff')).toContainText('31/08/2026');
     expect(errors).toEqual([]);
   });
 }

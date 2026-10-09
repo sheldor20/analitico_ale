@@ -57,6 +57,8 @@ import PortfolioCommunication from "@/components/portfolio-communication";
 import PaScenarioShare from "@/components/pa-scenario-share";
 import CommunicationStart, { type CommunicationChoice } from './communication-start';
 import ResultExport from './result-export';
+import CombinedPortfolio from './combined-portfolio';
+import { buildCurrentViewModels } from '@/lib/current-view.mjs';
 import { ManagementPriorities } from './management-priorities';
 import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
@@ -88,7 +90,7 @@ const EMPTY_ACTION: ActionState = {
   notes: "",
 };
 const metricName = (metric: string) =>
-  metric === "VN" ? "Venda Nova" : "Arrecadação";
+  metric === "both" ? "Venda Nova + Arrecadação" : metric === "VN" ? "Venda Nova" : "Arrecadação";
 const centralName = (central: string) =>
   Object.entries(CENTRALS).find(([id]) => id === central)?.[1] ??
   `Central ${central}`;
@@ -135,6 +137,7 @@ export default function Dashboard() {
   const [rowSelection, setRowSelection] = useState<{ context: string; keys: string[] }>({ context: '', keys: [] });
   const [priorityFocus, setPriorityFocus] = useState<{ context: string; keys: string[]; label: string } | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [exportMetric, setExportMetric] = useState<'VN' | 'AR'>('VN');
   const [exportMode, setExportMode] = useState<'filtered' | 'selected'>('filtered');
   const [showCommunicationStart, setShowCommunicationStart] = useState(false);
   const [communicationFormat, setCommunicationFormat] = useState<'email' | 'image' | 'summary'>('email');
@@ -183,9 +186,11 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
-  const [sharing, setSharing] = useState<{ kind: "pa" | "cooperative"; central?: string; coop?: string; selectedIds?: string[]; mode?: 'all' | 'filtered' | 'selected'; format?: 'email' | 'image' | 'summary'; showProjection?: boolean } | null>(null);
+  const [sharing, setSharing] = useState<{ kind: "central" | "pa" | "cooperative"; central?: string; coop?: string; metric?: "VN" | "AR"; unitIdsByMetric?: Partial<Record<"VN" | "AR", string[]>>; format?: "email" | "image" | "summary"; showProjection?: boolean } | null>(null);
   const effectiveSource = view === "cadence" ? "cadence" : source;
-  const effectiveMetric = effectiveSource === "cadence" ? "VN" : metric;
+  const selectedMetric = effectiveSource === "cadence" || view === "actions" && metric === "both" ? "VN" : metric;
+  const combinedPortfolios = selectedMetric === "both";
+  const effectiveMetric = selectedMetric === "AR" ? "AR" : "VN";
   const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
   const paPanelKey = `${dataset?.year}:${coop}`;
   useEffect(() => { setDrillHistory([]); setExpandedCoops([]); setPriorityFocus(null); setRowSelection({context:'',keys:[]}); setShowExport(false); setShowCommunicationStart(false); }, [user?.id, dataset?.year]);
@@ -279,7 +284,7 @@ export default function Dashboard() {
   );
   const cooperatives = useMemo(() => {
     const names = new Map<string, string>();
-    const rows = view === "audit" ? dataset?.rows ?? [] : sourceRows;
+    const rows = view === "audit" ? dataset?.rows ?? [] : combinedPortfolios && dataset ? analysisRows(dataset).filter(row => row.source === effectiveSource) : sourceRows;
     for (const row of rows) if (row.cooperative && (central === "all" || row.central === central))
       names.set(`${row.central}:${row.cooperative}`, `${row.cooperative} · ${row.cooperativeName}`);
     if (view === "audit") {
@@ -291,7 +296,7 @@ export default function Dashboard() {
       }
     }
     return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [sourceRows, central, dataset, view]);
+  }, [sourceRows, central, dataset, view, combinedPortfolios, effectiveSource]);
   const groups = [...new Set(sourceRows.map((r) => r.group))].sort();
   const paOptions = useMemo(() => [...new Map(sourceRows.filter(row => row.pa != null && (central === 'all' || row.central === central) && (coop === 'all' || `${row.central}:${row.cooperative}` === coop) && (group === 'all' || row.group === group)).map(row => [`${row.central}:${row.cooperative}:${row.pa}`, `PA ${row.pa} · ${row.name} · Coop. ${row.cooperative}`])).entries()].sort((a,b) => a[1].localeCompare(b[1], 'pt-BR', {numeric:true})), [sourceRows, central, coop, group]);
   const filtered = useMemo(
@@ -329,25 +334,27 @@ export default function Dashboard() {
         ),
     [filtered, actualLevel, dataset, config.year, month, period, uplift],
   );
-  const filterContext = JSON.stringify([user?.id, dataset?.year, dataset?.importedAt, dataset?.registry?.updatedAt, effectiveSource, effectiveMetric, central, coop, pa, group, actualLevel, period, month, search, statusFilter]);
+  const filterContext = JSON.stringify([user?.id, dataset?.year, dataset?.importedAt, dataset?.registry?.updatedAt, effectiveSource, selectedMetric, central, coop, pa, group, actualLevel, period, month, search, statusFilter]);
   const focus = priorityFocus?.context === filterContext ? priorityFocus : null;
   const scopedRows: Analysis[] = analysisIndicators(filterDashboardRows(analyses, search, statusFilter), options);
   const displayed: Analysis[] = sortAnalysis(analysisIndicators(focus ? scopedRows.filter(row => focus.keys.includes(row.key)) : scopedRows, options), sortBy);
   const selectionContext = `${filterContext}:${focus?.label ?? ''}`;
   const selectedKeys = rowSelection.context === selectionContext ? rowSelection.keys.filter(key => displayed.some(row => row.key === key)) : [];
-  const selectedRows = displayed.filter(row => selectedKeys.includes(row.key));
   const summary = summarize(displayed);
   const hasGoalConflict = displayed.some((row) => row.annualConflict);
   const variance = goalVariance(summary.actual, summary.target, summary.gap != null && !hasGoalConflict);
   const visibleLeaves: (DataRow & { cutoffMin?: string })[] = visibleLeafRows(aggregate(filtered, effectiveSource === 'cadence' ? 'pa' : 'cooperative'), displayed, actualLevel);
   const leafSummary = summarize(visibleLeaves.map(row => analyze(row, { year: dataset?.year ?? config.year, month, period, uplift })));
   const scenarioFilters = { central, coop, pa: effectiveSource === 'cadence' ? pa : 'all', source: effectiveSource, metric: effectiveMetric, group, level: actualLevel, period, month, uplift, sortBy, search, status: statusFilter };
-  const sharingFilters = sharing?.kind === "cooperative"
-    ? { ...scenarioFilters, source: "base", level: "cooperative", group: "all",
-        ...(actualLevel === "central" ? { search: "", status: "all" } : {}),
-        ...(sharing.central ? { central: sharing.central, coop, pa: 'all', search: "", status: "all" } : {}) }
-    : effectiveSource === "cadence" ? scenarioFilters
-    : { ...scenarioFilters, source: "cadence", metric: "VN", group: "all", search: "", status: "all", ...(sharing?.coop ? {coop:sharing.coop, central:sharing.central || central} : {}) };
+  const currentFilters = { ...scenarioFilters, metric: selectedMetric };
+  const currentModels = useMemo(() => dataset && combinedPortfolios ? buildCurrentViewModels({dataset, filters: {central, coop, pa:'all', source:effectiveSource, metric:'both', group, level:actualLevel, period, month, uplift, sortBy, search, status:statusFilter}}) : [], [dataset, combinedPortfolios, central, coop, effectiveSource, group, actualLevel, period, month, uplift, sortBy, search, statusFilter]);
+  const currentCount = combinedPortfolios ? currentModels.reduce((count, model) => count + model.count, 0) : displayed.length;
+  const activeExportModel = combinedPortfolios ? currentModels.find(model => model.metric === exportMetric) : undefined;
+  const sharingFilters = sharing?.coop
+    ? { ...currentFilters, source: 'cadence', metric: 'VN', level: 'pa', central: sharing.central || central, coop: sharing.coop, pa: 'all', group: 'all', search: '', status: 'all' }
+    : sharing?.central
+      ? { ...currentFilters, source: 'base', level: 'cooperative', central: sharing.central, coop, pa: 'all', search: '', status: 'all' }
+      : { ...currentFilters, ...(sharing?.metric ? {metric:sharing.metric} : {}) };
   const insights = buildDecisionInsights(displayed);
   const cutoffs = [...new Set(visibleLeaves.flatMap((r) => [r.cutoffMin || r.cutoff, r.cutoff]))].sort();
   const cutoff = cutoffs[0];
@@ -421,6 +428,9 @@ export default function Dashboard() {
   function rememberFilters() {
     setDrillHistory(items => [...items, {view, source, metric, central, coop, pa, group, level, search, status:statusFilter, sortBy, month, period, uplift, expandedPaKey, priorityFocus:focus}]);
   }
+  function openCentral(row: Analysis) {
+    rememberFilters(); setCentral(row.central); setCoop('all'); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setLevel('cooperative'); setPriorityFocus(null);
+  }
   function openCooperative(row: Analysis, cadence = false) {
     rememberFilters();
     setUnitsExpanded(true);
@@ -436,19 +446,16 @@ export default function Dashboard() {
     setRowSelection({context: selectionContext, keys: selectedKeys.includes(key) ? selectedKeys.filter(item => item !== key) : [...selectedKeys, key]});
   }
   function openCommunicationStart() { communicationOpener.current = document.activeElement as HTMLElement | null; setShowCommunicationStart(true); }
-  function startCommunication(choice: CommunicationChoice, fromStart = true) {
+  function startCommunication(choice: CommunicationChoice, fromStart = true, portfolio?: 'VN' | 'AR') {
     setShowCommunicationStart(false); communicationFromStart.current = fromStart;
-    setCommunicationProjection(choice.showProjection ?? false);
-    if (choice.content === 'individual') {
-      setCommunicationInitialKey(entityFromAnalysis(selectedRows[0] ?? displayed[0]).id); setCommunicationFormat(choice.format); setShowCommunication(true); return;
-    }
-    let ids: string[] | undefined;
-    const chosenRows = selectedRows.length ? selectedRows : focus || actualLevel === 'central' || choice.content === 'pa' && effectiveSource === 'base' ? displayed : null;
-    if (chosenRows) {
-      const entities = new Set(chosenRows.map(row => entityFromAnalysis(row).id));
-      ids = (dataset?.registry?.entities ?? []).filter(entity => entity.kind === choice.content && (central === 'all' || entity.central === central) && (coop === 'all' || `${entity.central}:${entity.cooperative}` === coop) && (choice.content !== 'pa' || effectiveSource !== 'cadence' || (pa === 'all' || `${entity.central}:${entity.cooperative}:${entity.pa}` === pa) && (group === 'all' || entity.group === group)) && (entities.has(entity.id) || entities.has(`central:${entity.central}`) || (choice.content === 'pa' && entities.has(`cooperative:${entity.central}:${entity.cooperative}`)))).map(entity => entity.id);
-    }
-    setSharing({kind:choice.content, format:choice.format, showProjection:choice.showProjection ?? false, ...(ids ? {selectedIds:ids, mode:'selected'} : {mode: actualLevel === 'central' || choice.content === 'pa' && effectiveSource !== 'cadence' ? 'all' : 'filtered'})});
+    const unitIdsByMetric = combinedPortfolios
+      ? Object.fromEntries(currentModels.filter(model => !portfolio || model.metric === portfolio).map(model => [model.metric, model.unitIds]))
+      : { [effectiveMetric]: displayed.map(row => entityFromAnalysis(row).id) };
+    setSharing({kind: actualLevel === 'central' ? 'central' : actualLevel === 'pa' ? 'pa' : 'cooperative', format:choice.format, showProjection:choice.showProjection, unitIdsByMetric, ...(portfolio ? {metric:portfolio} : {})});
+  }
+  function showAllPeriods() {
+    setPeriodExpandRequest(value => value + 1);
+    requestAnimationFrame(() => { const panel = document.getElementById('resultados-por-periodo'); panel?.focus({preventScroll:true}); panel?.scrollIntoView({block:'start',behavior:'smooth'}); });
   }
   function restoreCommunicationFocus() { if (communicationFromStart.current) (communicationOpener.current?.isConnected ? communicationOpener.current : communicationButton.current)?.focus(); communicationFromStart.current = false; }
   function closeCommunication() { setShowCommunication(false); restoreCommunicationFocus(); }
@@ -1005,7 +1012,7 @@ export default function Dashboard() {
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
               <div className="page-heading-actions">
-                {displayed.length > 0 && (
+                {currentCount > 0 && (
                   <button ref={communicationButton} className="button primary" onClick={openCommunicationStart}>
                     <MessageSquareText size={17} /> Gerar comunicação
                   </button>
@@ -1113,7 +1120,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <FilterPanel description={view === "audit" ? scopeLabel : `${metricName(effectiveMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={pa !== 'all' || central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
+              <FilterPanel description={view === "audit" ? scopeLabel : `${metricName(selectedMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={pa !== 'all' || central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
                 {view !== "audit" && <><label>
                   Fonte
                   <select
@@ -1148,11 +1155,12 @@ export default function Dashboard() {
                     Carteira
                     <select
                       aria-label="Carteira"
-                      value={effectiveMetric}
+                      value={selectedMetric}
                       onChange={(e) => setMetric(e.target.value)}
                     >
                       <option value="VN">Venda Nova</option>
                       <option value="AR">Arrecadação</option>
+                      {view === "overview" && <option value="both">Venda Nova + Arrecadação</option>}
                     </select>
                   </label>
                 )}
@@ -1193,25 +1201,9 @@ export default function Dashboard() {
                 {view !== "audit" && <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
                   onPeriodChange={setPeriod} onMonthChange={setMonth} />}
               </FilterPanel>
-              {view !== 'audit' && <div className="scope-navigation" aria-label="Recorte consultado">
+              {view !== 'audit' && (drillHistory.length > 0 || focus) && <div className="scope-navigation" aria-label="Navegação do recorte">
                 {drillHistory.length > 0 && <button type="button" className="button quiet" onClick={goBack}><ChevronLeft size={16} />Voltar ao recorte anterior</button>}
-                <span><strong>{scopeLabel}</strong> · {metricName(effectiveMetric)} · {periodDescription}{pa !== 'all' && effectiveSource === 'cadence' ? ` · ${paOptions.find(([id]) => id === pa)?.[1] ?? pa}` : ''}</span>
                 {focus && <span className="focus-chip">{focus.label}<button type="button" className="button quiet" onClick={() => setPriorityFocus(null)}>Limpar prioridade</button></span>}
-              </div>}
-              {view !== "audit" && <div className="position-line">
-                <span>
-                  <span className="position-dot" />
-                  Dados até:{" "}
-                  <strong>
-                    {cutoff ? cutoffs.length > 1 ? `${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])} · cortes diferentes` : shortDate(cutoff) : displayed.length ? "não importada" : "sem unidades na seleção"}
-                  </strong>
-                  {displayed.length > 0 && <> · {[...new Set(displayed.map(row => row.phase))].join(' / ')}</>}
-                </span>
-                <span>
-                  {effectiveSource === "cadence"
-                    ? "Metas próprias da cadência · não somadas às cooperativas"
-                    : "Consolidado das cooperativas · sem dupla contagem dos PAs"}
-                </span>
               </div>}
               {uplift > 0 && view !== "audit" && <div className="simulation-banner"><span>Simulação de ritmo +{uplift}% ativa · somente projeções</span><button className="button quiet" onClick={() => setUplift(0)}>Limpar simulação</button></div>}
               {view === "audit" ? (
@@ -1288,6 +1280,14 @@ export default function Dashboard() {
                   </section>
                   </details>
                 </>
+              ) : combinedPortfolios && dataset ? (
+                <>
+                  <div className="overview-period-shortcut"><button type="button" className="button quiet" onClick={showAllPeriods}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button></div>
+                  <CombinedPortfolio dataset={dataset} filters={currentFilters} models={currentModels} ownerId={user?.id} expandRequest={periodExpandRequest} controls={<div className="table-controls combined-controls">{listControls}</div>}
+                    onSelect={setSelected} onDrill={row => actualLevel === 'central' ? openCentral(row) : openCooperative(row, true)}
+                    onShare={portfolio => startCommunication({content:actualLevel === 'central' ? 'central' : 'cooperative',format:'image',showProjection:false}, false, portfolio)}
+                    onExport={portfolio => {setExportMetric(portfolio);setExportMode('filtered');setShowExport(true);}} />
+                </>
               ) : !filtered.length ? (
                 <section className="panel empty">
                   <FileSpreadsheet size={34} />
@@ -1296,13 +1296,12 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
-                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
+                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
                 </section>
               ) : (
                 <>
-                  <div className="result-scope" role="status"><strong>{displayed.length} {actualLevel === 'pa' ? (displayed.length === 1 ? 'PA' : 'PAs') : actualLevel === 'central' ? (displayed.length === 1 ? 'central' : 'centrais') : (displayed.length === 1 ? 'cooperativa' : 'cooperativas')} na seleção</strong><span>{search || statusFilter !== 'all' ? 'Indicadores acompanham a busca e a situação.' : periodDescription}</span>{view !== 'actions' && <button type="button" className="button quiet" onClick={() => { setPeriodExpandRequest(value => value + 1); requestAnimationFrame(() => { const panel = document.getElementById('resultados-por-periodo'); panel?.focus({ preventScroll: true }); panel?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}</div>
                   <section className="overview-metrics" aria-label="Resultado do período">
-                    <div className="overview-block-heading"><h2>Resultado do período</h2><PanelToggle expanded={metricsExpanded} onToggle={() => setMetricsExpanded(value => !value)} controls={metricContentId} label="indicadores do período" /></div>
+                    <div className="overview-block-heading"><div><h2>Resultado do período</h2><p className="overview-cutoff">{cutoff ? cutoffs.length > 1 ? `Cortes: ${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])}` : `Dados até ${shortDate(cutoff)}` : 'Sem data de atualização'}{displayed.length > 0 && ` · ${[...new Set(displayed.map(row => row.phase))].join(' / ')}`}</p></div><div className="overview-block-actions">{view !== 'actions' && <button type="button" className="button quiet" onClick={showAllPeriods}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}<PanelToggle expanded={metricsExpanded} onToggle={() => setMetricsExpanded(value => !value)} controls={metricContentId} label="indicadores do período" /></div></div>
                     <div className="kpi-grid" id={metricContentId} hidden={!metricsExpanded}>
                     <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
                     <Kpi title="Realizado até o corte" value={displayed.length ? money(summary.actual) : '—'}
@@ -1385,7 +1384,7 @@ export default function Dashboard() {
                             <p>{displayed.length} de {analyses.length} unidades</p>
                           </div>
                           <div className="overview-block-actions">
-                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
+                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                             <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           </div>
                         </div>
@@ -1396,8 +1395,8 @@ export default function Dashboard() {
                           </div>
                           <div className="overview-table-legend"><AttainmentLegend /></div>
                         <div className="selection-toolbar" aria-live="polite">
-                          <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar ou comunicar.'}</span>
-                          {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button><button className="button secondary" onClick={openCommunicationStart}>Comunicar selecionadas</button></>}
+                          <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar.'}</span>
+                          {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
                         </div>
                         <div className="table-scroll">
                           <table>
@@ -1484,7 +1483,7 @@ export default function Dashboard() {
                                       <Pill>{r.status}</Pill>
                                     </td>
                                     <td>
-                                      {actualLevel === 'central' && <button type="button" className="button quiet" aria-label={`Ver cooperativas de ${r.name}`} onClick={() => {rememberFilters(); setCentral(r.central); setCoop('all'); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setLevel('cooperative'); setPriorityFocus(null);}}>Ver cooperativas</button>}
+                                      {actualLevel === 'central' && <button type="button" className="button quiet" aria-label={`Ver cooperativas de ${r.name}`} onClick={() => openCentral(r)}>Ver cooperativas</button>}
                                       {actualLevel === "central" && effectiveSource === "base" && <button type="button" className="button quiet" aria-label={`Compartilhar cooperativas de ${r.name}`} onClick={() => setSharing({ kind: "cooperative", central: r.central })}>Compartilhar cooperativas</button>}
                                       {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <>
                                         <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} onClick={() => openCooperative(r)}>Ver PAs</button>
@@ -1510,11 +1509,10 @@ export default function Dashboard() {
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
-                        <div className="pagination">{displayed.length} unidades exibidas</div>
                         </div>
                       </section>
                       {resultContextPanels}
-                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa" })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
+                      {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa", central: coop.split(':')[0], coop })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
                       {dataset && <PeriodPerformance dataset={dataset} ownerId={user?.id ?? null} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
@@ -1627,14 +1625,17 @@ export default function Dashboard() {
           )}
         </Modal>
       )}
-      {showCommunicationStart && dataset && displayed.length > 0 && <Modal title="Gerar comunicação" onClose={() => setShowCommunicationStart(false)}><CommunicationStart level={actualLevel} scope={scopeLabel} period={`${metricName(effectiveMetric)} · ${periodDescription}`} selectedCount={selectedKeys.length} hasCooperatives={effectiveSource === 'base'} hasPas={(analysisRows(dataset).some(row => row.source === 'cadence' && (central === 'all' || row.central === central) && (coop === 'all' || `${row.central}:${row.cooperative}` === coop)))} onContinue={startCommunication} /></Modal>}
-      {showExport && dataset && <Modal title="Exportar dados" onClose={() => setShowExport(false)}><ResultExport rows={displayed} selectedIds={selectedKeys} initialMode={exportMode} ownerId={user?.id ?? 'local'} context={{year:dataset.year, month, period, source:effectiveSource, metric:effectiveMetric, level:actualLevel, scopeLabel, filterLabel:[search ? `Busca: ${search}` : '', statusFilter !== 'all' ? `Situação: ${statusFilter}` : '', focus?.label ?? ''].filter(Boolean).join(' · '), uplift}} /></Modal>}
+      {showCommunicationStart && dataset && currentCount > 0 && <Modal title="Gerar comunicação" onClose={() => setShowCommunicationStart(false)}><CommunicationStart level={actualLevel} scope={scopeLabel} period={`${metricName(selectedMetric)} · ${periodDescription}`} onContinue={startCommunication} /></Modal>}
+      {showExport && dataset && <Modal title="Exportar dados" onClose={() => setShowExport(false)}>
+        {combinedPortfolios && <label className="export-portfolio">Carteira para exportar<select value={exportMetric} onChange={event => setExportMetric(event.target.value as 'VN' | 'AR')}><option value="VN">Venda Nova</option><option value="AR">Arrecadação</option></select></label>}
+        <ResultExport key={combinedPortfolios ? exportMetric : effectiveMetric} rows={activeExportModel?.rows ?? displayed} selectedIds={combinedPortfolios ? [] : selectedKeys} initialMode={exportMode} ownerId={user?.id ?? 'local'} context={{year:dataset.year, month, period, source:effectiveSource, metric:activeExportModel?.metric ?? effectiveMetric, level:actualLevel, scopeLabel, filterLabel:[search ? `Busca: ${search}` : '', statusFilter !== 'all' ? `Situação: ${statusFilter}` : '', focus?.label ?? ''].filter(Boolean).join(' · '), uplift}} />
+      </Modal>}
       {showCommunication && dataset && displayed.length > 0 && (
         <PortfolioCommunication dataset={dataset} candidates={displayed.map(entityFromAnalysis)} initialKey={communicationInitialKey} initialFormat={communicationFormat} initialShowProjection={communicationProjection} scopedUnitIds={visibleLeaves.map(row => entityFromAnalysis({ ...row, kind: row.source === 'cadence' ? 'pa' : row.cooperative ? 'cooperative' : 'central' }).id)}
           metric={effectiveMetric as "VN" | "AR"} period={period} month={month} uplift={uplift}
           onClose={closeCommunication} />
       )}
-      {sharing && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}:${sharing.kind}`} unitKind={sharing.kind} userId={user.id} dataset={dataset} filters={sharingFilters} initialFormat={sharing.format} initialMode={sharing.mode} initialSelectedIds={sharing.selectedIds} initialShowProjection={sharing.showProjection ?? false} onClose={closeSharing} />}
+      {sharing && dataset && user && <PaScenarioShare key={`${user.id}:${dataset.year}:${sharing.kind}`} unitKind={sharing.kind} userId={user.id} dataset={dataset} filters={sharingFilters} initialFormat={sharing.format} unitIdsByMetric={sharing.unitIdsByMetric} initialShowProjection={sharing.showProjection ?? false} onClose={closeSharing} />}
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)} wide>
           <div className="detail-content">
