@@ -522,7 +522,7 @@ export default function Dashboard() {
         const saved = await loadWorkspace(user.id, config.year);
         if (saved) { current = initializeRegistry(saved.dataset); revision = saved.revision; }
       }
-      const allowedCentrals = [...new Set(["1002", "2007", ...(current?.registry?.entities.filter((e) => e.kind === "central").map((e) => e.central) ?? [])])];
+      const allowedCentrals = current?.registry?.entities.filter((entity) => entity.kind === "central").map((entity) => entity.central) ?? [];
       const parts = [];
       for (const [expectedSource, file] of selectedFiles) {
         if (file.size > 10 * 1024 * 1024) throw new Error("Cada arquivo pode ter até 10 MB.");
@@ -947,7 +947,6 @@ export default function Dashboard() {
         </a>
         <PortalNavigation view={view} disabled={!!busy || registrySaving} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
         <div className="sidebar-foot">
-          <div className="central-label">BAHIA & NORDESTE</div>
           <div className="session-state">
             <span className="avatar">
               {user?.email?.slice(0, 2).toUpperCase() ?? "AC"}

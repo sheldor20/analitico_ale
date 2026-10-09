@@ -17,6 +17,9 @@ async function fixture({
   group = "P1",
   sourceMonthly = 450,
   sourceAnnual = 5400,
+  central = 1002,
+  otherCentral = 9998,
+  footer = false,
 } = {}) {
   const book = new ExcelJS.Workbook(),
     s = book.addWorksheet("Cadência");
@@ -43,7 +46,7 @@ async function fixture({
   ]);
   const values = [
     group,
-    1002,
+    central,
     "CENTRAL BA",
     9999,
     "COOP TESTE",
@@ -66,7 +69,7 @@ async function fixture({
   if (duplicate) s.addRow(values);
   s.addRow([
     "P1",
-    9998,
+    otherCentral,
     "OUTRA CENTRAL",
     9997,
     "OUTRA COOP",
@@ -85,6 +88,7 @@ async function fixture({
     0,
     0,
   ]);
+  if (footer) s.addRow([null, "TOTAL", null, null]);
   return book.xlsx.writeBuffer();
 }
 test("Brazilian numeric conversion preserves missing/zero/negative", () => {
@@ -94,8 +98,8 @@ test("Brazilian numeric conversion preserves missing/zero/negative", () => {
   assert.equal(number("#N/A"), null);
   assert.equal(number("-1.234,56"), -1234.56);
 });
-test("imports source months, excludes unrelated centrals and preserves PA 0 with erroneous name", async () => {
-  const d = await parseWorkbook(await fixture(), "cadencia.xlsx", config);
+test("an explicit central scope preserves source months and PA 0 while excluding unrelated centrals", async () => {
+  const d = await parseWorkbook(await fixture(), "cadencia.xlsx", { ...config, allowedCentrals: ["1002"] });
   assert.equal(d.rows.length, 1);
   assert.equal(d.skipped, 1);
   assert.equal(d.rows[0].pa, "0");
@@ -194,20 +198,43 @@ test("combined snapshot prevents two files from same source", async () => {
   const p = await parseWorkbook(await fixture(), "a.xlsx", config);
   assert.throws(() => combineImports([p, p], config), /apenas um/);
   const d = combineImports([p], config);
-  assert.equal(d.rows.length, 1);
+  assert.equal(d.rows.length, 2);
   assert.equal(d.version, 2);
   assert.equal(d.paTargetPolicy.groups.P5.monthly, 1000);
 });
-test("an explicitly registered central can be updated without importing unrelated ones by default", async () => {
-  const d = await parseWorkbook(await fixture(), "cadencia.xlsx", { ...config, allowedCentrals: ["9998"] });
-  assert.equal(d.rows.length, 2);
-  assert.equal(d.rows[1].central, "9998");
+test("first import accepts new centrals without an allowlist, including an explicitly empty list", async () => {
+  const workbook = await fixture({ central: 3456, otherCentral: 1002 });
+  for (const scope of [{}, { allowedCentrals: [] }]) {
+    const result = await parseWorkbook(workbook, "cadencia.xlsx", { ...config, ...scope });
+    assert.deepEqual(result.rows.map(row => row.central), ["3456", "1002"]);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.rows[0].actuals[0], 123);
+    assert.equal(result.rows[0].pa, "0");
+  }
+});
+test("an explicit non-empty scope imports exactly its centrals without adding Bahia or Nordeste", async () => {
+  for (const legacy of [1002, 2007]) {
+    const result = await parseWorkbook(await fixture({ central: 3456, otherCentral: legacy }), "cadencia.xlsx", { ...config, allowedCentrals: ["003456"] });
+    assert.deepEqual(result.rows.map(row => row.central), ["3456"]);
+    assert.equal(result.skipped, 1);
+  }
+  const workbook = await fixture({ central: 1002, otherCentral: 2007 });
+  await assert.rejects(() => parseWorkbook(workbook, "cadencia.xlsx", { ...config, allowedCentrals: ["3456"] }), /centrais permitidas \(3456\)/);
+});
+test("unrestricted imports reject malformed record codes but preserve blank and total-footer handling", async () => {
+  for (const central of ["CENTRAL INVÁLIDA", "1234567890123"]) {
+    await assert.rejects(async () => parseWorkbook(await fixture({ central }), "cadencia.xlsx", config), /central inválida/);
+  }
+  const result = await parseWorkbook(await fixture({ central: "", footer: true }), "cadencia.xlsx", config);
+  assert.deepEqual(result.rows.map(row => row.central), ["9998"]);
+  await assert.rejects(async () => parseWorkbook(await fixture(), "cadencia.xlsx", { ...config, allowedCentrals: ["inválida"] }), /lista de centrais permitidas/);
 });
 test("a fixed cooperative base can provide annual/monthly goals before any production columns exist", async () => {
   const book = new ExcelJS.Workbook(), sheet = book.addWorksheet("Metas");
   sheet.addRow(["Nº CENTRAL", "Nº COOP", "SIGLA COOPERATIVA", "META", "G COOP", "META ANUAL", ...MONTHS.map((month) => `META ${month}`)]);
-  sheet.addRow([1002, 9999, "Cooperativa teste", "VENDA NOVA", "P1", 1200, ...Array(12).fill(100)]);
+  sheet.addRow([3456, 9999, "Cooperativa teste", "VENDA NOVA", "P1", 1200, ...Array(12).fill(100)]);
   const result = await parseWorkbook(await book.xlsx.writeBuffer(), "metas.xlsx", config);
+  assert.equal(result.rows[0].central, "3456");
   assert.equal(result.rows[0].annualTarget, 1200);
   assert.deepEqual(result.rows[0].actuals, Array(12).fill(null));
 });

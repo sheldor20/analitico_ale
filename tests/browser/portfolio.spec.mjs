@@ -16,6 +16,7 @@ import { registerManagementPeriodTests } from './management-period-cases.mjs';
 import { registerContactImportTests } from './contact-import-cases.mjs';
 import { registerPeriodShareTests } from './period-share-cases.mjs';
 import { registerFilteredSharingTests } from './filtered-sharing-cases.mjs';
+import { registerRegistryOnboardingTests } from './registry-onboarding-cases.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -34,6 +35,8 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   const relationshipReads = [];
   const contactReads = [];
   const contactImports = [];
+  const workspaceWrites = [];
+  const workspaceRows = relationshipSeed.workspaceMissing ? [] : [{ id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset }];
   const profileRows = structuredClone(relationshipSeed.profiles || []);
   const appointmentRows = structuredClone(relationshipSeed.appointments || []);
   const goalStateRows = structuredClone(relationshipSeed.goalStates || []);
@@ -61,8 +64,21 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
     if (url.pathname === '/auth/v1/user') return answer(user);
     if (url.pathname === '/auth/v1/logout') return answer({});
     if (url.pathname === '/rest/v1/commercial_workspaces') {
-      const row = { id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset };
-      return answer((request.headers().accept || '').includes('vnd.pgrst.object') ? row : [row]);
+      if (relationshipSeed.workspaceMissing && request.method() === 'GET' && url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Workspace: incorrect read owner');
+      if (relationshipSeed.workspaceMissing && ['POST', 'PATCH'].includes(request.method())) {
+        const payload = request.postDataJSON();workspaceWrites.push({method:request.method(),payload,filters:Object.fromEntries(url.searchParams)});
+        if (request.method() === 'POST') {
+          if (payload.owner_id !== owner || payload.revision !== 1) errors.push('Workspace: incorrect initial owner or revision');
+          workspaceRows.push({id:'00000000-0000-0000-0000-000000000010',updated_at:created,...payload});
+        } else {
+          if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Workspace: incorrect update owner');
+          const row=workspaceRows.find(item=>`eq.${item.year}`===url.searchParams.get('year')&&`eq.${item.revision}`===url.searchParams.get('revision'));
+          if (!row) return answer(null);
+          Object.assign(row,payload,{updated_at:created});
+        }
+      }
+      const selected=relationshipSeed.workspaceMissing ? workspaceRows.filter(row=>!url.searchParams.has('year')||`eq.${row.year}`===url.searchParams.get('year')) : workspaceRows;
+      return answer((request.headers().accept || '').includes('vnd.pgrst.object') ? selected[0] || null : selected);
     }
     if (url.pathname === '/rest/v1/commercial_message_templates') {
       const key = `${url.searchParams.get('entity_kind')}:${url.searchParams.get('metric')}`;
@@ -156,8 +172,9 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await login.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(login).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Visão geral', level: 1, exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
-  return { errors, writes, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
+  if (relationshipSeed.workspaceMissing) await expect(page.getByRole('button', { name: 'Começar pelo cadastro manual', exact: true })).toBeVisible();
+  else await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
+  return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
 async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
@@ -329,3 +346,5 @@ registerContactImportTests({ test, expect, setup, owner, created });
 registerPeriodShareTests({ test, expect, setup });
 
 registerFilteredSharingTests({ test, expect, setup });
+
+registerRegistryOnboardingTests({ test, expect, setup, owner });
