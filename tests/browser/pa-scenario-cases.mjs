@@ -80,7 +80,7 @@ function htmlFromEml(eml) {
 }
 
 export function registerPaScenarioTests({ test, expect, setup }) {
-  test('PA sharing: current filters are preserved, full scope is explicit and composite hierarchy preserves PA zero', async ({ page }, info) => {
+  test('PA sharing: dashboard filters define every reopened report and composite hierarchy preserves PA zero', async ({ page }, info) => {
     await recordExports(page);
     const { errors, writes, relationshipWrites } = await setup(page, scenarioFixture);
     await selectScope(page);
@@ -90,11 +90,21 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await expect(page.getByRole('region', { name: 'Lista de unidades', exact: true }).locator('tbody tr')).toHaveCount(1);
     await openShare(page);
     const dialog = shared(page);
-    await expect(dialog.getByRole('radio', { name: 'Somente PAs filtrados', exact: true })).toBeChecked();
+    for (const name of ['Somente PAs filtrados', 'Todos os PAs da seleção', 'Selecionar unidades']) await expect(dialog.getByRole('radio', { name, exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('region', { name: 'Seleção de unidades', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('combobox', { name: 'Ordem das unidades', exact: true })).toHaveCount(0);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
-    await dialog.getByRole('radio', { name: 'Todos os PAs da seleção', exact: true }).check();
+    await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('PA Alfa zero');
+    await expect(page.getByLabel('Grupo do PA')).toHaveValue('P1');
+    await expect(page.getByRole('combobox', { name: 'Filtrar situação', exact: true })).toHaveValue('attention');
+    await page.getByLabel('Buscar cooperativa ou PA').fill('');
+    await page.getByLabel('Grupo do PA').selectOption('all');
+    await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('all');
+    await openShare(page);
+    await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(7);
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
     await expect(reportRow(page, 'pa:1002:3017:1')).toContainText('PA Crescimento exato');
@@ -121,8 +131,12 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     const positions = orderedNames.map(name => drawn.indexOf(name));
     expect(positions.every(position => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await page.getByLabel('Grupo do PA').selectOption('P1');
+    await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('attention');
+    await page.getByLabel('Buscar cooperativa ou PA').fill('PA Alfa zero');
+    await openShare(page);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
-    await dialog.getByRole('radio', { name: 'Somente PAs filtrados', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:1002:3017:0')).toContainText('PA Alfa zero');
     await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
@@ -139,9 +153,15 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await page.getByLabel('Grupo do PA').selectOption('P2');
     await expect(page.getByRole('region', { name: 'Lista de unidades', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Compartilhar PAs', exact: true }).click();
-    await expect(dialog.getByRole('radio', { name: 'Somente PAs filtrados', exact: true })).toBeChecked();
+    await expect(dialog).toContainText('Nenhum PA neste recorte. Ajuste os filtros na Visão geral.');
     await expect(dialog.getByRole('radio', { name: 'E-mail', exact: true })).toHaveCount(0);
-    await dialog.getByRole('radio', { name: 'Todos os PAs da seleção', exact: true }).check();
+    await expect(dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('radio', { name: 'Todos os PAs da seleção', exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await expect(page.getByLabel('Grupo do PA')).toHaveValue('P2');
+    await page.getByLabel('Grupo do PA').selectOption('all');
+    await openShare(page);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(reportRows(page)).toHaveCount(1);
     await expect(reportRow(page, 'pa:1002:3025:0')).toContainText('PA Beta zero');
@@ -189,6 +209,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     const compactContext = emailFrame(page).locator('[data-communication-context]');
     await expect(compactContext).toContainText('Cooperativa 3017');
     await expect(compactContext).toContainText('31/08/2026');
+    await expect(header).not.toContainText('31/08/2026');
     const commonHeader = await emailFrame(page).locator('body').innerText();
     for (const common of ['Central Bahia teste', 'Cooperativa 3017', '31/08/2026']) expect(commonHeader.split(common)).toHaveLength(2);
     const growth = reportRow(page, 'pa:1002:3017:1').locator('td');

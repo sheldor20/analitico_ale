@@ -283,3 +283,102 @@ test('invalid selected projection is rejected instead of rendering incomplete or
   assert.throws(() => paScenarioImageLayout(part([row(0, { projection: { value: Infinity, attainment: 1, phase: 'Parcial', assumption: 'Estimativa.' } })], { showProjection: true }), measurement()), /projeção inválida/);
   assert.throws(() => paScenarioImageLayout(part([row(0, { projection: { value: 1000, attainment: 1, phase: 'Parcial' } })], { showProjection: true }), measurement()), /projeção inválida/);
 });
+
+test('compact PNG keeps one cutoff/phase line while removing redundant counts and retaining exceptional row dates', () => {
+  const rows = [row(0), row(1, {
+    complete: false, status: 'Dados incompletos', cutoff: '2026-09-15', cutoffMin: '2026-09-15',
+    attainment: null, variance: goalVariance(1250, 1000, false),
+  })];
+  const source = part(rows, {
+    compact: true, scopePartial: true, phaseLabel: 'Parcial', selectionLabel: 'Seleção parcial: 2 de 47 PAs',
+    notes: ['— Dado não informado ou sem avaliação.', 'Ordem: Maior atingimento', 'Exceções à data de corte indicadas nas unidades.'],
+    context: { central: '1002', cooperative: '1002:3017', cutoff: '2026-09-17', cutoffMin: '2026-09-17' },
+  });
+  const before = structuredClone(source), measure = measurement();
+  const layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  const fullText = drawn.map(command => command.value).join(' ');
+  assert.ok(fullText.includes('Gestão comercial · Venda nova'));
+  assert.ok(fullText.includes('Sicoob Central Bahia'));
+  assert.ok(fullText.includes('Setembro de 2026'));
+  assert.equal(drawn.filter(command => command.value.includes('Cooperativa 3017')).length, 1);
+  assert.ok(fullText.includes('Dados incompletos'));
+  assert.ok(fullText.includes('15/09/2026'), 'exceptional row cutoff remains visible');
+  assert.equal(drawn.filter(command => command.value === 'Corte: 17/09/2026 · Parcial · Recorte parcial').length, 1);
+  assert.equal(drawn.filter(command => command.value.includes('17/09/2026')).length, 1);
+  assert.doesNotMatch(fullText, /Seleção parcial|Parte|PAs 1–2|Valores em reais/);
+  for (const note of source.notes) assert.ok(!fullText.includes(note));
+  assert.equal(drawn.filter(command => /^PA \d+ · Unidade/.test(command.value)).length, 2);
+  assert.equal(drawn.filter(command => command.value === amount(1250)).length, 2);
+  assert.ok(layout.height < paScenarioImageLayout({ ...source, compact: false }, measurement()).height);
+  assert.deepEqual(source, before);
+  assertGeometry(layout, measure);
+});
+
+test('compact projected parts retain exact currencies, neutral estimates and only the short projection footer', () => {
+  const target = 927_900_000, actual = -12_945_213.17, projected = 1_234_567_890.12;
+  const rows = [row(0, {
+    target, actual, attainment: actual / target, variance: goalVariance(actual, target),
+    projection: { value: projected, attainment: projected / target, phase: 'Parcial', assumption: 'Estimativa pelo ritmo observado até o corte; considera dias úteis, sem descontar feriados.' },
+  }), row(1, {
+    projection: { value: null, attainment: null, phase: 'Dados incompletos', assumption: 'Sem estimativa: dados insuficientes ou metas divergentes.' },
+  })];
+  const source = part(rows, {
+    compact: true, showProjection: true, index: 2, total: 3, from: 13, to: 14,
+    notes: ['Projeção é estimativa; não altera o realizado.'], selectionLabel: 'Lista filtrada: 26 de 47 PAs', phaseLabel: 'Parcial',
+  });
+  const measure = measurement(), layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+  const fullText = drawn.map(command => command.value).join(' ');
+  assert.equal(drawn.filter(command => command.value === 'Projeção').length, 1);
+  assert.equal(drawn.filter(command => command.value === 'Projeção: estimativa para o encerramento do período.').length, 1);
+  assert.equal(drawn.filter(command => command.value === 'Corte: 17/09/2026 · Parcial').length, 1);
+  assert.doesNotMatch(fullText, /Premissa|feriados|insuficientes|não altera|Valores em reais|Lista filtrada|PAs 13–14|Recorte parcial/);
+  const pagination = drawn.filter(command => command.value.includes('Parte'));
+  assert.equal(pagination.length, 1);
+  assert.equal(pagination[0].value, 'Parte 2 de 3');
+  assert.ok(pagination[0].y > drawn.find(command => command.value === 'PA 1 · Unidade 1').y, 'pagination follows the table');
+  const amounts = [target, actual, rows[0].variance.value, projected].map(value => drawn.filter(command => command.value === amount(value)));
+  assert.ok(amounts.every(commands => commands.length === 1));
+  assert.deepEqual(amounts.map(([command]) => command.x), [388, 638, 898, 1160]);
+  assert.equal(new Set(amounts.map(([command]) => command.y)).size, 1);
+  assert.equal(new Set(amounts.map(([command]) => command.size)).size, 1);
+  assert.ok(amounts.every(([command]) => command.size >= 18));
+  assert.equal(amounts[1][0].fill, attainmentBand(actual / target).color);
+  assert.equal(amounts[3][0].fill, '#435c60');
+  assert.equal(drawn.filter(command => command.value === '—' && command.x === 1160).length, 1);
+  assert.ok(drawn.some(command => command.value === 'Dados incompletos' && command.x === 1160));
+  assertGeometry(layout, measure, 1440);
+});
+
+test('compact central exports identify the central rows and keep each portfolio independent', () => {
+  const central = row(0, { id: 'central:1002', cooperative: '', pa: '', name: 'Central Bahia', group: '' });
+  const common = {
+    compact: true, kind: 'central', scope: 'Centrais selecionadas', centralName: 'Centrais selecionadas',
+    context: { central: null, cooperative: null, cutoff: '2026-09-17', cutoffMin: '2026-09-17' },
+    bundleIndex: 1, bundleTotal: 2,
+  };
+  const vn = part([central], { ...common, metric: 'VN' });
+  const arActual = 8391.37;
+  const ar = part([{ ...central, actual: arActual, attainment: arActual / central.target, variance: goalVariance(arActual, central.target) }], { ...common, metric: 'AR', bundleIndex: 2 });
+  for (const [source, heading, other] of [[vn, 'Venda nova', 'Arrecadação'], [ar, 'Arrecadação', 'Venda nova']]) {
+    const measure = measurement(), layout = paScenarioImageLayout(source, measure), drawn = textCommands(layout);
+    const fullText = drawn.map(command => command.value).join(' ');
+    assert.ok(drawn.some(command => command.value === `Gestão comercial · ${heading}`));
+    assert.ok(!fullText.includes(other));
+    assert.ok(drawn.some(command => command.value === 'Central' && command.fill === '#ffffff'));
+    assert.ok(drawn.some(command => command.value === '1002 · Central Bahia'));
+    assert.equal(drawn.filter(command => command.value === 'Corte: 17/09/2026').length, 1);
+    assert.doesNotMatch(fullText, /\bPA\b|\bPAs\b|Cooperativa|Parte|Projeção/);
+    assert.equal(drawn.filter(command => command.value === amount(source.rows[0].actual) && command.x === 638).length, 1);
+    assertGeometry(layout, measure);
+  }
+  assert.ok(!textCommands(paScenarioImageLayout(vn, measurement())).some(command => command.value === amount(arActual)));
+  assert.ok(!textCommands(paScenarioImageLayout(ar, measurement())).some(command => command.value === amount(central.actual)));
+});
+
+test('compact flag and central identities are validated without weakening PA identity checks', () => {
+  assert.throws(() => paScenarioImageLayout(part([row()], { compact: 'true' }), measurement()), /parte.*inválida/);
+  assert.throws(() => paScenarioImageLayout(part([row()], { compact: true, scopePartial: 'true' }), measurement()), /parte.*inválida/);
+  assert.throws(() => paScenarioImageLayout(part([row(0, { pa: '' })], { compact: true }), measurement()), /unidade contém dados inválidos/);
+  assert.throws(() => paScenarioImageLayout(part([row(0, { central: '', cooperative: '', pa: '' })], { compact: true, kind: 'central' }), measurement()), /unidade contém dados inválidos/);
+  assert.throws(() => paScenarioImageLayout(part([row(0, { cooperative: '', pa: '' })], { compact: true, kind: 'cooperative' }), measurement()), /unidade contém dados inválidos/);
+});

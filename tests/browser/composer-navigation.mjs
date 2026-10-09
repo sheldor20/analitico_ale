@@ -1,11 +1,8 @@
 export async function openIndividualCommunication(page, format = 'E-mail') {
-  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
-  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
-  await chooser.getByRole('radio', { name: 'Uma unidade', exact: true }).check();
-  await chooser.getByRole('radio', { name: format, exact: true }).check();
-  await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /^Gerar comunicação de / }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
   await dialog.waitFor({ state: 'visible' });
+  if (format === 'Painel resumido') await step(dialog, 2);
   return dialog;
 }
 

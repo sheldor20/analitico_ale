@@ -285,7 +285,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
   });
 
-  test('management communication: AR quarter filters, order and selected units remain exact while projection is optional in every format', async ({ page }, info) => {
+  test('management communication: AR quarter filters and order remain exact independently of table selection, with optional projection', async ({ page }, info) => {
     await captureCopies(page);
     const { errors, writes, relationshipWrites } = await setup(page, managementFixture);
     await select(page, 'Central').selectOption('1002');
@@ -299,12 +299,12 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
     const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
     await expect(projection(chooser)).not.toBeChecked();
-    await chooser.getByRole('radio', { name: 'Cooperativas da seleção', exact: true }).check();
+    await expect(chooser.getByRole('radio', { name: 'Cooperativas da seleção', exact: true })).toHaveCount(0);
     await chooser.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
     const dialog = share(page);
     await expect(projection(dialog)).not.toBeChecked();
-    await expect(select(dialog, 'Ordem das unidades')).toHaveValue('production');
+    await expect(select(dialog, 'Ordem das unidades')).toHaveCount(0);
     await expect(exportedRows(page)).toHaveCount(2);
     expect(await exportedRows(page).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-cooperative-id')))).toEqual(['cooperative:1002:3030', 'cooperative:1002:3025']);
     await expect(frame(page).locator('[data-communication-header]')).toContainText('Gestão comercial · Arrecadação');
@@ -335,7 +335,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     const copied = await page.evaluate(() => window.__managementCopies);
     expect(copied.png[0].bytes).toEqual(pngMagic); expect(copied.png[0].width).toBe(1440);
     const drawn = copied.drawings.at(-1).join(' ');
-    for (const text of ['Arrecadação', '3º trimestre', 'Projeção é estimativa; não altera o realizado.', 'Cooperativa Delta', 'Cooperativa Beta', 'R$ 812,90', 'R$ 406,45']) expect(drawn).toContain(text);
+    for (const text of ['Arrecadação', '3º trimestre', 'Projeção: estimativa para o encerramento do período.', 'Cooperativa Delta', 'Cooperativa Beta', 'R$ 812,90', 'R$ 406,45']) expect(drawn).toContain(text);
     expect(drawn.indexOf('Cooperativa Delta')).toBeLessThan(drawn.indexOf('Cooperativa Beta'));
     expect(drawn).not.toContain('Cooperativa Alfa');
     const download = page.waitForEvent('download');
@@ -356,18 +356,18 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await chooser.getByRole('radio', { name: 'Painel resumido', exact: true }).check();
     await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(projection(dialog)).toBeChecked();
-    await expect(summary.locator('tbody tr')).toHaveCount(1);
-    await expect(summary.locator('tbody tr')).toContainText('Cooperativa Beta');
-    await expect(summary.locator('tbody tr')).toContainText(money(200));
-    await expect(summary.locator('tbody tr')).toContainText(money(406.45));
-    await expect(summary).not.toContainText('Cooperativa Delta');
+    await expect(summary.locator('tbody tr')).toHaveCount(2);
+    const beta = summary.locator('tbody tr').filter({ hasText: 'Cooperativa Beta' });
+    await expect(beta).toContainText(money(200));
+    await expect(beta).toContainText(money(406.45));
+    await expect(summary.locator('tbody tr').first()).toContainText('Cooperativa Delta');
     await page.setViewportSize({ width: 320, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
-    await expect(exportedRows(page)).toHaveCount(1);
+    await expect(exportedRows(page)).toHaveCount(2);
     await expect(exportedRow(page, 'cooperative:1002:3025').locator('td[data-label="Projeção de produção"]')).toContainText(money(406.45));
     expect(await frame(page).locator('body').evaluate(node => node.ownerDocument.documentElement.scrollWidth <= node.ownerDocument.defaultView.innerWidth + 1)).toBe(true);
-    await captureScenarioDocument(page, frame(page), info.outputPath('management-projection-selected-320.png'));
+    await captureScenarioDocument(page, frame(page), info.outputPath('management-projection-filtered-320.png'));
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
 }

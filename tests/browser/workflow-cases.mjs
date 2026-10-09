@@ -29,7 +29,7 @@ function workflowFixture(dataset) {
 async function openGenerator(page, content, format = 'E-mail') {
   await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
   const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
-  await chooser.getByRole('radio', { name: content, exact: true }).check();
+  if (await chooser.getByRole('radio', { name: content, exact: true }).count()) throw new Error('A comunicação deve herdar o nível do dashboard, sem seleção interna de conteúdo.');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
   await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
@@ -124,16 +124,17 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await openGenerator(page, 'Cooperativas da seleção');
     const cooperatives = page.getByRole('dialog', { name: 'Compartilhar cenário das cooperativas', exact: true });
     await expect(cooperatives.getByRole('radio', { name: 'E-mail', exact: true })).toBeChecked();
-    await expect(select(cooperatives, 'Ordem das unidades')).toHaveValue('attainment-desc');
+    await expect(select(cooperatives, 'Ordem das unidades')).toHaveCount(0);
     await expect(frame(page).locator('tr[data-cooperative-id]')).toHaveCount(2);
     expect(await frame(page).locator('tr[data-cooperative-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-cooperative-id')))).toEqual(['cooperative:1002:3025', 'cooperative:1002:3017']);
     await expect(frame(page).locator('body')).toContainText('AGO/2026');
     await expect(frame(page).locator('body')).not.toContainText('Outra central');
     await cooperatives.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await select(page, 'Cooperativa').selectOption('1002:3017');
     await select(page, 'Ordenar análise').selectOption('production');
     await openGenerator(page, 'PAs da seleção', 'Imagem para WhatsApp');
-    await expect(select(share(page), 'Ordem das unidades')).toHaveValue('production');
+    await expect(select(share(page), 'Ordem das unidades')).toHaveCount(0);
     await expect(share(page).getByRole('radio', { name: 'WhatsApp e imagem', exact: true })).toBeChecked();
     await expect(share(page).getByRole('img', { name: 'Cenário dos PAs — parte 1 de 1', exact: true })).toBeVisible();
     await share(page).getByRole('radio', { name: 'E-mail', exact: true }).check();
@@ -141,10 +142,8 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(frame(page).locator('body')).not.toContainText('PA Beta zero');
     await expect(frame(page).locator('body')).not.toContainText('PA Nordeste zero');
     await share(page).getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
-    await page.getByRole('region', { name: 'PAs da cooperativa', exact: true }).getByRole('button', { name: 'Abrir PAs', exact: true }).click();
-    await page.getByRole('button', { name: 'Abrir cadência de Cooperativa Alfa', exact: true }).click();
     await select(page, 'PA').selectOption('1002:3017:0');
-    await openGenerator(page, 'Uma unidade');
+    await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
     const individual = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
     await expect(individual.getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');
     await expect(individual.getByText('Paula Teste', { exact: true })).toBeVisible();
@@ -225,35 +224,35 @@ export function registerWorkflowTests({ test, expect, setup }) {
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
 
-  test('workflow: selected units, editable message and order stay consistent across summary, email, caption and real PNG', async ({ page, context }, info) => {
+  test('workflow: visible PA filters, editable message and dashboard order stay consistent across summary, email, caption and real PNG', async ({ page, context }, info) => {
     await captureCopies(page);
-    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertPlanRow(workflowFixture(dataset), {
+    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertEntity(upsertPlanRow(workflowFixture(dataset), {
       entityId: 'pa:1002:3017:0', metric: 'VN', targets: Array(12).fill(100), annualTarget: 1200,
       actuals: [...Array(8).fill(225), null, null, null, null], cutoff: '2026-08-31',
-    }));
+    }), { kind: 'pa', central: '1002', cooperative: '3017', pa: '3', name: 'PA Sem produção informada', group: 'P2' }));
+    await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await august(page);
+    await select(page, 'Central').selectOption('1002');
     await select(page, 'Cooperativa').selectOption('1002:3017');
     await openGenerator(page, 'PAs da seleção', 'Painel resumido');
     const dialog = share(page);
     const summary = dialog.getByRole('region', { name: 'Prévia do painel resumido', exact: true });
     await expect(summary).toBeVisible();
-    await expect(select(dialog, 'Ordem das unidades')).toHaveValue('attainment-desc');
+    await expect(select(dialog, 'Ordem das unidades')).toHaveCount(0);
     // Higher attainment must lead even when another PA has more production in reais.
     await expect(summary.locator('tbody tr').first()).toContainText('PA Alfa zero');
     await expect(summary.locator('tbody tr').first()).toContainText('225%');
     await expect(summary.locator('tbody tr').nth(1)).toContainText('PA Próximo da meta');
-    await dialog.getByRole('radio', { name: 'Selecionar unidades', exact: true }).check();
-    const selection = dialog.getByRole('region', { name: 'Seleção de unidades', exact: true });
-    await selection.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
-    await selection.getByRole('checkbox', { name: 'Selecionar PA 0 · PA Alfa zero · Coop. 3017 · Central 1002', exact: true }).check();
-    await selection.getByRole('searchbox', { name: 'Buscar unidades para selecionar', exact: true }).fill('Próximo');
-    await selection.getByRole('button', { name: 'Selecionar unidades visíveis', exact: true }).click();
-    await selection.getByRole('searchbox', { name: 'Buscar unidades para selecionar', exact: true }).fill('negativo');
-    await selection.getByRole('button', { name: 'Selecionar unidades visíveis', exact: true }).click();
-    await selection.getByRole('searchbox', { name: 'Buscar unidades para selecionar', exact: true }).fill('');
-    await expect(selection.getByRole('checkbox', { checked: true })).toHaveCount(3);
-    await expect(selection.getByRole('checkbox', { name: 'Selecionar PA 3 · PA Sem produção informada · Coop. 3017 · Central 1002', exact: true })).not.toBeChecked();
-    await select(dialog, 'Ordem das unidades').selectOption('production');
+    await expect(dialog.getByRole('radio', { name: 'Selecionar unidades', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('region', { name: 'Seleção de unidades', exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await page.getByLabel('Grupo do PA').selectOption('P1');
+    await select(page, 'Ordenar análise').selectOption('production');
+    await expect(list(page).locator('tbody tr')).toHaveCount(3);
+    await expect(list(page)).not.toContainText('PA Sem produção informada');
+    await openGenerator(page, 'PAs da seleção', 'Painel resumido');
+    await expect(summary.locator('tbody tr')).toHaveCount(3);
+    await expect(summary.locator('tbody tr').first()).toContainText('PA Próximo da meta');
     await dialog.locator('summary').filter({ hasText: 'Editar mensagem' }).click();
     const subject = 'Plano <Equipe> & ação de agosto';
     const intro = 'Olá <b>equipe</b> & gestores. Vamos avaliar os resultados.';
