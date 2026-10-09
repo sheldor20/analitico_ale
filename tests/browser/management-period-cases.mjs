@@ -5,7 +5,8 @@ import { captureScenarioDocument } from './scenario-artifacts.mjs';
 const select = (root, name) => root.getByRole('combobox', { name, exact: true });
 const results = page => page.getByRole('region', { name: 'Lista de unidades', exact: true });
 const periods = page => page.getByRole('region', { name: 'Resultados por período', exact: true });
-const periodRow = (page, period, month) => periods(page).locator(`tr[data-period="${period}"][data-month="${month}"]`);
+const periodRow = (page, period, month) => periods(page).locator(`[data-period="${period}"][data-month="${month}"]`);
+const financial = (page, period, month, field) => periodRow(page, period, month).locator(`[data-field="${field}"]`);
 const frame = page => page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
 const share = page => page.getByRole('dialog', { name: 'Compartilhar cenário das cooperativas', exact: true });
 const projection = root => root.getByRole('checkbox', { name: 'Incluir projeção de produção', exact: true });
@@ -75,24 +76,27 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await select(page, 'Mês de referência').selectOption('7');
     await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
     const panel = periods(page);
-    for (const [name, count] of [['Resultados mensais', 12], ['Resultados trimestrais', 4], ['Resultados semestrais', 2], ['Resultado anual', 1]]) {
-      await expect(panel.getByRole('table', { name, exact: true }).locator('tbody tr')).toHaveCount(count);
+    await expect(panel.getByRole('table', { name: 'Resultados mensais', exact: true }).getByRole('columnheader')).toHaveText(['Mês', 'Meta', 'Realizado', 'Atingimento', 'GAP / Superação', 'Projeção']);
+    for (const [kind, count] of [['month', 12], ['quarter', 4], ['semester', 2], ['annual', 1]]) {
+      await expect(panel.locator(`[data-period="${kind}"][data-month]`)).toHaveCount(count);
     }
+    const displayOrder = await panel.locator('[data-period][data-month]').evaluateAll(nodes => nodes.map(node => node.dataset.period));
+    expect(displayOrder).toEqual(['annual', ...Array(12).fill('month'), ...Array(4).fill('quarter'), ...Array(2).fill('semester')]);
     for (const [month, name, actual, band] of [[0, 'Janeiro', 690, 'red'], [1, 'Fevereiro', 700, 'yellow'], [2, 'Março', 1000, 'blue']]) {
       const row = periodRow(page, 'month', month);
       await expect(row.getByRole('rowheader')).toContainText(name);
-      await expect(row.locator('td').nth(0)).toContainText(money(1000));
-      await expect(row.locator('td').nth(1)).toContainText(money(actual));
+      await expect(row.locator('[data-field="target"]')).toContainText(money(1000));
+      await expect(row.locator('[data-field="actual"]')).toContainText(money(actual));
       await expect(row.locator('[data-attainment]')).toHaveAttribute('data-attainment', band);
     }
     const missing = periodRow(page, 'month', 8);
     await expect(missing.getByRole('rowheader')).toContainText('Setembro');
-    await expect(missing.locator('td').nth(1)).not.toContainText('0,00');
+    await expect(missing.locator('[data-field="actual"]')).not.toContainText('0,00');
     await expect(missing.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
     for (const [kind, month, target, actual] of [['quarter', 2, 3000, 2390], ['semester', 5, 6000, 4390], ['annual', 11, 12000, 6090]]) {
       const row = periodRow(page, kind, month);
-      await expect(row.locator('td').nth(0)).toContainText(money(target));
-      await expect(row.locator('td').nth(1)).toContainText(money(actual));
+      await expect(row.locator('[data-field="target"]')).toContainText(money(target));
+      await expect(row.locator('[data-field="actual"]')).toContainText(money(actual));
     }
     await expect(periodRow(page, 'month', 7)).toContainText('Parcial');
     await expect(panel).not.toContainText('PA Alfa zero');
@@ -118,16 +122,16 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await select(page, 'Central').selectOption('2007');
     await select(page, 'Cooperativa').selectOption('2007:3017');
-    await expect(periodRow(page, 'quarter', 2).locator('td').nth(1)).toContainText(money(27000));
-    await expect(periodRow(page, 'quarter', 2).locator('td').nth(1)).not.toContainText(money(2390));
+    await expect(financial(page, 'quarter', 2, 'actual')).toContainText(money(27000));
+    await expect(financial(page, 'quarter', 2, 'actual')).not.toContainText(money(2390));
     await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await select(page, 'PA').selectOption('2007:3017:0');
-    await expect(periodRow(page, 'month', 0).locator('td').nth(1)).toContainText(money(4000));
+    await expect(financial(page, 'month', 0, 'actual')).toContainText(money(4000));
     await select(page, 'Central').selectOption('1002');
     await select(page, 'Cooperativa').selectOption('1002:3017');
     await select(page, 'PA').selectOption('1002:3017:0');
-    await expect(periodRow(page, 'month', 0).locator('td').nth(1)).toContainText(money(10));
-    await expect(periodRow(page, 'annual', 11).locator('td').nth(1)).toContainText(money(360));
+    await expect(financial(page, 'month', 0, 'actual')).toContainText(money(10));
+    await expect(financial(page, 'annual', 11, 'actual')).toContainText(money(360));
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
 
@@ -140,7 +144,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await select(page, 'Mês de referência').selectOption('7');
     await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
     const panel = periods(page), order = select(panel, 'Ordenar períodos');
-    const groupRows = kind => panel.locator(`tr[data-period="${kind}"]`);
+    const groupRows = kind => panel.locator(`[data-period="${kind}"][data-month]`);
     const months = kind => groupRows(kind).evaluateAll(rows => rows.map(row => Number(row.dataset.month)));
     await expect(order).toHaveValue('chronological');
     expect(await months('month')).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
@@ -161,23 +165,24 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
       expect(await months('annual')).toEqual([11]);
       await expect(periodRow(page, 'month', 8).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
     }
-    await expect(periodRow(page, 'month', 7).locator('td').nth(1)).toContainText(money(250));
-    await expect(periodRow(page, 'month', 7).locator('td').nth(3)).toContainText(money(525));
-    await expect(periodRow(page, 'annual', 11).locator('td').nth(1)).toContainText(money(915));
+    await expect(financial(page, 'month', 7, 'actual')).toContainText(money(250));
+    await expect(financial(page, 'month', 7, 'projected')).toContainText(money(525));
+    await expect(financial(page, 'annual', 11, 'actual')).toContainText(money(915));
     await order.selectOption('attainment');
     for (const label of ['resultados mensais', 'resultados trimestrais', 'resultados semestrais', 'resultado anual']) {
       const toggle = panel.getByRole('button', { name: `Recolher ${label}`, exact: true });
-      await toggle.click();
+      await toggle.focus();
+      await toggle.press('Enter');
       await expect(panel.getByRole('button', { name: `Expandir ${label}`, exact: true })).toHaveAttribute('aria-expanded', 'false');
     }
-    for (const table of await panel.locator('table').all()) await expect(table).toBeHidden();
+    for (const period of await panel.locator('[data-period][data-month]').all()) await expect(period).toBeHidden();
     await panel.getByRole('button', { name: 'Recolher resultados por período', exact: true }).click();
     await expect(order).toBeHidden();
     await expect(panel.getByRole('button', { name: 'Expandir resultados por período', exact: true })).toHaveAttribute('aria-expanded', 'false');
     await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
     await expect(panel).toBeFocused();
     await expect(order).toHaveValue('attainment');
-    for (const table of await panel.locator('table').all()) await expect(table).toBeVisible();
+    for (const period of await panel.locator('[data-period][data-month]').all()) await expect(period).toBeVisible();
     expect(await months('month')).toEqual([4, 6, 1, 0, 3, 7, 2, 5, ...unknown]);
     await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
     await expect(select(page, 'Carteira')).toHaveValue('AR');
@@ -185,10 +190,10 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await panel.screenshot({ path: info.outputPath('compact-periods-desktop.png') });
     await page.setViewportSize({ width: 320, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    const moneyLines = await panel.locator('tbody td').evaluateAll(cells => {
+    const moneyLines = await panel.locator('[data-field]').evaluateAll(cells => {
       const values = cells.flatMap(cell => {
         const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT), nodes = [];
-        while (walker.nextNode()) if (walker.currentNode.textContent.trim().startsWith('R$')) nodes.push(walker.currentNode);
+        while (walker.nextNode()) if (/^(?:[-−]\s*)?R\$/.test(walker.currentNode.textContent.trim())) nodes.push(walker.currentNode);
         return nodes;
       });
       return { count: values.length, wrapped: values.filter(node => { const range = document.createRange(); range.selectNodeContents(node); return range.getClientRects().length !== 1; }).length };
@@ -200,6 +205,84 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     expect(await months('quarter')).toEqual([2, 5, 8, 11]);
     expect(await months('semester')).toEqual([5, 11]);
     expect(writes).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
+  });
+
+  test('reference periods: annual summary and period cards retain exact large, negative and unknown amounts across desktop and mobile', async ({ page }, info) => {
+    const { errors, writes, relationshipWrites } = await setup(page, dataset => upsertPlanRow(dataset, {
+      entityId: 'cooperative:1002:3017', metric: 'AR', targets: Array(12).fill(9279000), annualTarget: 111348000,
+      actuals: [12345000, 6495300, 6495299.99, -12945213.17, 0, 0, 186000000, 1, null, null, null, null], cutoff: '2026-08-14',
+    }));
+    await select(page, 'Central').selectOption('1002');
+    await select(page, 'Cooperativa').selectOption('1002:3017');
+    await select(page, 'Carteira').selectOption('AR');
+    await select(page, 'Período').selectOption('month');
+    await select(page, 'Mês de referência').selectOption('7');
+    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+    const panel = periods(page), annual = periodRow(page, 'annual', 11);
+    await expect(panel.locator('[data-period][data-month]')).toHaveCount(19);
+    await expect(annual.locator('[data-field]')).toHaveCount(4);
+    await expect(financial(page, 'annual', 11, 'target')).toContainText(money(111348000));
+    await expect(financial(page, 'annual', 11, 'actual')).toContainText(money(198390387.82));
+    await expect(financial(page, 'annual', 11, 'variance')).toContainText(money(87042387.82));
+    await expect(financial(page, 'annual', 11, 'variance')).toContainText('Superação');
+    await expect(financial(page, 'quarter', 5, 'actual')).toContainText(money(-12945213.17));
+    await expect(periodRow(page, 'quarter', 5).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'red');
+    await expect(financial(page, 'quarter', 5, 'variance')).toContainText('GAP');
+    await expect(financial(page, 'quarter', 8, 'actual')).toContainText(money(186000001));
+    await expect(periodRow(page, 'quarter', 8).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'blue');
+    await expect(periodRow(page, 'month', 1).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'yellow');
+    await expect(periodRow(page, 'month', 2).locator('[data-attainment]')).toHaveAttribute('data-attainment', 'red');
+    const future = periodRow(page, 'quarter', 11);
+    await expect(future).toHaveAttribute('data-phase', 'future');
+    await expect(future.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
+    await expect(future.locator('[data-field="actual"]')).toContainText('Não disponível');
+    await expect(future.locator('[data-field="actual"]')).not.toContainText('0,00');
+    for (const width of [1440, 1280, 960, 390, 320]) {
+      await page.setViewportSize({ width, height: width > 960 ? 1100 : 844 });
+      await page.evaluate(() => document.fonts.ready);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `page overflow at ${width}`).toBe(true);
+      const geometry = await panel.locator('[data-field]').evaluateAll(fields => fields.flatMap(field => {
+        const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT), values = [];
+        const container = field.closest('td, dd') || field;
+        const bounds = container.getBoundingClientRect(), style = getComputedStyle(container);
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (!/^(?:[-−]\s*)?R\$/.test(node.textContent.trim())) continue;
+          const range = document.createRange(); range.selectNodeContents(node);
+          const lines = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
+          const box = range.getBoundingClientRect();
+          values.push({ text: node.textContent, lines: lines.length, left: box.left, right: box.right,
+            availableLeft: bounds.left + parseFloat(style.paddingLeft), availableRight: bounds.right - parseFloat(style.paddingRight) });
+        }
+        return values;
+      }));
+      expect(geometry.length).toBeGreaterThan(40);
+      for (const amount of geometry) {
+        expect(amount.lines, `${width}: ${amount.text}`).toBe(1);
+        expect(amount.left, `${width}: left ${amount.text}`).toBeGreaterThanOrEqual(amount.availableLeft - 1);
+        expect(amount.right, `${width}: right ${amount.text}`).toBeLessThanOrEqual(amount.availableRight + 1);
+      }
+      // Monthly data may scroll horizontally, while the summary and cards must fit the viewport.
+      const cardBounds = await panel.locator('article[data-period][data-month]').evaluateAll(cards => cards.map(card => {
+        const box = card.getBoundingClientRect(); return { left: box.left, right: box.right, width: box.width, scroll: card.scrollWidth, client: card.clientWidth };
+      }));
+      expect(cardBounds).toHaveLength(7);
+      for (const bounds of cardBounds) {
+        expect(bounds.left).toBeGreaterThanOrEqual(0);expect(bounds.right).toBeLessThanOrEqual(width + 1);
+        expect(bounds.scroll).toBeLessThanOrEqual(bounds.client + 1);
+      }
+      if ([1440, 390, 320].includes(width)) await panel.screenshot({ path: info.outputPath(`reference-periods-large-${width}.png`), style: '.sidebar, .skip-link { visibility: hidden !important; }' });
+    }
+    // Keyboard activation keeps the annual data and filter state intact when reopened.
+    const toggle = panel.getByRole('button', { name: 'Recolher resultado anual', exact: true });
+    await toggle.focus();await toggle.press('Space');
+    await expect(annual).toBeHidden();
+    await expect(panel.getByRole('button', { name: 'Expandir resultado anual', exact: true })).toBeFocused();
+    await panel.getByRole('button', { name: 'Expandir resultado anual', exact: true }).press('Enter');
+    await expect(annual).toBeVisible();
+    await expect(financial(page, 'annual', 11, 'actual')).toContainText(money(198390387.82));
+    await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
+    expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
   });
 
   test('management communication: AR quarter filters, order and selected units remain exact while projection is optional in every format', async ({ page }, info) => {
