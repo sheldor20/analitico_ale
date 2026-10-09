@@ -210,11 +210,13 @@
 .workspace-content .overview-metrics {min-width:0;margin:0 0 16px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);overflow:hidden}
 .overview-block-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px}
 .overview-block-heading h2 {font-size:16px;line-height:1.35;margin:0}
-.workspace-content .overview-metrics .kpi-grid {gap:0;margin:0;border-top:1px solid var(--line)}
-.workspace-content .overview-metrics .kpi {border:0;border-inline-end:1px solid var(--line);border-radius:0;padding:16px;min-height:132px}
-.workspace-content .overview-metrics .kpi[data-attainment] {border-top:0}
-.workspace-content .overview-metrics .kpi:last-child {border-inline-end:0}
-.workspace-content .overview-metrics .kpi .kpi-value {margin-top:10px}
+.workspace-content .overview-metrics .kpi-grid {gap:12px;margin:0;padding:0 12px 12px}
+.workspace-content .overview-metrics .kpi {border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px;min-height:132px;background:linear-gradient(135deg,var(--surface),var(--surface-subtle))}
+.workspace-content .overview-metrics .kpi[data-attainment] {border:1px solid var(--attainment-border);background:linear-gradient(135deg,var(--surface),var(--attainment-background))}
+.workspace-content .overview-metrics .kpi .kpi-heading {justify-content:flex-end;flex-direction:row-reverse;color:var(--ink);font-size:15px!important;font-weight:600}
+.workspace-content .overview-metrics .kpi .kpi-heading>span:last-child {display:flex;flex:0 0 22px;align-items:center;justify-content:center}
+.workspace-content .overview-metrics .kpi .kpi-heading svg {display:block;color:var(--green);width:20px;height:20px}
+.workspace-content .overview-metrics .kpi .kpi-value {margin-top:8px;color:var(--ink);letter-spacing:-.025em}
 .workspace-content .overview-metrics .kpi p {font-size:15px;line-height:1.45;margin-top:6px}
 .workspace-content .overview-metrics .metric-progress {margin-top:12px;height:4px;min-height:4px}
 .workspace-content .overview-units-heading {align-items:center;justify-content:space-between;padding:12px 16px;gap:10px 16px}
@@ -232,15 +234,11 @@
 .workspace-content .overview-units .entity-button strong {font-size:15px}
 .workspace-content .overview-units .pagination {padding:10px 16px;border-top:1px solid var(--line);font-size:12px}
 .overview-metrics [hidden],.overview-units [hidden] {display:none!important}
-@media(min-width:721px) and (max-width:1100px) {
-  .workspace-content .overview-metrics .kpi:nth-child(2) {border-inline-end:0}
-  .workspace-content .overview-metrics .kpi:nth-child(n+3) {border-top:1px solid var(--line)}
-}
 @media(max-width:720px) {
   .overview-block-heading {padding:8px 12px;gap:8px}
   .overview-block-heading h2 {font-size:15px}
-  .workspace-content .overview-metrics .kpi {border-inline-end:0;border-bottom:1px solid var(--line);min-height:0;padding:14px}
-  .workspace-content .overview-metrics .kpi:last-child {border-bottom:0}
+  .workspace-content .overview-metrics .kpi-grid {gap:8px;padding:0 10px 10px}
+  .workspace-content .overview-metrics .kpi {min-height:0;padding:14px}
   .workspace-content .overview-units-heading {padding:12px}
   .overview-block-actions {justify-content:space-between;width:100%}
   .workspace-content .overview-unit-controls {padding:12px}

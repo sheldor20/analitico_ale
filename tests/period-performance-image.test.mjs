@@ -39,7 +39,7 @@ function geometry(layout, context, width = 1200) {
       assert.ok(command.y + Math.ceil(command.size * 1.4) <= layout.height);
     }
   }
-  const rowBoxes = layout.commands.filter(command => command.type === 'rect' && command.x === 36 && ['#f0f7f4', '#ffffff'].includes(command.fill));
+  const rowBoxes = layout.commands.filter(command => command.type === 'rect' && command.role === 'period-row');
   for (const box of rowBoxes) {
     const inside = texts(layout).filter(command => command.y >= box.y && command.y < box.y + box.height);
     assert.ok(inside.every(command => command.y + Math.ceil(command.size * 1.4) <= box.y + box.height), 'row text must end before the next row starts');
@@ -56,9 +56,9 @@ test('period PNG keeps the three-line brand header, exact financial columns and 
   assert.ok(drawn.some(command => command.value.includes('Ordem: Cronológica')));
   const currencies = [1000, 700, 300].map(value => drawn.filter(command => command.value === amount(value)));
   assert.ok(currencies.every(commands => commands.length === 1));
-  assert.deepEqual(currencies.map(([command]) => command.x), [388, 638, 898]);
+  assert.deepEqual(currencies.map(([command]) => command.x), [256, 504, 928]);
   assert.equal(new Set(currencies.map(([command]) => command.y)).size, 1);
-  assert.ok(drawn.some(command => command.value === '70% da meta'));
+  assert.ok(drawn.some(command => command.value === '70%' && command.role === 'attainment'));
   assert.ok(drawn.some(command => command.value === 'Parcial'));
   assert.deepEqual(source, before);
   geometry(layout, measure);
@@ -69,17 +69,16 @@ test('all nineteen engine periods survive twelve-row parts in their supplied ord
     targets: Array(12).fill(1000), annualTarget: 12000, targetRule: 'registry', actuals: [690, 700, 1000, 500, 1000, 500, 1000, 700, null, null, null, null], cutoff: '2026-08-14' };
   const dataset = initializeRegistry({ ...createEmptyDataset(2026), rows: [production] });
   const model = buildPeriodPerformance({ dataset, filters: { source: 'base', metric: 'AR', level: 'cooperative', central: '1002' }, unitIds: ['cooperative:1002:3017'] });
-  const rows = model.groups.flatMap(group => group.rows), seen = [];
+  const rows = [...model.groups.find(group => group.period === 'annual').rows, ...model.groups.filter(group => group.period !== 'annual').flatMap(group => group.rows)], seen = [];
   for (let index = 0; index < 2; index++) {
     const slice = rows.slice(index * 12, (index + 1) * 12), measure = measurement();
     const source = part(slice, { index: index + 1, total: 2, from: index * 12 + 1, to: Math.min(rows.length, (index + 1) * 12) });
     const layout = periodPerformanceImageLayout(source, measure), drawn = texts(layout);
     assert.ok(layout.height < 3000);
-    const labels = drawn.filter(command => command.x === 52 && command.size === 23).map(command => command.value);
+    const labels = drawn.filter(command => command.role === 'period-label').map(command => command.value);
     assert.deepEqual(labels, slice.map(item => item.label)); seen.push(...labels);
     for (const item of slice) {
-      const label = drawn.find(command => command.x === 52 && command.size === 23 && command.value === item.label);
-      const actual = drawn.find(command => command.x === 638 && command.y === label.y);
+      const actual = drawn.find(command => command.rowId === item.id && command.role === 'amount-actual');
       assert.equal(actual.value, item.actual === null ? '—' : amount(item.actual));
     }
     geometry(layout, measure);
@@ -109,7 +108,7 @@ test('assumptions stay complete below the results without expanding the compact 
   geometry(layout, measure, 1440);
 });
 
-test('billions, negative adjustments and cents stay indivisible in both four and five-column exports', () => {
+test('billions, negative adjustments and cents stay indivisible in both five and six-column monthly exports', () => {
   const target = 927_900_000, actual = -12_945_213.17, projected = 1_234_567_890.12;
   const item = row(7, { target, actual, attainment: actual / target, projected, projectedAttainment: projected / target, variance: goalVariance(actual, target) });
   for (const showProjection of [false, true]) {
@@ -124,14 +123,92 @@ test('billions, negative adjustments and cents stay indivisible in both four and
   }
 });
 
+test('annual summary uses three primary cards plus one optional neutral projection without repeating the annual row', () => {
+  const annual = row(11, { id: 'annual:11', period: 'annual', label: 'Ano completo', target: 9279000, actual: 8391422.37,
+    attainment: 8391422.37 / 9279000, projected: 10321456.78, projectedAttainment: 10321456.78 / 9279000, variance: goalVariance(8391422.37, 9279000) });
+  for (const showProjection of [false, true]) {
+    const measure = measurement(), layout = periodPerformanceImageLayout(part([annual, row()], { showProjection }), measure), drawn = texts(layout);
+    assert.deepEqual(drawn.filter(command => command.role === 'section-title').map(command => command.value), ['Resumo anual', 'Resultados mensais']);
+    assert.equal(drawn.filter(command => command.role === 'period-label' && command.rowId === annual.id).length, 1);
+    const cards = layout.commands.filter(command => command.role === 'metric-card' && command.rowId === annual.id);
+    assert.equal(cards.length, showProjection ? 4 : 3);
+    assert.equal(new Set(cards.map(command => command.y)).size, 1);
+    assert.equal(new Set(cards.map(command => command.height)).size, 1);
+    const amounts = drawn.filter(command => command.rowId === annual.id && command.role?.startsWith('amount-'));
+    assert.deepEqual(amounts.map(command => command.value), [annual.target, annual.actual, annual.variance.value, ...(showProjection ? [annual.projected] : [])].map(amount));
+    assert.equal(new Set(amounts.map(command => command.y)).size, 1);
+    assert.equal(drawn.filter(command => command.rowId === annual.id && command.role === 'attainment').length, 1);
+    for (const card of cards) {
+      const inside = drawn.filter(command => command.rowId === annual.id && command.x > card.x && command.x < card.x + card.width && command.y >= card.y);
+      assert.ok(inside.every(command => command.y + Math.ceil(command.size * 1.4) <= card.y + card.height));
+    }
+    geometry(layout, measure, showProjection ? 1440 : 1200);
+  }
+});
+
+test('monthly attainment occupies a separate column and partial emphasis does not change the sign of financial values', () => {
+  const item = row(7, { actual: -25.5, attainment: -.0255, variance: goalVariance(-25.5, 1000) });
+  for (const showProjection of [false, true]) {
+    const measure = measurement(), layout = periodPerformanceImageLayout(part([item], { showProjection }), measure), drawn = texts(layout);
+    const header = layout.commands.find(command => command.role === 'monthly-header');
+    assert.equal(drawn.filter(command => command.y > header.y && command.y < header.y + header.height).length, showProjection ? 6 : 5);
+    assert.equal(drawn.find(command => command.role === 'amount-actual').x, showProjection ? 496 : 504);
+    const badge = layout.commands.find(command => command.role === 'attainment-badge');
+    assert.equal(badge.x, showProjection ? 744 : 752);
+    assert.equal(badge.fill, attainmentBand(item.attainment).background);
+    assert.ok(badge.x > drawn.find(command => command.role === 'amount-actual').x);
+    assert.equal(layout.commands.find(command => command.role === 'period-row').fill, '#edf8f5');
+    assert.equal(layout.commands.find(command => command.role === 'phase-badge').fill, '#dff5f0');
+    assert.equal(drawn.find(command => command.role === 'amount-actual').value, amount(-25.5));
+    assert.equal(drawn.find(command => command.role === 'amount-variance').value, amount(1025.5));
+    assert.ok(drawn.some(command => command.value === '− GAP'));
+    geometry(layout, measure, showProjection ? 1440 : 1200);
+  }
+});
+
+test('very large attained percentages expand annual and semester cards instead of escaping their surface', () => {
+  for (const period of ['annual', 'semester']) {
+    const item = row(11, { id: `${period}:11`, period, label: period === 'annual' ? 'Ano completo' : '2º semestre', target: 1, actual: 1488000000,
+      attainment: 1488000000, variance: goalVariance(1488000000, 1) });
+    const measure = measurement(), layout = periodPerformanceImageLayout(part([item]), measure);
+    const badge = layout.commands.find(command => command.role === 'attainment-badge');
+    const card = layout.commands.find(command => command.role === 'metric-card' && badge.x > command.x && badge.x < command.x + command.width);
+    assert.ok(badge.height > 34, 'large percentages must have enough lines');
+    assert.ok(badge.y + badge.height <= card.y + card.height, 'the badge stays fully inside the realized card');
+    geometry(layout, measure);
+  }
+});
+
+test('quarter cards pair horizontally while semesters use full-width metric rows and the monthly continuation is explicit', () => {
+  const quarters = Array.from({ length: 4 }, (_, index) => row(index * 3 + 2, { id: `quarter:${index * 3 + 2}`, period: 'quarter', label: `${index + 1}º trimestre` }));
+  const semesters = [row(5, { id: 'semester:5', period: 'semester', label: '1º semestre' }), row(11, { id: 'semester:11', period: 'semester', label: '2º semestre' })];
+  const rows = [row(11), ...quarters, ...semesters], measure = measurement();
+  const layout = periodPerformanceImageLayout(part(rows, { index: 2, total: 2, from: 13, to: 19, showProjection: true }), measure), drawn = texts(layout);
+  assert.deepEqual(drawn.filter(command => command.role === 'section-title').map(command => command.value), ['Resultados mensais · continuação', 'Visão trimestral', 'Visão semestral']);
+  assert.deepEqual(drawn.filter(command => command.role === 'period-label').map(command => command.rowId), rows.map(item => item.id));
+  const cards = layout.commands.filter(command => command.role === 'period-card');
+  assert.equal(cards.length, 4);
+  assert.equal(cards[0].y, cards[1].y); assert.equal(cards[2].y, cards[3].y);
+  assert.ok(cards[1].x > cards[0].x + cards[0].width);
+  assert.ok(cards[2].y > cards[0].y + cards[0].height);
+  for (const item of rows) {
+    for (const role of ['amount-target', 'amount-actual', 'amount-variance', 'amount-projection']) assert.equal(drawn.filter(command => command.rowId === item.id && command.role === role).length, 1);
+    assert.equal(drawn.filter(command => command.rowId === item.id && command.role === 'attainment').length, 1);
+  }
+  for (const item of semesters) {
+    const amounts = drawn.filter(command => command.rowId === item.id && command.role?.startsWith('amount-'));
+    assert.equal(new Set(amounts.map(command => command.y)).size, 1);
+  }
+  geometry(layout, measure, 1440);
+});
+
 test('only actual attainment controls colors; projections remain neutral and disappear completely when disabled', () => {
   const ratios = [null, -.1, .699999, .7, .999999, 1, 1.7];
   const rows = ratios.map((ratio, index) => row(index, { attainment: ratio, actual: ratio === null ? null : ratio * 1000, projected: 2000, projectedAttainment: 2 }));
   const measure = measurement(), layout = periodPerformanceImageLayout(part(rows, { showProjection: true }), measure), drawn = texts(layout);
   for (const [index, ratio] of ratios.entries()) {
-    const label = drawn.find(command => command.value === MONTHS[index] && command.x === 52);
-    const actual = drawn.find(command => command.x === 638 && command.y === label.y);
-    const projection = drawn.find(command => command.x === 1160 && command.y === label.y);
+    const actual = drawn.find(command => command.rowId === rows[index].id && command.role === 'amount-actual');
+    const projection = drawn.find(command => command.rowId === rows[index].id && command.role === 'amount-projection');
     assert.equal(actual.fill, attainmentBand(ratio).color);
     assert.equal(projection.fill, '#435c60');
     assert.notEqual(projection.fill, attainmentBand(2).color);
@@ -165,7 +242,7 @@ test('future, missing, incomplete and conflicting results retain their phase and
 test('long labels and literal markup wrap without clipping or interpreting content', () => {
   const label = '<script>alert(1)</script>' + 'ABCDEFGHIJ'.repeat(12);
   const measure = measurement(), layout = periodPerformanceImageLayout(part([row(7, { label })], { notes: ['<img src=x onerror=alert(1)>'] }), measure);
-  const drawn = texts(layout), renderedLabel = drawn.filter(command => command.x === 52 && command.size === 23).map(command => command.value).join('');
+  const drawn = texts(layout), renderedLabel = drawn.filter(command => command.role === 'period-label').map(command => command.value).join('');
   assert.equal(renderedLabel, label);
   assert.ok(drawn.some(command => command.value === '<img src=x onerror=alert(1)>'));
   assert.ok(!drawn.some(command => command.value.includes('…')));

@@ -62,9 +62,12 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await recordCopies(page);
     const { errors, writes, relationshipWrites, contactImports, contactReads } = await setup(page, managementFixture);
     await chooseCohort(page);
-    const sourceIds = await panel(page).locator('tr[data-period]').evaluateAll(nodes => nodes.map(node => `${node.dataset.period}:${node.dataset.month}`));
+    const sourceIds = await panel(page).locator('[data-period][data-month]').evaluateAll(nodes => nodes.map(node => `${node.dataset.period}:${node.dataset.month}`));
     expect(sourceIds).toHaveLength(19);
-    expect(sourceIds.slice(0, 12)).toEqual([2, 4, 6, 1, 7, 0, 3, 5, 8, 9, 10, 11].map(month => `month:${month}`));
+    expect(sourceIds).toEqual([
+      'annual:11', ...[2, 4, 6, 1, 7, 0, 3, 5, 8, 9, 10, 11].map(month => `month:${month}`),
+      'quarter:2', 'quarter:5', 'quarter:8', 'quarter:11', 'semester:5', 'semester:11',
+    ]);
     await panel(page).getByRole('button', { name: 'Recolher resultados mensais', exact: true }).click();
     await panel(page).getByRole('button', { name: 'Recolher resultado anual', exact: true }).click();
     await panel(page).getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
@@ -73,17 +76,30 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await expect(projection(dialog)).not.toBeChecked();
     await expect(rows(page)).toHaveCount(19);
     expect(await rows(page).evaluateAll(nodes => nodes.map(node => node.dataset.periodShareId))).toEqual(sourceIds);
+    expect(await frame(page).locator('[data-period-share-group]').evaluateAll(nodes => nodes.map(node => node.dataset.periodShareGroup))).toEqual(['annual', 'month', 'quarter', 'semester']);
+    await expect(frame(page).locator('[data-period-share-group="month"] thead th')).toHaveText(['Período', 'Meta', 'Realizado', 'Atingimento', 'GAP ou superação']);
+    for (const [month, band] of [[0, 'red'], [1, 'yellow'], [2, 'blue']]) {
+      await expect(row(page, `month:${month}`).locator('td[data-label="Atingimento"] [data-attainment-band]')).toHaveAttribute('data-attainment-band', band);
+      await expect(row(page, `month:${month}`).locator('td[data-label="Realizado"] [data-attainment-band]')).toHaveCount(0);
+    }
+    await expect(row(page, 'annual:11').locator('td[data-label="Realizado"] [data-attainment-band]')).toHaveAttribute('data-attainment-band', 'red');
     await expect(frame(page).locator('[data-communication-header]')).toContainText('Gestão comercial · Arrecadação');
     await expect(frame(page).locator('[data-communication-header]')).toContainText('Central Bahia teste');
     await expect(frame(page).locator('[data-communication-context]')).toContainText('Cooperativa Alfa');
     for (const excluded of ['Cooperativa Beta', 'Outra central', 'PA Alfa zero']) await expect(frame(page).locator('body')).not.toContainText(excluded);
     await expect(frame(page).getByRole('columnheader', { name: 'Projeção de produção', exact: true })).toHaveCount(0);
-    for (const [id, target, actual] of [['month:0', 1000, 690], ['quarter:2', 3000, 2390], ['semester:5', 6000, 4390], ['annual:11', 12000, 6090]]) {
+    const periodAmounts = [
+      ['annual:11', 12000, 6090],
+      ...[690, 700, 1000, 500, 1000, 500, 1000, 700, null, null, null, null].map((actual, month) => [`month:${month}`, 1000, actual]),
+      ...[2390, 2000, 1700, null].map((actual, index) => [`quarter:${index * 3 + 2}`, 3000, actual]),
+      ['semester:5', 6000, 4390], ['semester:11', 6000, 1700],
+    ];
+    for (const [id, target, actual] of periodAmounts) {
       await expect(row(page, id).locator('td[data-label="Meta"]')).toContainText(money(target));
-      await expect(row(page, id).locator('td[data-label="Realizado / atingimento"]')).toContainText(money(actual));
+      await expect(row(page, id).locator('td[data-label="Realizado"]')).toContainText(actual == null ? '—' : money(actual));
     }
-    await expect(row(page, 'month:8').locator('td[data-label="Realizado / atingimento"]')).toContainText('—');
-    await expect(row(page, 'month:8').locator('td[data-label="Realizado / atingimento"]')).not.toContainText('0,00');
+    await expect(row(page, 'month:8').locator('td[data-label="Realizado"]')).toContainText('—');
+    await expect(row(page, 'month:8').locator('td[data-label="Realizado"]')).not.toContainText('0,00');
     const savedContact = dialog.getByRole('group', { name: 'Responsáveis da unidade', exact: true }).getByRole('checkbox', { name: /Ana Teste/ });
     await expect(savedContact).not.toBeChecked();
     await expect(dialog.getByRole('textbox', { name: 'Destinatários do e-mail', exact: true })).toHaveValue('');
@@ -120,20 +136,24 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     const text = await page.evaluate(() => window.__periodCopies.text.at(-1));
     expect(text).toContain('Realizado: R$');expect(text).toContain('6.090,00');expect(text).not.toContain('Projeção de produção:');
+    const partLabels = [
+      ['Ano completo', 'Março', 'Maio', 'Julho', 'Fevereiro', 'Agosto', 'Janeiro', 'Abril', 'Junho', 'Setembro', 'Outubro', 'Novembro'],
+      ['Dezembro', '1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre', '1º semestre', '2º semestre'],
+    ];
+    const labels = partLabels.flat();
     for (const index of [1, 2]) {
       const image = dialog.getByRole('img', { name: `Cenário por período — parte ${index} de 2`, exact: true });
       await expect.poll(() => image.evaluate(node => node.naturalWidth)).toBe(1200);
       await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__periodCopies.png.length)).toBe(index);
       const drawn = await page.evaluate(() => window.__periodCopies.drawings.at(-1));
-      if (index === 1) expect(drawn.filter(value => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(value))).toEqual(['Março', 'Maio', 'Julho', 'Fevereiro', 'Agosto', 'Janeiro', 'Abril', 'Junho', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']);
-      else {
-        expect(drawn.filter(value => /^(?:[1-4]º trimestre|[12]º semestre|Ano completo)$/.test(value))).toEqual(['1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre', '1º semestre', '2º semestre', 'Ano completo']);
+      expect(drawn.filter(value => labels.includes(value))).toEqual(partLabels[index - 1]);
+      if (index === 1) {
         expect(drawn).toContain('R$ 6.090,00');expect(drawn).toContain('R$ 12.000,00');
-        const pngDownload = page.waitForEvent('download');
-        await dialog.getByRole('button', { name: 'Baixar imagem desta parte', exact: true }).click();
-        await (await pngDownload).saveAs(info.outputPath('period-share-all-part-2.png'));
       }
+      const pngDownload = page.waitForEvent('download');
+      await dialog.getByRole('button', { name: 'Baixar imagem desta parte', exact: true }).click();
+      await (await pngDownload).saveAs(info.outputPath(`period-share-all-part-${index}.png`));
       if (index === 1) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
     expect(await page.evaluate(() => window.__periodCopies.png.map(item => item.magic))).toEqual([pngMagic, pngMagic]);
@@ -155,9 +175,12 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await projection(dialog).check();
     await expect(rows(page)).toHaveCount(4);
     expect(await rows(page).evaluateAll(nodes => nodes.map(node => node.dataset.periodShareId))).toEqual(['quarter:2', 'quarter:5', 'quarter:8', 'quarter:11']);
-    await expect(row(page, 'quarter:8').locator('td[data-label="Realizado / atingimento"]')).toContainText(money(1700));
+    await expect(row(page, 'quarter:8').locator('td[data-label="Realizado"]')).toContainText(money(1700));
     await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"]')).toContainText(money(3454.84));
+    await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"]')).toContainText('115,2% da meta');
+    await expect(row(page, 'quarter:8').locator('td[data-label="Projeção de produção"] [data-attainment-band]')).toHaveCount(0);
     await expect(row(page, 'quarter:11').locator('td[data-label="Projeção de produção"]')).toContainText('—');
+    await expect(row(page, 'quarter:11').locator('td[data-label="Projeção de produção"]')).toContainText('Sem avaliação');
     const recipients = dialog.getByRole('textbox', { name: 'Destinatários do e-mail', exact: true });
     await recipients.fill('endereco-invalido');
     await expect(dialog.getByRole('button', { name: 'Copiar painel', exact: true })).toBeDisabled();
@@ -199,7 +222,7 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await expect.poll(() => page.evaluate(() => window.__periodCopies.drawings.at(-1)?.includes('Ano completo'))).toBe(true);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(rows(page)).toHaveCount(1);
-    await expect(row(page, 'annual:11').locator('td[data-label="Realizado / atingimento"]')).toContainText(money(6090));
+    await expect(row(page, 'annual:11').locator('td[data-label="Realizado"]')).toContainText(money(6090));
     await expect(row(page, 'annual:11').locator('td[data-label="Projeção de produção"]')).toContainText(money(9775.03));
     await projection(dialog).uncheck();
     await expect(frame(page).locator('td[data-label="Projeção de produção"]')).toHaveCount(0);
