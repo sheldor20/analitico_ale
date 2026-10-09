@@ -51,18 +51,16 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
     {models.map(model => <section className={styles.portfolio} key={model.metric} aria-label={`Carteira ${model.label}`} data-portfolio={model.metric}>
       <header className={styles.heading}><div><h2>{model.label}</h2><p>{model.periodLabel} · {model.count} {model.level === 'central' ? model.count === 1 ? 'central' : 'centrais' : model.level === 'pa' ? model.count === 1 ? 'PA' : 'PAs' : model.count === 1 ? 'cooperativa' : 'cooperativas'}</p><p className={styles.cutoff}>{model.cutoff ? model.cutoffMin && model.cutoffMin !== model.cutoff ? `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}` : `Corte: ${dateLabel(model.cutoff)}` : 'Sem data de atualização'} · {model.phaseLabel}</p></div><div className={styles.actions}><button type="button" className="button secondary" disabled={!model.count} onClick={() => onShare(model.metric)}><Share2 size={16} aria-hidden="true" />Compartilhar {model.label}</button><button type="button" className="button quiet" disabled={!model.count} onClick={() => onExport(model.metric)}><Download size={16} aria-hidden="true" />Exportar {model.label}</button></div></header>
       <Headline model={model} />
-      {model.count ? <div className={styles.tableScroll}><table aria-label={`Unidades de ${model.label}`}>
-        <thead><tr><th scope="col">Unidade</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th><th scope="col">Ações</th></tr></thead>
-        <tbody>{model.rows.map((row, index) => {
+      {model.count ? <div className={styles.tableScroll}><table role="table" aria-label={`Unidades de ${model.label}`}>
+        <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Unidade</th><th role="columnheader" scope="col">Meta</th><th role="columnheader" scope="col">Realizado</th><th role="columnheader" scope="col">GAP / Superação</th><th role="columnheader" scope="col">Ações</th></tr></thead>
+        <tbody role="rowgroup">{model.rows.map((row, index) => {
           const entity = model.units[index], variance = goalVariance(row.actual, row.target, row.gap != null && !row.annualConflict);
-          return <tr key={row.key} data-unit-id={entity.id} data-metric={model.metric}>
-            <th scope="row"><button className={styles.unitButton} type="button" onClick={() => onSelect(row)}>{entity.kind === 'central' ? `Central ${entity.central}` : entity.kind === 'pa' ? `PA ${entity.pa}` : `Cooperativa ${entity.cooperative}`} · {row.name}</button><small>{entity.kind !== 'central' ? `Central ${entity.central}${entity.kind === 'pa' ? ` · Cooperativa ${entity.cooperative}` : ''} · ` : ''}{row.status}</small></th>
-            <td className={styles.numeric} data-field="target"><Money value={row.target} /></td>
-            <td className={styles.numeric} data-field="actual"><Money value={row.actual} /></td>
-            <td className={styles.attainmentCell}><Badge value={row.annualConflict ? null : row.attainment} /></td>
-            <td className={styles.numeric} data-field="variance"><Balance value={variance} /></td>
-            <td className={styles.numeric} data-field="projected"><Money value={row.projected} /></td>
-            <td><div className={styles.rowActions}><button type="button" className="button quiet" onClick={() => onSelect(row)}>Detalhar</button>{model.level !== 'pa' && <button type="button" className="button quiet" onClick={() => onDrill(row)}>{model.level === 'central' ? 'Ver cooperativas' : 'Ver PAs'}</button>}</div></td>
+          return <tr role="row" key={row.key} data-unit-id={entity.id} data-metric={model.metric}>
+            <th role="rowheader" scope="row"><button className={styles.unitButton} type="button" onClick={() => onSelect(row)}>{entity.kind === 'central' ? `Central ${entity.central}` : entity.kind === 'pa' ? `PA ${entity.pa}` : `Cooperativa ${entity.cooperative}`} · {row.name}</button><small>{entity.kind !== 'central' ? `Central ${entity.central}${entity.kind === 'pa' ? ` · Cooperativa ${entity.cooperative}` : ''} · ` : ''}{row.status}</small></th>
+            <td role="cell" className={styles.numeric} data-label="Meta"><span data-field="target"><Money value={row.target} /></span></td>
+            <td role="cell" className={styles.numeric} data-label="Realizado"><div className={styles.resultStack}><span data-field="actual"><Money value={row.actual} /></span><Badge value={row.annualConflict ? null : row.attainment} /><div className={styles.projection}><span>Projeção · estimativa</span><span data-field="projected"><Money value={row.projected} /></span></div></div></td>
+            <td role="cell" className={styles.numeric} data-label="GAP / Superação"><span data-field="variance"><Balance value={variance} /></span></td>
+            <td role="cell" className={styles.actionCell} data-label="Ações"><div className={styles.rowActions}><button type="button" className="button quiet" onClick={() => onSelect(row)}>Detalhar</button>{model.level !== 'pa' && <button type="button" className="button quiet" onClick={() => onDrill(row)}>{model.level === 'central' ? 'Ver cooperativas' : 'Ver PAs'}</button>}</div></td>
           </tr>;
         })}</tbody>
       </table></div> : <p className={styles.empty}>Nenhuma unidade de {model.label} no recorte atual. Ajuste os filtros para continuar.</p>}

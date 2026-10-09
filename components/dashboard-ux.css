@@ -251,3 +251,81 @@
 .overview-period-shortcut { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .combined-controls { padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
 .export-portfolio { display: grid; gap: 6px; margin-bottom: 16px; max-width: 320px; }
+
+/* Results fit the available panel width; optional indicators use a second row. */
+.unit-results { container: unit-results / inline-size; min-width: 0; }
+.unit-select-all { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); min-height: 32px; cursor: pointer; }
+.workspace-content .unit-select-all .row-selector { margin-right: 0; }
+.workspace-content .unit-results-table { width: 100%; min-width: 0; white-space: normal; }
+.workspace-content .unit-results-table > thead > tr > th,
+.workspace-content .unit-results-table > tbody > tr > td { padding: 12px 10px; vertical-align: middle; }
+.workspace-content .unit-results-table > thead > tr > th { font-size: 13px; white-space: normal; }
+.workspace-content .unit-results-table > thead > tr > th:first-child,
+.workspace-content .unit-results-table > tbody > tr > td:first-child { padding-left: 16px; }
+.workspace-content .unit-results-table > thead > tr > th:last-child,
+.workspace-content .unit-results-table > tbody > tr > td:last-child { padding-right: 16px; }
+.unit-results-table .unit-identity { width: 28%; }
+.unit-results-table .entity-cell { min-width: 0; gap: 8px; }
+.unit-results-table .entity-cell .row-selector { margin-right: 0; }
+.unit-results-table .entity-button { max-width: none; }
+.workspace-content .unit-results-table .entity-button strong { font-size: 15px !important; line-height: 1.35; overflow-wrap: anywhere; }
+.unit-results-table .entity-button small { white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
+.unit-status { padding-left: 26px; margin-top: 6px; }
+.unit-results-table .unit-status .pill { font-size: 12px !important; padding: 3px 6px; white-space: normal; }
+.workspace-content .unit-results-table .unit-metric { font-size: 15px; }
+.unit-money { display: inline-block; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.unit-field-label { display: none; }
+.unit-actual > .unit-money { font-weight: 700; }
+.unit-actual .attainment { margin-top: 5px; color: var(--attainment-color); font-size: 13px; font-weight: 600; }
+.unit-attainment-note { font-weight: 400; }
+.unit-actual .mini-progress { width: 100%; max-width: 90px; margin: 4px 0 0 auto; }
+.unit-results-table .unit-actions-cell { width: 160px; }
+.unit-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: wrap; }
+.workspace-content .unit-row-actions .button { padding: 6px 8px; min-height: 36px; font-size: 13px; white-space: normal; text-align: left; }
+.unit-row-actions .icon-button { width: 36px; height: 36px; flex: 0 0 36px; }
+.unit-row-actions [aria-expanded="true"] svg { transform: rotate(180deg); }
+.workspace-content .unit-results-table .cell-note { font-size: 12px; white-space: normal; }
+.unit-indicators-row > td { background: var(--surface-subtle); }
+.unit-indicators { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px 20px; margin: 0; }
+.unit-indicators > div { min-width: 0; }
+.unit-indicators dt { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+.unit-indicators dd { margin: 0; color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+.unit-indicators small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 3px; }
+.unit-results-table > tbody > .expanded-unit .table-scroll { contain: inline-size; }
+
+@container unit-results (max-width: 1050px) {
+  .workspace-content .unit-results-table,
+  .unit-results-table > tbody { display: block; }
+  .unit-results-table > thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .workspace-content .unit-results-table > thead > tr > th { position: static; }
+  .unit-results-table > tbody > .unit-result-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+  .workspace-content .unit-results-table > tbody > .unit-result-row > td { display: block; min-width: 0; width: auto; padding: 12px 16px; border: 0; }
+  .unit-result-row > .unit-identity,
+  .unit-result-row > .unit-actions-cell { grid-column: 1 / -1; }
+  .unit-results-table .unit-identity { display: flex !important; align-items: center; justify-content: space-between; gap: 12px; }
+  .unit-results-table .entity-cell { flex: 1; }
+  .unit-status { padding: 0; margin: 0; max-width: 35%; }
+  .unit-result-row .unit-field-label { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-bottom: 6px; white-space: normal; }
+  .unit-result-row .unit-row-actions { justify-content: flex-start; }
+  .unit-results-table > tbody > .unit-indicators-row,
+  .unit-results-table > tbody > .expanded-unit { display: block; }
+  .workspace-content .unit-results-table > tbody > .unit-indicators-row > td,
+  .workspace-content .unit-results-table > tbody > .expanded-unit > td { display: block; width: 100%; }
+}
+
+@container unit-results (max-width: 600px) {
+  .unit-results-table > tbody > .unit-result-row { grid-template-columns: minmax(0, 1fr); }
+  .workspace-content .unit-results-table > tbody > .unit-result-row > td { padding: 10px 12px; }
+  .unit-results-table .unit-identity { flex-wrap: wrap; gap: 6px; }
+  .unit-results-table .entity-cell { flex-basis: 100%; }
+  .unit-status { padding-left: 26px; max-width: none; }
+  .workspace-content .unit-results-table > tbody > .unit-result-row > .unit-metric { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 10px; font-size: 16px; }
+  .unit-result-row .unit-field-label { margin: 0; text-align: left; }
+  .unit-row-actions { gap: 6px; }
+  .unit-row-actions .icon-button { width: 42px; height: 42px; flex-basis: 42px; }
+  .workspace-content .unit-row-actions .button { min-height: 42px; }
+  .unit-indicators { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .unit-indicators > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
+  .unit-indicators dd { text-align: right; font-size: 16px; }
+  .unit-indicators dd small { max-width: 190px; }
+}
