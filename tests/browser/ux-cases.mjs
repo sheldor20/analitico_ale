@@ -190,9 +190,9 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   expect(listBox.y-resultBox.y-resultBox.height).toBeLessThan(100);
   expect(listBox.y).toBeLessThan((await page.getByRole('region',{name:'Prioridades da carteira',exact:true}).boundingBox()).y);
   expect((await list.boundingBox()).y).toBeLessThan((await page.getByRole('region',{name:'Comparativo entre anos',exact:true}).boundingBox()).y);
-  await expect(list.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
-  await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toHaveCount(0);
-  await list.getByLabel('Mais indicadores').check();await expect(list.locator('dt').filter({hasText:/^Projeção$/}).first()).toBeVisible();
+  await expect(list.getByRole('columnheader',{name:'GAP / Superação',exact:true})).toBeVisible();
+  await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toBeVisible();
+  await list.getByLabel('Mais indicadores').check();await expect(list.locator('dt').filter({hasText:/^Necessário\/dia$/}).first()).toBeVisible();
   await list.getByLabel('Mais indicadores').uncheck();
   await page.screenshot({path:testInfo.outputPath('ux-overview-desktop.png'),fullPage:true});
   await page.getByRole('combobox',{name:'Cooperativa',exact:true}).selectOption('1002:3017');
