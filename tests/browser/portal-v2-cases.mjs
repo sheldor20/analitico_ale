@@ -1,4 +1,21 @@
 export function registerPortalV2Tests({ test, expect, setup }) {
+  test('portal clean: context stays visible with filters and complementary periods collapsed', async ({ page }) => {
+    const { errors } = await setup(page, value => value, { compactPortal: true });
+    const filters = page.getByRole('region', { name: 'Filtros da análise' });
+    await expect(filters.locator('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false');
+    await expect(filters.locator('.filter-description')).toBeVisible();
+    await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toBeHidden();
+    await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
+    const periods = page.getByRole('region', { name: 'Resultados por período', exact: true });
+    await expect(periods.locator('button[aria-expanded]').first()).toHaveAttribute('aria-expanded', 'false');
+    await filters.locator('button[aria-expanded]').click();
+    await filters.getByRole('combobox', { name: 'Central', exact: true }).selectOption('1002');
+    await filters.locator('button[aria-expanded]').click();
+    await expect(filters.locator('.filter-description')).toContainText('Bahia');
+    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+    await expect(periods.locator('button[aria-expanded]').first()).toHaveAttribute('aria-expanded', 'true');
+    expect(errors).toEqual([]);
+  });
   test('portal v2: cards, filtered table, empty state and reset use the same scope', async ({ page }, info) => {
     const { errors } = await setup(page);
     await page.getByRole('combobox', { name: 'Período', exact: true }).selectOption('month');
@@ -46,6 +63,7 @@ export function registerPortalV2Tests({ test, expect, setup }) {
       await expect(page.getByRole('heading', { level: 1, name: 'Cadastro e metas' })).toBeFocused();
       await page.getByRole('button', { name: 'Visão geral', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Visão geral', exact: true })).toHaveAttribute('aria-current', 'page');
+      await page.locator('.filter-toggle[aria-expanded="false"]').click();
       await expect(page.getByRole('combobox', { name: 'Central', exact: true })).toHaveValue('1002');
       await expect(page.getByRole('combobox', { name: 'Trimestre', exact: true })).toHaveValue('2');
       await expect(page.getByRole('button', { name: 'Sair', exact: true }).locator('span')).toBeVisible();
