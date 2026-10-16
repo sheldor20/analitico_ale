@@ -2952,7 +2952,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
   html, body { width:auto!important; min-width:0!important; height:auto!important; overflow:visible!important; background:#fff!important; }
   body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .portal .app-shell, .portal.app-shell { display:block!important; min-height:0!important; }
-  .portal :is(.sidebar,.topbar,.skip-link,.page-heading-actions,.analysis-tabs,.analysis-breadcrumb,.filters,.filter-panel-heading,.filter-toggle,.filter-actions,.analysis-context-controls,.workspace-toolbar,.selection-toolbar,.table-controls,.overview-block-actions,.panel-disclosure-toggle,.method-footer,.modal-backdrop) { display:none!important; }
+  .portal :is(.sidebar,.topbar,.skip-link,.page-heading-actions,.analysis-tabs,.analysis-breadcrumb,.filters,.filter-panel-heading,.filter-toggle,.filter-actions,.analysis-context-controls,.workspace-toolbar,.selection-toolbar,.table-controls,.overview-block-actions,.panel-disclosure-toggle,.method-footer,.calculation-notes,.modal-backdrop) { display:none!important; }
   .portal :is(button:not(.entity-button),input,select,textarea) { display:none!important; }
   .portal .main-shell { width:auto!important; max-width:none!important; margin:0!important; padding:0!important; }
   .portal .workspace-content { width:auto!important; padding:0!important; }

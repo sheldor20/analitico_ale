@@ -288,6 +288,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await expect(skip).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Navegação principal', exact: true })).toBeHidden();
     await expect(tablist(page)).toBeHidden();
+    await expect(page.locator('.calculation-notes')).toBeHidden();
     await expect(table.locator('tbody > tr.unit-result-row')).toHaveCount(3);
     expect(await table.locator('thead').evaluate(node => getComputedStyle(node).display)).toBe('table-header-group');
     expect(await table.locator('tbody > tr.unit-result-row').evaluateAll(rows => rows.every(row => ['avoid', 'avoid-page'].includes(getComputedStyle(row).breakInside)))).toBe(true);
