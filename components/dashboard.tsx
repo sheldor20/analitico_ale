@@ -1406,7 +1406,9 @@ export default function Dashboard() {
                                 </th>
                                 <th role="columnheader" scope="col" className="numeric">Meta</th>
                                 <th role="columnheader" scope="col" className="numeric">Realizado</th>
-                                <th role="columnheader" scope="col" className="numeric">Crescimento / GAP</th>
+                                <th role="columnheader" scope="col" className="numeric">Atingimento</th>
+                                <th role="columnheader" scope="col" className="numeric">GAP / Superação</th>
+                                <th role="columnheader" scope="col" className="numeric">Projeção</th>
                                 <th role="columnheader" scope="col">
                                   Ações
                                 </th>
@@ -1444,18 +1446,16 @@ export default function Dashboard() {
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="actual" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
                                       <span className="unit-field-label" aria-hidden="true">Realizado</span>
-                                      <div className="unit-actual">
-                                        <strong className="unit-money">{money(r.actual)}</strong>
-                                        <div className="attainment" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
-                                          <span>{percent(r.attainment)} <span className="unit-attainment-note">da meta</span></span>
-                                          <span className="mini-progress" aria-hidden="true"><i style={{width: `${Math.max(0, Math.min(100, (r.attainment ?? 0) * 100))}%`}} /></span>
-                                        </div>
-                                      </div>
+                                      <strong className="unit-money">{money(r.actual)}</strong>
+                                    </td>
+                                    <td role="cell" className="numeric unit-metric unit-attainment-cell" data-field="attainment">
+                                      <span className="unit-attainment-badge" data-attainment={attainmentBand(r.complete && !r.annualConflict ? r.attainment : null).key}>{r.complete && !r.annualConflict ? percent(r.attainment) : 'Sem avaliação'}</span>
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="variance">
                                       <span className="unit-field-label" aria-hidden="true">Crescimento / GAP</span>
                                       <div><ResultVariance actual={r.actual} target={r.target} complete={r.complete} conflict={!!r.annualConflict} /></div>
                                     </td>
+                                    <td role="cell" className="numeric unit-metric" data-field="projected" title={`${percent(r.projectedAttainment)} da meta · estimativa`}><span className="unit-money">{money(r.projected)}</span></td>
                                     <td role="cell" className="unit-actions-cell">
                                       <div className="unit-row-actions">
                                       {actualLevel === 'central' && <button type="button" className="button quiet" aria-label={`Ver cooperativas de ${r.name}`} onClick={() => openCentral(r)}>Ver cooperativas</button>}
@@ -1477,10 +1477,9 @@ export default function Dashboard() {
                                     </td>
                                   </tr>
                                   {(showMoreIndicators || sortBy === 'contribution' || sortBy === 'evolution') && <tr role="row" className={`unit-indicators-row${selectedKeys.includes(r.key) ? ' selected-result' : ''}`}>
-                                    <td role="cell" colSpan={5}>
+                                    <td role="cell" colSpan={7}>
                                       <dl className="unit-indicators" aria-label={`Indicadores adicionais de ${r.name}`}>
                                         {showMoreIndicators && <>
-                                          <div><dt>Projeção</dt><dd><span className="unit-money">{money(r.projected)}</span><small>{percent(r.projectedAttainment)} da meta · estimativa</small></dd></div>
                                           <div><dt>Necessário/dia</dt><dd><span className="unit-money">{money(r.requiredDaily)}</span></dd></div>
                                         </>}
                                         {(showMoreIndicators || sortBy === 'contribution') && <div><dt>Contribuição</dt><dd>{percent(r.contribution)}<small>{r.contribution == null ? 'Sem base comparável' : 'do realizado da seleção'}</small></dd></div>}
@@ -1488,7 +1487,7 @@ export default function Dashboard() {
                                       </dl>
                                     </td>
                                   </tr>}
-                                  {actualLevel === 'cooperative' && expandedCoops.includes(r.key) && dataset && <tr role="row" className="expanded-unit"><td role="cell" colSpan={5}><PaTable dataset={dataset} filters={{...scenarioFilters,central:r.central,coop:`${r.central}:${r.cooperative}`,pa:'all'}} expanded onToggle={() => setExpandedCoops(keys => keys.filter(key => key !== r.key))} onSelect={setSelected} onShare={() => setSharing({kind:'pa',central:r.central,coop:`${r.central}:${r.cooperative}`})} onOpenCadence={() => openCooperative(r,true)} /></td></tr>}
+                                  {actualLevel === 'cooperative' && expandedCoops.includes(r.key) && dataset && <tr role="row" className="expanded-unit"><td role="cell" colSpan={7}><PaTable dataset={dataset} filters={{...scenarioFilters,central:r.central,coop:`${r.central}:${r.cooperative}`,pa:'all'}} expanded onToggle={() => setExpandedCoops(keys => keys.filter(key => key !== r.key))} onSelect={setSelected} onShare={() => setSharing({kind:'pa',central:r.central,coop:`${r.central}:${r.cooperative}`})} onOpenCadence={() => openCooperative(r,true)} /></td></tr>}
                                 </Fragment>
                                 ))}
                             </tbody>
@@ -1865,7 +1864,7 @@ function FileSlot({
 
 function ResultVariance({ actual, target, complete, conflict }: { actual: number | null; target: number | null; complete: boolean; conflict: boolean }) {
   const value = goalVariance(actual, target, complete && !conflict);
-  return <><span className="unit-money">{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? (target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
+  return <span className="unit-money unit-variance" data-variance={value.kind} title={value.label}><span className="sr-only">{value.label}: </span>{value.kind === 'growth' ? '+ ' : value.kind === 'gap' ? '− ' : ''}{money(value.value)}</span>;
 }
 
 function Modal({

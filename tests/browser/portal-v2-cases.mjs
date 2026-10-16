@@ -1,4 +1,31 @@
+import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 export function registerPortalV2Tests({ test, expect, setup }) {
+  test('compact units: all cooperatives and PAs remain in one unpaginated table with natural vertical flow', async ({page},info) => {
+    const {errors}=await setup(page,dataset=>{
+      for (let index=1;index<=22;index++) {
+        const cooperative=String(5000+index),pa=String(index);
+        dataset=upsertEntity(dataset,{kind:'cooperative',central:'1002',cooperative,name:`Cooperativa compacta ${index}`});
+        dataset=upsertPlanRow(dataset,{entityId:`cooperative:1002:${cooperative}`,metric:'VN',targets:Array(12).fill(100),annualTarget:1200,actuals:Array(12).fill(75),cutoff:'2026-08-31'});
+        dataset=upsertEntity(dataset,{kind:'pa',central:'1002',cooperative:'3017',pa,name:`PA compacto ${index}`,group:'P1'});
+        dataset=upsertPlanRow(dataset,{entityId:`pa:1002:3017:${pa}`,metric:'VN',targets:Array(12).fill(450),annualTarget:5400,actuals:Array(12).fill(300),cutoff:'2026-08-31'});
+      }
+      return dataset;
+    });
+    const table=page.getByRole('table',{name:'Resultados das unidades filtradas',exact:true});
+    await expect(table.locator('tbody > .unit-result-row')).toHaveCount(25);
+    await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Cadência dos PAs',exact:true}).click();
+    await expect(table.locator('tbody > .unit-result-row')).toHaveCount(24);
+    for (const width of [1440,768,390]) {
+      await page.setViewportSize({width,height:900});
+      const geometry=await table.locator('..').evaluate(node=>({height:node.clientHeight,scroll:node.scrollHeight}));
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.height+1);
+      expect(await table.locator('tbody > .unit-result-row').evaluateAll(rows=>rows.every(row=>getComputedStyle(row).display==='table-row'))).toBe(true);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }
+    await page.setViewportSize({width:1440,height:900});
+    await table.screenshot({path:info.outputPath('all-24-pas-in-compact-rows.png')});
+    expect(errors).toEqual([]);
+  });
   test('compact unit table: desktop rows keep identity and amounts together without card stacking', async ({ page }, info) => {
     await page.setViewportSize({width:1200,height:900});
     const {errors}=await setup(page);
@@ -6,6 +33,17 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     const bounds=await row.evaluate(node=>({height:node.getBoundingClientRect().height,identity:node.querySelector('.unit-identity').getBoundingClientRect().top,amount:node.querySelector('[data-field="target"]').getBoundingClientRect().top}));
     expect(bounds.height).toBeLessThan(110);
     expect(Math.abs(bounds.identity-bounds.amount)).toBeLessThan(3);
+    const table=page.getByRole('table',{name:'Resultados das unidades filtradas',exact:true});
+    await expect(table.getByRole('columnheader')).toHaveText(['Cooperativa','Meta','Realizado','Atingimento','GAP / Superação','Projeção','Ações']);
+    for (const width of [1200,768,390,320]) {
+      await page.setViewportSize({width,height:900});
+      expect(await row.evaluate(node=>getComputedStyle(node).display)).toBe('table-row');
+      expect(await row.evaluate(node=>node.getBoundingClientRect().height)).toBeLessThan(85);
+      await expect(table.locator('tbody > tr.unit-result-row')).toHaveCount(3);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }
+    await page.setViewportSize({width:1200,height:900});
+
     await page.screenshot({path:info.outputPath('compact-units-1200.png'),fullPage:true});
     expect(errors).toEqual([]);
   });

@@ -2,7 +2,7 @@ import { portfolioFixture } from '../portfolio-fixture.mjs';
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 import { money } from '../../lib/analytics.mjs';
 export function registerUxTests({test,expect,setup,owner,created}) {
- test('cooperative table: exact large and negative values, optional indicators and row actions fit without horizontal scrolling',async({page},testInfo)=>{
+ test('cooperative table: exact large and negative values, optional indicators and row actions retain compact rows with horizontal scrolling inside the table when needed',async({page},testInfo)=>{
   const betaName='Cooperativa Beta de Desenvolvimento Regional e Apoio Comercial';
   const {errors,writes,relationshipWrites}=await setup(page,dataset=>{
    dataset=upsertEntity(dataset,{kind:'cooperative',central:'1002',cooperative:'3025',name:betaName},'cooperative:1002:3025');
@@ -23,7 +23,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
    await list.getByRole('button',{name:'Expandir PAs de Cooperativa Alfa',exact:true}).click();
    const nested=list.getByRole('region',{name:'PAs da cooperativa',exact:true});
    await expect(nested.getByRole('table')).toBeVisible();await expect(nested).toContainText('PA Alfa zero');
-   for(const node of [wrapper,table])expect(await node.evaluate(element=>element.scrollWidth<=element.clientWidth+1)).toBe(true);
+   expect(await wrapper.evaluate(element=>getComputedStyle(element).overflowX)).toBe('auto');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
    await list.getByRole('button',{name:'Recolher PAs de Cooperativa Alfa',exact:true}).click();
    await expect(nested).toHaveCount(0);
@@ -38,13 +38,13 @@ export function registerUxTests({test,expect,setup,owner,created}) {
    for(const more of [false,true]){
     await list.getByRole('checkbox',{name:'Mais indicadores',exact:true}).setChecked(more);
     await expect(rows).toHaveCount(2);await expect(selection).toBeChecked();
-    await expect(table.locator('dt').filter({hasText:/^Projeção$/})).toHaveCount(more?2:0);
+    await expect(table.locator('dt').filter({hasText:/^Projeção$/})).toHaveCount(0);
+    await expect(rows.locator('[data-field="projected"]')).toHaveCount(2);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`document at ${width}/${more}`).toBe(true);
-    for(const node of [wrapper,table]){
-     const box=await node.evaluate(element=>({scroll:element.scrollWidth,client:element.clientWidth,left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right}));
-     expect(box.scroll,`table or wrapper at ${width}/${more}`).toBeLessThanOrEqual(box.client+1);
-     expect(box.left).toBeGreaterThanOrEqual(0);expect(box.right).toBeLessThanOrEqual(width+1);
-    }
+    const box=await wrapper.evaluate(element=>({left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right,height:element.clientHeight,scrollHeight:element.scrollHeight,overflowX:getComputedStyle(element).overflowX}));
+    expect(box.left).toBeGreaterThanOrEqual(0);expect(box.right).toBeLessThanOrEqual(width+1);
+    expect(box.overflowX).toBe('auto');expect(box.scrollHeight).toBeLessThanOrEqual(box.height+1);
+    expect(await table.evaluate(element=>getComputedStyle(element).display)).toBe('table');
     const amounts=await table.evaluate(element=>{
      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),values=[];let node;
      while((node=walker.nextNode())){
