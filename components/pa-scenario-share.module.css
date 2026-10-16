@@ -7,6 +7,9 @@
 .context { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 20px; overflow-wrap: anywhere; }
 .context strong { font-size: 17px; color: var(--ink); }
 .context span { color: var(--muted); font-size: 14px; }
+.cutoffs { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle, #f3f7f7); color: var(--muted); font-size: 13px; line-height: 1.4; }
+.cutoffs > span { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.cutoffs strong { color: var(--ink); }
 .scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; border: 0; }
 .scope legend, .channels legend { margin-bottom: 10px; font-size: 14px; font-weight: 700; color: var(--ink); }
 .scope label { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; line-height: 1.4; }
@@ -105,3 +108,9 @@
 .projectionOption input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 2px 0 0; padding: 0; accent-color: #00776b; }
 .projectionOption span { display: grid; gap: 4px; }
 .projectionOption small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+@media print {
+  .backdrop { display: none !important; }
+  .summaryTable { overflow: visible; border-radius: 0; }
+  .summaryTable thead { display: table-header-group; }
+  .summaryTable tr { break-inside: avoid; page-break-inside: avoid; }
+}

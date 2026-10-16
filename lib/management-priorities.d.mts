@@ -1,4 +1,4 @@
-export type ManagementPriorityKind = 'review' | 'pace' | 'near-goal' | 'production';
+export type ManagementPriorityKind = 'review' | 'pace' | 'near-goal' | 'gap' | 'production';
 export type ManagementAnalysis = {
   key: string; source: string; metric: string; name?: string; central?: string;
   cooperative?: string; pa?: string | null; cutoff: string; cutoffMin?: string;
@@ -14,8 +14,10 @@ export type ManagementPriority = {
   kind: ManagementPriorityKind; title: string; detail: string;
   tone: 'warning' | 'positive' | 'neutral'; notes: string[];
   rows: { key: string; name: string; context: string; cutoff: string; detail: string }[];
+  concentration?: { names: string[]; count: number; totalUnits: number; share: number };
+  reconciliation?: { consolidated: number; deficits: number; surplus: number };
   action: ManagementPriorityAction;
 };
 export function buildManagementPriorities(analyses?: ManagementAnalysis[]): {
-  items: ManagementPriority[]; additional: ManagementPriority[]; notes: string[]; empty: string;
+  items: ManagementPriority[]; additional: ManagementPriority[]; review: ManagementPriority | null; notes: string[]; empty: string;
 };

@@ -6,8 +6,9 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
     await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
-    await page.locator('summary').filter({hasText:'Rede da seleção'}).click();
-    await expect(page.getByRole('region',{name:'Resumo da rede filtrada'})).toContainText('2');
+    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true}).locator('tbody tr')).toHaveCount(2);
+    await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
     await page.getByLabel('Ordenar análise').selectOption('attainment-desc');
     const table=page.locator('.table-panel tbody');
     await expect(table.locator('tr').first()).toContainText('Cooperativa Beta');
@@ -17,7 +18,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     const pas=page.getByRole('region',{name:'PAs da cooperativa',exact:true});
     await expect(pas.locator('tbody tr')).toHaveCount(1);
     await expect(pas).toContainText('PA Alfa zero');await expect(pas).not.toContainText('PA Beta zero');
-    await expect(pas.getByRole('columnheader',{name:'Crescimento / GAP',exact:true})).toBeVisible();
+    await expect(pas.getByRole('columnheader',{name:'GAP / Superação',exact:true})).toBeVisible();
     await page.screenshot({path:testInfo.outputPath('scenario-desktop.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
@@ -43,7 +44,7 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('ytd');
     await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');
-    await page.getByRole('button',{name:'Comparar anos',exact:true}).click();
+    await page.getByRole('tab',{name:'Comparar anos',exact:true}).click();
     const comparison=page.getByRole('region',{name:'Comparativo entre anos',exact:true});
     await expect(comparison.getByRole('combobox',{name:'Comparar 2026 com',exact:true})).toHaveValue('2025');
     await expect(comparison).toContainText('JAN a AGO');

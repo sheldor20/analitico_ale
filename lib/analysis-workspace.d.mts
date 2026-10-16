@@ -1,0 +1,1 @@
+export function analysisEffort(rows: {complete:boolean;annualConflict?:boolean;remainingDays:number;remainingMonths:number}[],summary:{gap:number|null;target:number|null;projected:number|null}): {remainingDays:number|null;remainingMonths:number|null;sameDeadline:boolean;daily:number|null;monthly:number|null;projectedGap:number|null};

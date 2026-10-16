@@ -44,17 +44,17 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
     await expect(region.getByRole('article').nth(0)).toHaveAccessibleName('Meta do período');
     await expect(region.getByRole('article').nth(1)).toHaveAccessibleName('Realizado até o corte');
     await expect(region.getByRole('article').nth(1)).toHaveClass(/accent/);
-    await expect(region.getByRole('article').nth(2)).toHaveAccessibleName('Crescimento sobre a meta');
+    await expect(region.getByRole('article').nth(2)).toHaveAccessibleName('Superação consolidada');
     await expect(region.getByRole('article').nth(2)).toContainText('50,00');
     await expect(region.getByRole('article').nth(2)).toContainText('50% acima da meta');
-    await expect(region.getByRole('article').nth(3)).toHaveAccessibleName('Projeção de fechamento');
+    await expect(region.getByRole('article').nth(3)).toHaveAccessibleName('Projeção do mês');
     for(const width of [1440,390]) {
       await page.setViewportSize({width,height:width===1440?1100:844});
       expect(await region.getByRole('article').nth(1).locator('p').evaluate(n=>parseFloat(getComputedStyle(n).fontSize))).toBeGreaterThanOrEqual(15);
       await region.scrollIntoViewIfNeeded(); await page.screenshot({path:info.outputPath(`ordered-kpis-${width}.png`),fullPage:false});
     }
     await page.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
-    await expect(region.getByRole('article').nth(2)).toHaveAccessibleName('GAP para a meta');
+    await expect(region.getByRole('article').nth(2)).toHaveAccessibleName('GAP consolidado');
     await expect(region.getByRole('article').nth(2)).toContainText('50,00');
     await page.getByLabel('Buscar cooperativa ou PA').fill('no match');
     await expect(region.getByRole('article').nth(2).locator('.kpi-value')).toHaveText('—');
@@ -144,7 +144,7 @@ export function registerFollowupTests({test,expect,setup,composer,selectAugust})
     await page.getByLabel('Buscar cooperativa ou PA').fill('Beta');
     const region=page.getByRole('region',{name:'Resultado do período',exact:true});
     await expect(page.getByRole('region',{name:'Lista de unidades'})).toContainText('Metas divergentes');
-    await expect(region.getByRole('article',{name:'Crescimento sobre a meta'})).toHaveCount(0);
+    await expect(region.getByRole('article',{name:'Superação consolidada'})).toHaveCount(0);
     await expect(region.getByRole('article').nth(2)).toContainText('Metas divergentes');
     await expect(region.getByRole('article').nth(2).locator('.kpi-value')).toHaveText('Não disponível');
     await expect(region.getByRole('meter')).toHaveCount(0);

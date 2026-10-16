@@ -8,6 +8,8 @@ import { buildCooperativeScenarioReport } from '../lib/cooperative-scenario-shar
 import { buildEmailFile, buildPortfolioReport, renderPortfolioCommunication } from '../lib/portfolio-communication.mjs';
 import { validateDashboard } from '../lib/portfolio-presentation.mjs';
 import { projectionDetails } from '../lib/production-projection.mjs';
+import { paScenarioImageLayout } from '../lib/pa-scenario-image.mjs';
+import { buildScenarioBundleReport } from '../lib/scenario-share-bundle.mjs';
 import { createEmptyDataset, initializeRegistry } from '../lib/registry.mjs';
 import { portfolioFixture, unit } from './portfolio-fixture.mjs';
 import { attainmentBand } from '../lib/attainment.mjs';
@@ -120,4 +122,19 @@ test('HTML uses unrounded observed attainment bands while projections remain neu
     assert.equal(validateDashboard(model), model);
     for (const invalid of ['0.7', true, NaN, Infinity]) { card.attainment = invalid; assert.throws(() => validateDashboard(model)); }
   }
+});
+
+test('simulated pace stays identified in compact PNG, HTML, text and individual portfolio output', () => {
+  const data = dataset([sourceRow('3017')]);
+  const report = buildScenarioBundleReport({ dataset: data, filters, kind: 'cooperative', showProjection: true });
+  const measure = { font: '', measureText(value) { return { width: [...value].length * Number(this.font.match(/(\d+)px/)?.[1] || 20) * .5 }; } };
+  for (const output of [report.periodLabel, report.html, report.text, report.caption]) assert.match(output, /Simulação de ritmo \+20%/);
+  const drawn = paScenarioImageLayout(report.parts[0], measure).commands.filter(command => command.type === 'text').map(command => command.value).join(' ');
+  assert.match(drawn, /Simulação de ritmo \+20%/);
+  const reference = buildScenarioBundleReport({ dataset: data, filters: { ...filters, uplift: 0 }, kind: 'cooperative', showProjection: true });
+  assert.equal(report.rows[0].actual, reference.rows[0].actual);
+  assert.equal(report.rows[0].target, reference.rows[0].target);
+  const single = buildPortfolioReport({ dataset: data, entity: unit(data, 'cooperative:1002:3017'), metric: 'AR', month: 7, period: 'month', uplift: 20 });
+  const output = renderPortfolioCommunication(single, { showProjection: true, showAnnual: false });
+  for (const channel of [output.html, output.text, output.whatsapp, output.dashboard.periodLabel]) assert.match(channel, /Simulação de ritmo \+20%/);
 });

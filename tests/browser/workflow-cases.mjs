@@ -27,9 +27,9 @@ function workflowFixture(dataset) {
 }
 
 async function openGenerator(page, content, format = 'E-mail') {
-  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
-  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
-  if (await chooser.getByRole('radio', { name: content, exact: true }).count()) throw new Error('A comunicação deve herdar o nível do dashboard, sem seleção interna de conteúdo.');
+  await page.getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
+  const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
+  await select(chooser, 'Cenário do compartilhamento').selectOption(content.startsWith('PAs') ? 'pa' : 'cooperative');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
   await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
@@ -95,7 +95,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(list(page)).toContainText('PA Alfa zero');
     await expect(list(page)).not.toContainText('PA Nordeste zero');
     await page.getByRole('button', { name: 'Voltar ao recorte anterior', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Visão geral', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Análises', exact: true })).toBeVisible();
     await expect(select(page, 'Central')).toHaveValue('1002');
     await expect(select(page, 'Filtrar situação')).toHaveValue('attention');
     await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('Alfa');

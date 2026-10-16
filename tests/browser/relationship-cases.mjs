@@ -143,6 +143,7 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
       outbound.push(route.request().url());
       await route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>WhatsApp test handoff</title>' });
     });
+    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
     const notice = page.getByRole('complementary', { name: 'Alerta de metas atingidas' });
     await expect(notice).toContainText('5 metas atingidas');
     await notice.getByRole('button', { name: 'Ver conquistas' }).click();

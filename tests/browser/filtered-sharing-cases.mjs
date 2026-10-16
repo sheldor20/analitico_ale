@@ -57,8 +57,9 @@ async function september(page) {
   await select(page, 'Ordenar análise').selectOption('production');
 }
 async function generate(page, format = 'E-mail') {
-  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
-  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
+  await page.getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
+  const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
+  await select(chooser, 'Cenário do compartilhamento').selectOption('summary');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
   await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
@@ -88,7 +89,8 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await modal.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'Central').selectOption('1002');await select(page, 'Cooperativa').selectOption('1002:3017');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Bahia');
-    await page.getByRole('region', { name: 'Prioridades da carteira', exact: true }).getByRole('button', { name: 'Ver unidades: Próximas da meta', exact: true }).click();
+    await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
+    await page.getByRole('region', { name: 'Prioridades da carteira', exact: true }).getByRole('button', { name: 'Ver unidades: Concluir metas próximas', exact: true }).click();
     await expect(list(page).locator('tbody tr')).toHaveCount(1);
     await generate(page);await expect(rows).toHaveCount(1);
     await expect(bahia.locator('td[data-label="Meta"]')).toContainText(money(100));

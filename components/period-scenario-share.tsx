@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, ImageIcon, Mail, X } from 'lucide-react';
-import { buildPeriodPerformanceShare, type PeriodShareSelection } from '@/lib/period-performance-share.mjs';
+import { buildPeriodPerformanceShare, periodShareCutoff, type PeriodShareSelection } from '@/lib/period-performance-share.mjs';
 import { renderPeriodPerformancePng, type PeriodPerformanceImagePart } from '@/lib/period-performance-image.mjs';
 import { buildEmailFile, buildOutlookLink, buildWhatsappLink, normalizeRecipients } from '@/lib/portfolio-communication.mjs';
 import type { PeriodPerformanceModel } from '@/lib/period-performance.mjs';
@@ -135,8 +135,9 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
       <header className={styles.heading}><h2 id={titleId}>Compartilhar cenário por período</h2><button ref={close} type="button" className="icon-button" aria-label="Fechar compartilhamento de períodos" onClick={onClose}><X size={22} aria-hidden="true" /></button></header>
       <div className={styles.content}>
         <div className={styles.context}><strong>{model.scopeLabel}</strong><span>{model.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {model.year}</span></div>
+        <p className={styles.cutoffs}>{periodShareCutoff(model)} · Estado Parcial, Fechado ou sem informação identificado em cada período.</p>
         <label className={styles.field}>Períodos para compartilhar<select aria-label="Períodos para compartilhar" value={period} onChange={event => { setPeriod(event.target.value as PeriodShareSelection); setPartIndex(0); }}>{Object.entries(selections).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <p className={styles.helper}>Mesmas unidades do recorte atual · {report?.orderLabel}. Recolher um grupo no painel não remove seus períodos do compartilhamento.</p>
+        <p className={styles.helper}>Mesmas unidades do recorte atual · {report?.orderLabel}. Todos os períodos selecionados acompanham a saída, inclusive os que estiverem fora da área visível.</p>
         <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, com as premissas da análise.</small></span></label>
         {!report ? <p className={styles.error} role="alert">{built.error}</p> : <>
           <fieldset className={styles.channels}><legend>Canal de compartilhamento</legend><label className={channel === 'email' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'email'} onChange={() => { setChannel('email'); invalidate(); }} /><Mail size={18} aria-hidden="true" />E-mail</label><label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'image'} onChange={() => { setChannel('image'); invalidate(); }} /><ImageIcon size={18} aria-hidden="true" />WhatsApp e imagem</label></fieldset>

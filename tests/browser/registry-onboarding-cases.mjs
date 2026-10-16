@@ -50,7 +50,7 @@ export function registerRegistryOnboardingTests({test,expect,setup,owner}) {
     await expect(frame.locator('[data-communication-header]')).toContainText('Central Exemplo');
     await expect(frame.locator('body')).not.toContainText(/Bahia|Nordeste|1002|2007/i);
     await composer.getByRole('button',{name:'Fechar comunicação',exact:true}).click();
-    await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Visão geral',exact:true}).click();
+    await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Análises',exact:true}).click();
     await page.locator('.filter-toggle[aria-expanded="false"]').click();
     const central=page.getByRole('combobox',{name:'Central',exact:true});
     expect(await central.locator('option').evaluateAll(nodes=>nodes.map(node=>node.value))).toEqual(['all','3456']);

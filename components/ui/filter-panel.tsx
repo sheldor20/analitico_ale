@@ -1,12 +1,13 @@
 'use client';
 import { useId, useState, type ReactNode } from 'react';
 import { ChevronDown, SlidersHorizontal } from 'lucide-react';
-export default function FilterPanel({ children, description, onReset, active }: {
-  children: ReactNode; description: string; onReset: () => void; active: boolean;
+export default function FilterPanel({ children, primary, description, onReset, active }: {
+  children: ReactNode; primary?: ReactNode; description: string; onReset: () => void; active: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   return <section className="filter-panel panel" aria-label="Filtros da análise">
+    {primary && <section className="analysis-context" aria-label="Contexto da análise">{primary}</section>}
     <div className="filter-panel-heading">
       <button className="filter-toggle" type="button" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(!expanded)}>
         <SlidersHorizontal size={17} aria-hidden="true" /><strong>Filtros</strong>

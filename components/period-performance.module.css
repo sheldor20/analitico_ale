@@ -67,3 +67,25 @@
   .annualGrid,.quarterGrid { grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
   .kpi>svg { display:none; }
 }
+
+.analysisToolbar{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px 16px;padding:10px 0;border-top:1px solid var(--line)}
+.analysisToolbar>label{display:grid;gap:4px;color:var(--muted);font-size:12px;min-width:150px}
+.analysisToolbar select{min-height:38px;padding:6px 28px 6px 10px;color:var(--ink);font:inherit;font-size:14px}
+.viewSwitch{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--bg);margin-left:auto}
+.viewSwitch button{min-height:32px;padding:6px 14px;border:0;border-radius:5px;background:transparent;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.viewSwitch button[aria-pressed=true]{background:var(--sicoob-dark);color:#fff;font-weight:650}
+.periodChart{min-width:0;margin:0;padding:6px 12px 12px}
+.periodChart figcaption{font-size:14px;font-weight:650;color:var(--ink)}
+.periodChart>svg{display:block;width:100%;height:auto;max-height:320px;overflow:visible}
+.periodChart text{font:12px var(--font-body),Arial,sans-serif;fill:var(--muted)}
+.periodChart p{margin:3px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.chartGrid{stroke:var(--line);stroke-width:1}.chartReference{stroke:var(--sicoob-dark);stroke-width:1;stroke-dasharray:5 4}
+.chartLine{stroke:var(--sicoob-turquoise)}.chartPoint{fill:var(--sicoob-dark);stroke:var(--surface);stroke-width:2}
+.chartPoint[data-phase=partial]{fill:var(--sicoob-turquoise);stroke:var(--sicoob-dark)}
+.periodChart .chartPartial{font-size:10px;fill:var(--sicoob-dark)}
+.section[data-standalone=true] .attainment{min-width:60px;padding:2px 7px;font-size:12px}
+.section[data-standalone=true] .legend :global(.attainment-legend),.section[data-standalone=true] .balanceLegend{font-size:12px}
+.tableScroll[data-indicator=target] thead th:nth-child(2),.tableScroll[data-indicator=actual] thead th:nth-child(3),.tableScroll[data-indicator=attainment] thead th:nth-child(4){box-shadow:inset 0 -3px var(--sicoob-turquoise);color:var(--sicoob-dark)}
+.tableScroll[data-indicator=target] tbody td:nth-child(2),.tableScroll[data-indicator=actual] tbody td:nth-child(3){font-weight:650}
+@media(max-width:600px){.analysisToolbar{gap:10px}.analysisToolbar>label{flex:1 1 120px;min-width:0}.analysisToolbar select{width:100%;font-size:16px}.viewSwitch{margin-left:0}.periodChart{padding:6px 8px 10px}.periodChart>svg{min-height:170px}.periodChart text{font-size:15px}.periodChart .chartPartial{font-size:13px}}
+@media print{.controls,.analysisToolbar,.guide{display:none!important}.section,.group{break-inside:auto;padding:0;border:0}.heading{margin-bottom:8px}.tableScroll{overflow:visible;border:0;margin:0}.tableScroll table{min-width:0}.tableScroll thead{display:table-header-group}.tableScroll tr{break-inside:avoid;page-break-inside:avoid}.tableScroll th,.tableScroll td{font-size:9px;padding:5px 3px}.periodChart{break-inside:avoid}.periodChart>svg{max-height:230px}}
