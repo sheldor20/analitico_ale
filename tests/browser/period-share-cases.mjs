@@ -58,7 +58,7 @@ function htmlFromEml(eml) {
 }
 
 export function registerPeriodShareTests({ test, expect, setup }) {
-  test('period sharing: the exact AR cohort and order survive all 19 periods, collapsed groups, email and two complete PNG parts', async ({ page, context }, info) => {
+  test('period sharing: the exact AR cohort and order survive all 19 periods, collapsed groups, email and one complete compact PNG', async ({ page, context }, info) => {
     await recordCopies(page);
     const { errors, writes, relationshipWrites, contactImports, contactReads } = await setup(page, managementFixture);
     await chooseCohort(page);
@@ -137,13 +137,13 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     const text = await page.evaluate(() => window.__periodCopies.text.at(-1));
     expect(text).toContain('Realizado: R$');expect(text).toContain('6.090,00');expect(text).not.toContain('Projeção de produção:');
     const partLabels = [
-      ['Ano completo', 'Março', 'Maio', 'Julho', 'Fevereiro', 'Agosto', 'Janeiro', 'Abril', 'Junho', 'Setembro', 'Outubro', 'Novembro'],
-      ['Dezembro', '1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre', '1º semestre', '2º semestre'],
+      ['Ano completo', 'Março', 'Maio', 'Julho', 'Fevereiro', 'Agosto', 'Janeiro', 'Abril', 'Junho', 'Setembro', 'Outubro', 'Novembro', 'Dezembro', '1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre', '1º semestre', '2º semestre'],
     ];
     const labels = partLabels.flat();
-    for (const index of [1, 2]) {
-      const image = dialog.getByRole('img', { name: `Cenário por período — parte ${index} de 2`, exact: true });
+    for (const index of [1]) {
+      const image = dialog.getByRole('img', { name: `Cenário por período — parte ${index} de 1`, exact: true });
       await expect.poll(() => image.evaluate(node => node.naturalWidth)).toBe(1200);
+      expect(await image.evaluate(node=>node.naturalHeight)).toBeLessThan(2800);
       await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__periodCopies.png.length)).toBe(index);
       const drawn = await page.evaluate(() => window.__periodCopies.drawings.at(-1));
@@ -154,9 +154,8 @@ export function registerPeriodShareTests({ test, expect, setup }) {
       const pngDownload = page.waitForEvent('download');
       await dialog.getByRole('button', { name: 'Baixar imagem desta parte', exact: true }).click();
       await (await pngDownload).saveAs(info.outputPath(`period-share-all-part-${index}.png`));
-      if (index === 1) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
-    expect(await page.evaluate(() => window.__periodCopies.png.map(item => item.magic))).toEqual([pngMagic, pngMagic]);
+    expect(await page.evaluate(() => window.__periodCopies.png.map(item => item.magic))).toEqual([pngMagic]);
     await dialog.getByRole('button', { name: 'Fechar compartilhamento de períodos', exact: true }).click();
     await expect(select(panel(page), 'Ordenar períodos')).toHaveValue('attainment-desc');
     await expect(select(page, 'Carteira')).toHaveValue('AR');await expect(select(page, 'Filtrar situação')).toHaveValue('track');

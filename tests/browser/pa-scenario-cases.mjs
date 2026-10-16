@@ -271,14 +271,14 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     const text = await page.evaluate(() => window.__paExports.plain[0]);
     for (const name of names) expect(text).toContain(name);
     expect(text).not.toContain('PA Nordeste zero');
-    for (let part = 1; part <= 4; part++) {
-      await expect(dialog.getByRole('img', { name: `Cenário dos PAs — parte ${part} de 4`, exact: true })).toBeVisible();
-      await expect(dialog.getByText(`Parte ${part} de 4 · PAs ${(part - 1) * 12 + 1} a ${Math.min(part * 12, 47)}`, { exact: true })).toBeVisible();
+    for (let part = 1; part <= 2; part++) {
+      await expect(dialog.getByRole('img', { name: `Cenário dos PAs — parte ${part} de 2`, exact: true })).toBeVisible();
+      await expect(dialog.getByText(`Parte ${part} de 2 · PAs ${(part - 1) * 24 + 1} a ${Math.min(part * 24, 47)}`, { exact: true })).toBeVisible();
       await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(part);
       await expect(whatsappReady).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: 'Abrir WhatsApp e colar texto', exact: true })).toBeDisabled();
-      if (part < 4) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
+      if (part < 2) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
     const exported = await page.evaluate(() => window.__paExports);
     for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(3000); expect(png.size).toBeGreaterThan(1000); }

@@ -26,10 +26,10 @@ test('all 19 periods preserve the displayed fixed AR cohort, user order and ever
   const expected = ['annual', 'month', 'quarter', 'semester'].flatMap(period => sortPerformancePeriods(source.groups.find(group => group.period === period).rows, 'attainment'));
   assert.deepEqual(report.rows, expected);
   assert.deepEqual(bodyRows(report.html), expected.map(row => row.id));
-  assert.deepEqual(report.parts.map(part => part.rows.length), [12, 7]);
-  assert.equal(PERIOD_SHARE_PAGE_SIZE, 12);
+  assert.deepEqual(report.parts.map(part => part.rows.length), [19]);
+  assert.equal(PERIOD_SHARE_PAGE_SIZE, 19);
   assert.deepEqual(report.parts.flatMap(part => part.rows), expected);
-  assert.deepEqual(report.parts.map(part => [part.index, part.total, part.from, part.to]), [[1, 2, 1, 12], [2, 2, 13, 19]]);
+  assert.deepEqual(report.parts.map(part => [part.index, part.total, part.from, part.to]), [[1, 1, 1, 19]]);
   assert.equal(report.rows.find(row => row.id === 'month:0').actual, 690);
   assert.equal(report.rows.find(row => row.id === 'month:3').actual, -25.5);
   assert.equal(report.rows.find(row => row.id === 'month:4').actual, 0);
