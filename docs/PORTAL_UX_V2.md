@@ -27,7 +27,7 @@ Referência de marca: `docs/IDENTIDADE_VISUAL.md`, logos oficiais e Sicoob Sans 
 
 Padrões utilizados: tabelas orientadas à tarefa, controles junto à listagem, divulgação progressiva e hierarquia de dados do Carbon Design System; navegação por teclado e foco perceptível das recomendações WCAG. São referências de desenho, não importação da biblioteca Carbon nem alegação de certificação WCAG.
 
-- Tokens centrais em `app/design-system.css`: escala de espaçamento 4/8/12/16/20/24/32, raios, altura dos controles, cores semânticas e anel de foco.
+- Tokens centrais em `app/globals.css`: escala de espaçamento 4/8/12/16/20/24/32, raios, altura dos controles, cores semânticas e anel de foco.
 - Componentes reutilizáveis em `components/ui/`: `MetricCard`, `FilterPanel` e `PortalNavigation`.
 - Números tabulares, tipografia responsiva, valores monetários em reais, estados com texto além da cor.
 - CSS do workspace isolado de exportações/preview das mensagens. Login usa os mesmos tokens.

@@ -67,7 +67,6 @@ import { supabase } from "@/lib/supabase";
 import { analysisIndicators, sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
 import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
 import type { ActionState, DataRow, Dataset, ImportConfig, RegistryEntity } from "@/lib/types";
-import "./dashboard-ux.css";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
 import PeriodPerformance from './period-performance';
@@ -75,7 +74,7 @@ import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import PanelToggle from './ui/panel-toggle';
 
-import PortalNavigation, { VIEW_TITLES, VIEW_DESCRIPTIONS, type PortalView as View } from './ui/portal-navigation';
+import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/portal-navigation';
 import Kpi from './ui/metric-card';
 import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
@@ -369,8 +368,9 @@ export default function Dashboard() {
       );
     }
     if (view !== "audit" && group !== "all") labels.push(`Grupo ${group}`);
+    if (view !== "audit" && pa !== "all") labels.push(paOptions.find(([key]) => key === pa)?.[1] ?? `PA ${pa.split(':').at(-1)}`);
     return labels.length ? labels.join(" · ") : "Todas as centrais da seleção";
-  }, [central, coop, group, cooperatives, centralOptions, view]);
+  }, [central, coop, group, pa, paOptions, cooperatives, centralOptions, view]);
   const [auditKind, setAuditKind] = useState("data");
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
@@ -937,7 +937,7 @@ export default function Dashboard() {
   );
   if (leaving) return <main className="auth-check" role="status">Encerrando sessão…</main>;
   return (
-    <div className="app-shell">
+    <div className="app-shell portal">
       <a className="skip-link" href="#conteudo">Ir para o conteúdo</a>
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="Sicoob Gestão Comercial — início">
@@ -961,10 +961,7 @@ export default function Dashboard() {
         <header className="topbar">
           <div className="breadcrumb">
             <img className="mobile-brand" src="/brand/sicoob-logo.svg" alt="Sicoob" width="108" height="25" />
-            Gestão comercial <span>/</span>{" "}
-            <strong>
-              {VIEW_TITLES[view]}
-            </strong>
+            Gestão comercial
           </div>
           <div className="top-actions">
             {dataset && (
@@ -1004,9 +1001,7 @@ export default function Dashboard() {
           <div className="page-heading">
             <div>
               <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
-              <p>
-                {dataset || view === "imports" ? VIEW_DESCRIPTIONS[view] : "Escolha uma base para começar."}
-              </p>
+              {!dataset && <p>Escolha uma base para começar.</p>}
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
               <div className="page-heading-actions">
@@ -1505,7 +1500,7 @@ export default function Dashboard() {
                       </section>
                       {resultContextPanels}
                       {dataset && view === "overview" && effectiveSource === "base" && actualLevel === "cooperative" && coop !== "all" && <PaTable dataset={dataset} filters={scenarioFilters} onSelect={setSelected} onShare={() => setSharing({ kind: "pa", central: coop.split(':')[0], coop })} expanded={expandedPaKey === paPanelKey} onToggle={() => setExpandedPaKey(expandedPaKey === paPanelKey ? "" : paPanelKey)} onOpenCadence={() => {const row=analyses.find(item=>`${item.central}:${item.cooperative}`===coop); if(row)openCooperative(row,true);}} />}
-                      {dataset && <PeriodPerformance dataset={dataset} ownerId={user?.id ?? null} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest} />}
+                      {dataset && <PeriodPerformance dataset={dataset} ownerId={user?.id ?? null} initialExpanded={false} filters={scenarioFilters} unitIds={displayed.map(row => entityFromAnalysis(row).id)} expandRequest={periodExpandRequest || undefined} />}
               {dataset && <YearComparison key={user?.id ?? "session"} dataset={dataset} filters={scenarioFilters} owner={user?.id ?? null} years={[...workspaces.map(item => item.year), ...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} />}
                       <details className="progressive-panel" key={`evolution:${view}`}><summary>Evolução e simulação{uplift > 0 ? ` · cenário +${uplift}% ativo` : ""}</summary>
                       <section className="chart-grid">
@@ -1585,14 +1580,14 @@ export default function Dashboard() {
                       </details>
                     </>
                   )}
-                  <details className="progressive-panel"><summary>Leitura do cenário</summary>
+                  <details className="progressive-panel"><summary>Resumo e recomendações</summary>
                   <section className="decision-insights" aria-label="Informações para decidir">
                     {insights.slice(0,3).map((insight) => <article className={`panel insight ${insight.tone}`} key={insight.title}><h3>{insight.title}</h3><p>{insight.detail}</p></article>)}
                   </section>
                   </details>
                 </>
               )}
-              <footer className="method-footer">
+              <details className="progressive-panel calculation-notes"><summary>Critérios de cálculo</summary><footer className="method-footer">
                 <Info size={16} />
                 <span>
                   Projeções estimadas a partir do corte de cada fonte. Dias
@@ -1602,7 +1597,7 @@ export default function Dashboard() {
                     Ver critérios e conferência
                   </button>
                 </span>
-              </footer>
+              </footer></details>
             </>
           )}
         </main>

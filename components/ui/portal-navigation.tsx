@@ -16,10 +16,13 @@ export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
 };
 const groups = [
   { label: 'Acompanhamento', items: [
-    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList }, { id: 'alerts', icon: BellRing },
+    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList },
   ] },
-  { label: 'Gestão da base', items: [
-    { id: 'audit', icon: ShieldCheck }, { id: 'imports', icon: History }, { id: 'registry', icon: Building2 }, { id: 'agenda', icon: CalendarDays },
+  { label: 'Relacionamento', items: [
+    { id: 'agenda', icon: CalendarDays }, { id: 'alerts', icon: BellRing },
+  ] },
+  { label: 'Administração', items: [
+    { id: 'audit', icon: ShieldCheck }, { id: 'imports', icon: History }, { id: 'registry', icon: Building2 },
   ] },
 ] as const;
 export default function PortalNavigation({ view, disabled, issueCount, onNavigate }: {
