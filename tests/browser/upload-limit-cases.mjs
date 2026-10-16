@@ -29,6 +29,7 @@ export function registerUploadLimitTests({test,expect,setup,owner}) {
     // A reload must recover the saved normalization, not just the in-memory import.
     await page.reload();
     await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Cadência dos PAs',exact:true}).click();
+    await page.locator('.filter-toggle[aria-expanded="false"]').click();
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
     await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
     const list=page.getByRole('region',{name:'Lista de unidades',exact:true});
@@ -40,3 +41,4 @@ export function registerUploadLimitTests({test,expect,setup,owner}) {
     expect(workspaceWrites).toHaveLength(1);expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
   });
 }
+
