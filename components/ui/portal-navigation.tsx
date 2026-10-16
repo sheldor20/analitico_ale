@@ -1,7 +1,7 @@
 import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, ShieldCheck } from 'lucide-react';
 export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda';
 export const VIEW_TITLES: Record<PortalView, string> = {
-  overview: 'Visão geral', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
+  overview: 'Análises', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
   audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda',
 };
 export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {

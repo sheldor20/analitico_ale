@@ -14,3 +14,19 @@
 /* Bounded checkbox overrides the generic full-width form input rule. */
 .section .controls .check input[type="checkbox"]{width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;margin:0;accent-color:var(--sicoob-dark)}
 .section .controls .check{gap:8px;font-size:13px;max-width:360px}
+.comparisonContext{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:13px;line-height:1.5}
+.comparisonContext p{margin:0}.comparisonContext>div{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:6px;color:var(--muted)}
+.comparisonContext strong{color:var(--ink);font-weight:600;margin-right:6px}.comparisonContext .cutoffNotice{margin-top:8px;color:var(--sicoob-dark)}
+.paSection{padding:10px 12px!important;margin:0 0 0 10px;border-left:3px solid var(--sicoob-turquoise);border-radius:0 8px 8px 0;background:var(--bg)}
+.paSection :global(.panel-heading){align-items:center;margin-bottom:8px}.paSection :global(.panel-heading h2){font-size:15px;margin:0}.paSection :global(.panel-heading p){font-size:12px;margin:3px 0 0}
+.paToolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.paToolbar>div{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.paToolbar :global(.button),.paActions :global(.button){font-size:12px;min-height:30px;padding:5px 8px;white-space:nowrap}
+.paIndicators{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap}
+.paIndicators input[type=checkbox]{width:16px;height:16px;min-height:16px;padding:0;margin:0;accent-color:var(--sicoob-dark)}
+.paMethod{font-size:12px;color:var(--muted);margin:0 0 8px!important;line-height:1.4}
+.paTable{min-width:950px;table-layout:auto}.paTable th,.paTable td{padding:7px 9px!important;font-size:12px;vertical-align:middle;white-space:nowrap;line-height:1.35}.paTable th:first-child{min-width:195px;max-width:330px;text-align:left;white-space:normal}.paTable tbody th{font-weight:400}.paTable tbody th>strong{font-size:12px;display:block}.paTable :global(.cell-note){font-size:11px;margin-top:2px}
+.paAttainment{display:inline-block;padding:3px 7px;border-radius:5px;border:1px solid var(--attainment-border);color:var(--attainment-color);background:var(--attainment-background);font-weight:650;white-space:nowrap}
+.paActions{display:flex;align-items:center;gap:3px}.paVariance{white-space:nowrap;font-variant-numeric:tabular-nums}
+.paTable thead th{text-align:right}.paTable thead th:first-child,.paTable thead th:last-child{text-align:left}
+@media(max-width:600px){.paSection{margin-left:4px;padding:10px!important}.paToolbar>div{width:100%;gap:4px}.paSection :global(.panel-heading .button){width:auto}.paSection .paToolbar :global(.button){width:auto}.paIndicators{font-size:13px}}
+@media print{.section{padding:0!important;margin:8px 0;border:0;break-inside:auto}.controls,.paToolbar,.paActions,.section :global(.panel-heading>button){display:none!important}.section :global(.table-scroll){overflow:visible}.section :global(table){min-width:0;width:100%;table-layout:auto}.section :global(thead){display:table-header-group}.section :global(tr){break-inside:avoid;page-break-inside:avoid}.section :global(th),.section :global(td){font-size:9px!important;padding:4px 3px!important}.paTable th:first-child{min-width:0}.comparisonCharts{grid-template-columns:1fr 1.3fr}.chartCard{break-inside:avoid}.comparisonContext{break-inside:avoid}.paSection{margin-left:6px}}

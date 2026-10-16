@@ -12,19 +12,39 @@ import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import { ChevronDown, MessageSquareText } from 'lucide-react';
 export type ScenarioFilters = { central: string; coop: string; pa?: string; unitIds?: string[]; source: string; metric: string; group: string; level: string; period: string; month: number; uplift: number; sortBy: string; search: string; status: string };
-export function PaTable({ dataset, filters, onSelect, onShare, onOpenCadence, expanded = false, onToggle }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onShare?: () => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void }) {
+export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpenCadence, expanded = false, onToggle, compact = true, showLegend = false }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onHistory?: (row: any) => void; onShare?: () => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void; compact?: boolean; showLegend?: boolean }) {
   const model = useMemo(() => networkSummary(dataset, { ...filters, source: 'base', search: '', status: 'all' }), [dataset, filters]);
   const rows = sortAnalysis(model.pas, filters.sortBy);
   const contentId = useId();
-  return <section className={`panel ${styles.section}`} aria-label="PAs da cooperativa">
-    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><p>{rows.length} PAs · {model.paAchieved} com meta atingida · Venda Nova</p></div><button type="button" className="button secondary" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Abrir PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
+  const [moreIndicators, setMoreIndicators] = useState(!compact);
+  return <section className={`panel ${styles.section} ${styles.paSection}`} aria-label="PAs da cooperativa">
+    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><p>{rows.length} PAs · {model.paAchieved} com meta atingida · Venda Nova</p></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
     <div id={contentId} hidden={!expanded}>
-    {onShare && rows.length > 0 && <button type="button" className="button secondary pa-share-trigger" onClick={onShare}><MessageSquareText size={17} aria-hidden="true" />Compartilhar PAs</button>}
-    {onOpenCadence && <button type="button" className="button quiet" aria-label={`Abrir cadência de ${dataset.registry?.entities.find(entity => entity.id === `cooperative:${filters.coop}`)?.name ?? filters.coop}`} onClick={onOpenCadence}>Abrir cadência</button>}
-    <p className="helper">{periodTitle(filters.period, filters.month, dataset.year)} · Cadência PA, sem somar à produção da cooperativa. Clique no PA para abrir o histórico mensal.</p>
-    <div className="table-scroll"><table><thead><tr><th scope="col">PA / grupo</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">Crescimento / GAP</th><th scope="col">Projeção</th><th scope="col">GAP projetado</th><th scope="col">Necessário/dia útil</th><th scope="col">Necessário/mês</th><th scope="col">Corte</th><th scope="col">Situação</th></tr></thead><tbody>{rows.map((row: any) => <tr key={row.key}><td><button className="entity-button" disabled={!onSelect} onClick={() => onSelect?.(row)}><strong>PA {row.pa} · {row.name}</strong><small>{row.group} · Coop. {row.cooperative}</small></button></td><td className="numeric">{money(row.target)}</td><td className="numeric" data-attainment={attainmentBand(row.complete && !row.annualConflict ? row.attainment : null).key}>{money(row.actual)}</td><td className="numeric" data-attainment={attainmentBand(row.complete && !row.annualConflict ? row.attainment : null).key}>{percent(row.attainment)}</td><td className="numeric"><PaVariance row={row} /></td><td className="numeric">{money(row.projected)}</td><td className="numeric">{money(row.projectionGap)}</td><td className="numeric">{money(row.requiredDaily)}</td><td className="numeric">{money(row.requiredMonthly)}</td><td>{row.cutoff.split('-').reverse().join('/')}</td><td>{row.status}</td></tr>)}</tbody></table></div>
-    <AttainmentLegend />
-    {!rows.length && <p className="empty">Nenhum PA cadastrado para esta cooperativa neste ano. Importe a cadência PA ou inclua no cadastro fixo.</p>}
+      <div className={styles.paToolbar}>
+        <span>{periodTitle(filters.period, filters.month, dataset.year)}</span>
+        <div>
+          <label className={styles.paIndicators}><input type="checkbox" checked={moreIndicators} onChange={event => setMoreIndicators(event.target.checked)} />Mais indicadores</label>
+          {onOpenCadence && <button type="button" className="button quiet" aria-label={`Abrir cadência de ${dataset.registry?.entities.find(entity => entity.id === `cooperative:${filters.coop}`)?.name ?? filters.coop}`} onClick={onOpenCadence}>Abrir cadência</button>}
+          {onShare && rows.length > 0 && <button type="button" className="button secondary pa-share-trigger" aria-label="Compartilhar PAs" onClick={onShare}><MessageSquareText size={16} aria-hidden="true" />Compartilhar cenário</button>}
+        </div>
+      </div>
+      <p className={styles.paMethod}>Cadência de Venda Nova dos PAs. Estes valores não são somados à produção da cooperativa.</p>
+      <div className="table-scroll"><table className={styles.paTable}><thead><tr><th scope="col">Unidade</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th>{moreIndicators && <><th scope="col">GAP projetado</th><th scope="col" title="GAP do período dividido pelos dias úteis restantes do mesmo período">Necessário/dia útil</th><th scope="col" title="GAP do período dividido pelos meses equivalentes restantes">Necessário/mês equivalente</th><th scope="col">Corte</th><th scope="col">Ritmo do período</th></>}<th scope="col">Ações</th></tr></thead><tbody>{rows.map((row: any) => {
+        const assessable = row.complete && !row.annualConflict && row.target > 0;
+        const dataState = row.annualConflict ? 'Metas divergentes' : row.actual == null ? 'Sem realizado' : !row.complete ? 'Dados incompletos' : row.target == null ? 'Sem meta' : row.target === 0 ? 'Meta zero' : null;
+        return <tr key={row.key} data-pa={row.pa}>
+          <th scope="row"><strong>PA {row.pa} · {row.name}</strong><small className="cell-note">{row.group} · Coop. {row.cooperative}{dataState ? ` · ${dataState}` : ''}</small></th>
+          <td className="numeric">{money(row.target)}</td>
+          <td className="numeric">{money(row.actual)}</td>
+          <td className="numeric"><span className={styles.paAttainment} data-attainment={attainmentBand(assessable ? row.attainment : null).key}>{assessable ? percent(row.attainment) : row.target == null || row.target === 0 ? 'Sem meta' : 'Sem avaliação'}</span></td>
+          <td className="numeric"><PaVariance row={row} /></td>
+          <td className="numeric" title={`Estimativa de fechamento: ${periodTitle(filters.period, filters.month, dataset.year)}`}>{money(row.projected)}</td>
+          {moreIndicators && <><td className="numeric">{money(row.projectionGap)}</td><td className="numeric">{money(row.requiredDaily)}</td><td className="numeric">{money(row.requiredMonthly)}</td><td>{row.cutoff?.split('-').reverse().join('/') ?? 'Sem corte'}</td><td>{row.status}</td></>}
+          <td><div className={styles.paActions}>{onSelect && <button type="button" className="button quiet" aria-label={`Analisar PA ${row.pa} · ${row.name}`} onClick={() => onSelect(row)}>Analisar PA</button>}{onHistory && <button type="button" className="button quiet" aria-label={`Ver histórico do PA ${row.pa} · ${row.name}`} onClick={() => onHistory(row)}>Ver histórico</button>}{!onSelect && !onHistory && <span className="helper">Sem ações disponíveis</span>}</div></td>
+        </tr>;
+      })}</tbody></table></div>
+      {showLegend && <AttainmentLegend />}
+      {!rows.length && <p className="empty">Nenhum PA cadastrado para esta cooperativa neste ano. Importe a cadência PA ou inclua no cadastro fixo.</p>}
     </div>
   </section>;
 }
@@ -38,33 +58,38 @@ export function NetworkSummary({ dataset, filters }: { dataset: Dataset; filters
     </div>
   </section>;
 }
-export function YearComparison({ dataset, filters, owner, years, sessionDatasets }: { dataset: Dataset; filters: ScenarioFilters; owner: string | null; years: number[]; sessionDatasets: Map<number, Dataset> }) {
+export function YearComparison({ dataset, filters, owner, years, sessionDatasets, standalone = false, initialExpanded = false, onShare }: { dataset: Dataset; filters: ScenarioFilters; owner: string | null; years: number[]; sessionDatasets: Map<number, Dataset>; standalone?: boolean; initialExpanded?: boolean; onShare?: (comparison: ReturnType<typeof compareYears>, previousYear: number) => void }) {
   const choices = [...new Set(years)].filter(year => year !== dataset.year).sort((a, b) => b - a);
   const [year, setYear] = useState<number | null>(null);
   const [commonOnly, setCommonOnly] = useState(false);
   const selectedYear = year !== null && choices.includes(year) ? year : choices.find(value => value < dataset.year) ?? choices[0];
   const [loaded, setLoaded] = useState<{ key: string; dataset: Dataset | null; error: string } | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialExpanded);
+  const visible = standalone || open;
   const contentId = useId();
   const key = `${owner ?? 'session'}:${dataset.year}:${selectedYear}:${dataset.importedAt}:${dataset.registry?.updatedAt ?? ''}`;
   useEffect(() => {
-    if (!open || !selectedYear) return;
+    if (!visible || !selectedYear) return;
     let cancelled = false;
     setLoaded(null);
     if (!owner) { setLoaded({ key, dataset: sessionDatasets.get(selectedYear) ?? null, error: '' }); return; }
     loadWorkspace(owner, selectedYear).then(value => { if (!cancelled) setLoaded({ key, dataset: value?.dataset?.year === selectedYear ? value.dataset : null, error: '' }); }).catch(() => { if (!cancelled) setLoaded({ key, dataset: null, error: 'Não foi possível carregar o ano comparado. Tente novamente ou recarregue o cadastro salvo.' }); });
     return () => { cancelled = true; };
-  }, [open, owner, selectedYear, key, sessionDatasets, dataset]);
+  }, [visible, owner, selectedYear, key, sessionDatasets, dataset]);
   const prior = loaded?.key === key ? loaded.dataset : null;
   const comparison = useMemo(() => prior ? compareYears(dataset, prior, filters, commonOnly) : null, [dataset, prior, filters, commonOnly]);
-  return <section className={`panel ${styles.section}`} aria-label="Comparativo entre anos"><div className="panel-heading"><div><h2>Comparativo entre anos</h2>{open && <p>{periodTitle(filters.period, filters.month, dataset.year)}</p>}</div><button className="button secondary" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-controls={contentId}>{open ? 'Fechar comparativo' : 'Comparar anos'}<ChevronDown size={16} className={open ? styles.rotated : undefined} /></button></div>
-    <div id={contentId} hidden={!open}>{open && <><div className={styles.controls}><label>Comparar {dataset.year} com<select value={selectedYear ?? ''} onChange={event => setYear(Number(event.target.value))} disabled={!choices.length}>{!choices.length && <option value="">Nenhum outro ano cadastrado</option>}{choices.map(value => <option key={value} value={value}>{value}</option>)}</select></label><label className={styles.check}><input type="checkbox" checked={commonOnly} onChange={event => setCommonOnly(event.target.checked)} />Somente unidades presentes nos dois anos</label></div>
+  const cutoffFor = (side: 'current' | 'previous') => [...new Set<string>((comparison?.rows ?? []).flatMap((row: any) => [row[side]?.cutoffMin, row[side]?.cutoff]).filter((value: unknown): value is string => typeof value === 'string'))].sort();
+  const currentCuts = cutoffFor('current'), previousCuts = cutoffFor('previous');
+  const cutLabel = (cuts: string[]) => cuts.length ? cuts[0] === cuts.at(-1) ? cuts[0].split('-').reverse().join('/') : `${cuts[0].split('-').reverse().join('/')} a ${cuts.at(-1)!.split('-').reverse().join('/')}` : 'não informado';
+  const differentCuts = currentCuts.length > 0 && previousCuts.length > 0 && JSON.stringify([...new Set(currentCuts.map(value => value.slice(5)))]) !== JSON.stringify([...new Set(previousCuts.map(value => value.slice(5)))]);
+  return <section className={`panel ${styles.section}`} aria-label="Comparativo entre anos"><div className="panel-heading"><div><h2>Comparativo entre anos</h2>{visible && <p>{periodTitle(filters.period, filters.month, dataset.year)}</p>}</div>{!standalone && <button className="button secondary" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-controls={contentId}>{open ? 'Fechar comparativo' : 'Comparar anos'}<ChevronDown size={16} className={open ? styles.rotated : undefined} /></button>}{onShare && <button type="button" className="button secondary" aria-label="Compartilhar comparativo" disabled={!comparison?.available || selectedYear == null} onClick={() => { if (comparison?.available && selectedYear != null) onShare(comparison, selectedYear); }}><MessageSquareText size={16} aria-hidden="true" />Compartilhar cenário</button>}</div>
+    <div id={contentId} hidden={!visible}>{visible && <><div className={styles.controls}><label>Comparar {dataset.year} com<select value={selectedYear ?? ''} onChange={event => setYear(Number(event.target.value))} disabled={!choices.length}>{!choices.length && <option value="">Nenhum outro ano cadastrado</option>}{choices.map(value => <option key={value} value={value}>{value}</option>)}</select></label><label className={styles.check}><input type="checkbox" checked={commonOnly} onChange={event => setCommonOnly(event.target.checked)} />Somente unidades presentes nos dois anos</label></div>
     {!choices.length ? <p>Use Importar base → Base e produção de outro ano. O cadastro atual não será sobrescrito.</p> : loaded?.key !== key ? <p role="status">Carregando o ano comparado…</p> : loaded.error ? <p role="alert">{loaded.error}</p> : !prior ? <p>Este ano não possui base salva. Importe a base e a produção histórica.</p> : comparison && <>
-      <p className="helper">{comparison.available ? `Mesmos meses fechados: ${MONTHS[comparison.first]} a ${MONTHS[comparison.last]} em ambos os anos. Meses parciais não entram no cálculo.` : 'Não há mês fechado comum no período escolhido. Selecione outro período ou atualize as bases anuais.'} </p>
+      <div className={styles.comparisonContext} aria-label="Critério e cortes do comparativo"><p>{comparison.available ? `Mesmos meses fechados: ${MONTHS[comparison.first]} a ${MONTHS[comparison.last]} em ambos os anos. Meses parciais não entram no cálculo.` : 'Não há mês fechado comum no período escolhido. Selecione outro período ou atualize as bases anuais.'}</p><div><span><strong>Corte {dataset.year}</strong> {cutLabel(currentCuts)}</span><span><strong>Corte {selectedYear}</strong> {cutLabel(previousCuts)}</span></div>{differentCuts && <p className={styles.cutoffNotice}>As datas de corte diferem. A comparação usa somente os meses fechados comuns, sem estimar produção histórica diária.</p>}</div>
 
       {comparison.available && <>
       <ComparisonDashboard comparison={comparison} currentYear={dataset.year} previousYear={selectedYear} />
-      <details className={styles.unitDetails}><summary>Detalhar por unidade · {comparison.rows.length} unidades</summary><div className="table-scroll"><table className="comparison-unit-table"><thead><tr><th scope="col">Unidade</th><th scope="col">Presença no cadastro</th><th scope="col">Meta {dataset.year}</th><th scope="col">Produção {dataset.year}</th><th scope="col">Atingimento {dataset.year}</th><th scope="col">GAP {dataset.year}</th><th scope="col">Meta {selectedYear}</th><th scope="col">Produção {selectedYear}</th><th scope="col">Atingimento {selectedYear}</th><th scope="col">GAP {selectedYear}</th><th scope="col">Variação R$</th><th scope="col">Variação %</th><th scope="col">Variação atingimento (p.p.)</th></tr></thead><tbody>{comparison.rows.map((row: any) => <tr key={row.key}><td><strong>{row.name}</strong><small className="cell-note">{row.key}</small></td><td>{row.membership === 'both' ? 'Nos dois anos' : `Somente no cadastro de ${row.membership === 'current' ? dataset.year : selectedYear}`}</td>{[row.current, row.previous].map((value: any, index: number) => <Cells key={index} value={value} fullYear={comparison.first === 0 && comparison.last === 11} />)}<td className="numeric">{money(row.delta)}</td><td className="numeric">{percent(row.growth)}</td><td className="numeric">{row.attainmentDelta == null ? 'Sem base' : row.attainmentDelta.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</td></tr>)}</tbody></table>{!comparison.rows.length && <p className="empty">Nenhuma unidade corresponde aos filtros.</p>}</div></details></>}
+      <details className={styles.unitDetails}><summary>Detalhar por unidade · {comparison.rows.length} unidades</summary><div className="table-scroll"><table className="comparison-unit-table"><thead><tr><th scope="col">Unidade</th><th scope="col">Presença no cadastro</th><th scope="col">Meta {dataset.year}</th><th scope="col">Produção {dataset.year}</th><th scope="col">Atingimento {dataset.year}</th><th scope="col">GAP {dataset.year}</th><th scope="col">Meta {selectedYear}</th><th scope="col">Produção {selectedYear}</th><th scope="col">Atingimento {selectedYear}</th><th scope="col">GAP {selectedYear}</th><th scope="col">Variação R$</th><th scope="col">Variação %</th><th scope="col">Variação atingimento (p.p.)</th></tr></thead><tbody>{comparison.rows.map((row: any) => <tr key={row.key}><td><strong>{row.name}</strong><small className="cell-note">{row.key}</small></td><td>{row.membership === 'both' ? 'Nos dois anos' : `Somente no cadastro de ${row.membership === 'current' ? dataset.year : selectedYear}`}</td>{[row.current, row.previous].map((value: any, index: number) => <Cells key={index} value={value} fullYear={comparison.first === 0 && comparison.last === 11} />)}<td className="numeric">{money(row.delta)}</td><td className="numeric">{row.growth == null ? 'Sem base' : percent(row.growth)}</td><td className="numeric">{row.attainmentDelta == null ? 'Sem base' : row.attainmentDelta.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</td></tr>)}</tbody></table>{!comparison.rows.length && <p className="empty">Nenhuma unidade corresponde aos filtros.</p>}</div></details></>}
       {filters.source === "base" && filters.level === "central" && <p className="helper">A composição de cooperativas de uma central pode mudar entre anos. Para isolar unidades comuns, compare no nível Cooperativas e marque a opção de presença nos dois anos.</p>}
 
     </>}</>}</div>
@@ -81,5 +106,6 @@ function Cells({ value, fullYear }: { value: any; fullYear: boolean }) {
 }
 function PaVariance({ row }: { row: { actual: number | null; target: number | null; complete: boolean; annualConflict?: boolean } }) {
   const value = goalVariance(row.actual, row.target, row.complete && !row.annualConflict);
-  return <><span>{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? (row.target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
+  const label = value.kind === 'growth' ? 'Superação' : value.kind === 'met' ? (row.target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP';
+  return <span className={styles.paVariance} title={label} aria-label={`${label}: ${money(value.value)}`}>{value.kind === 'growth' ? '+ ' : value.kind === 'gap' ? '− ' : ''}{money(value.value)}</span>;
 }

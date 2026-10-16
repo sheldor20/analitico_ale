@@ -73,21 +73,26 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     await page.screenshot({path:info.outputPath('compact-units-1200.png'),fullPage:true});
     expect(errors).toEqual([]);
   });
-  test('portal clean: context stays visible with filters and complementary periods collapsed', async ({ page }) => {
+  test('portal clean: context stays visible with advanced filters collapsed and five distinct analysis tabs', async ({ page }) => {
     const { errors } = await setup(page, value => value, { compactPortal: true });
     const filters = page.getByRole('region', { name: 'Filtros da análise' });
-    await expect(filters.locator('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false');
+    await expect(filters.locator('.filter-toggle')).toHaveAttribute('aria-expanded', 'false');
     await expect(filters.locator('.filter-description')).toBeVisible();
-    await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toBeHidden();
+    await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toBeVisible();
+    await expect(filters.getByRole('combobox', { name: 'Cooperativa', exact: true })).toBeHidden();
     await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
-    const periods = page.getByRole('region', { name: 'Resultados por período', exact: true });
-    await expect(periods.locator('button[aria-expanded]').first()).toHaveAttribute('aria-expanded', 'false');
-    await filters.locator('button[aria-expanded]').click();
+    await expect(page.getByRole('tab')).toHaveText(['Visão geral','Cooperativas e PAs','Por período','Comparar anos','Simulação']);
+    await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toHaveAttribute('aria-selected','true');
+    await expect(page.getByRole('region',{name:'Lista de unidades',exact:true})).toBeHidden();
+    await expect(page.getByRole('region',{name:'Resultados por período',exact:true})).toHaveCount(0);
     await filters.getByRole('combobox', { name: 'Central', exact: true }).selectOption('1002');
-    await filters.locator('button[aria-expanded]').click();
     await expect(filters.locator('.filter-description')).toContainText('Bahia');
     await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
-    await expect(periods.locator('button[aria-expanded]').first()).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('tab',{name:'Por período',exact:true})).toHaveAttribute('aria-selected','true');
+    const periods=page.getByRole('region',{name:'Resultados por período',exact:true});
+    await expect(periods).toBeVisible();
+    await expect(periods.getByRole('table',{name:'Resultados mensais',exact:true}).locator('tbody tr')).toHaveCount(12);
+    await expect(filters.getByRole('combobox',{name:'Central',exact:true})).toHaveValue('1002');
     expect(errors).toEqual([]);
   });
   test('portal v2: cards, filtered table, empty state and reset use the same scope', async ({ page }, info) => {
@@ -113,9 +118,9 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     await page.screenshot({ path: info.outputPath('portal-v2-desktop.png'), fullPage: true });
     await page.getByRole('combobox', { name: 'Filtrar situação', exact: true }).selectOption('all');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Beta');
-    await page.locator('summary').filter({ hasText: 'Evolução e simulação' }).click();
-    await expect(page.locator('.route-number')).toHaveText(/1\s*\/\s*1/);
-    await expect(page.locator('.route-progress > span')).toHaveAttribute('style', /width: 100%/);
+    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true}).locator('tbody tr')).toHaveCount(1);
+    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true})).toContainText('Cooperativa Beta');
     expect(errors).toEqual([]);
   });
   test('portal v2: filters preserve values while collapsed and navigation works on small screens', async ({ page }, info) => {
@@ -127,7 +132,8 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     const toggle = filters.locator('button[aria-expanded]');
     await toggle.focus(); await page.keyboard.press('Enter');
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toBeHidden();
+    await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toBeVisible();
+    await expect(filters.getByRole('combobox', { name: 'Cooperativa', exact: true })).toBeHidden();
     await toggle.press('Enter');
     await expect(filters.getByRole('combobox', { name: 'Central', exact: true })).toHaveValue('1002');
     for (const width of [390, 320]) {
@@ -135,8 +141,8 @@ export function registerPortalV2Tests({ test, expect, setup }) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.getByRole('button', { name: 'Cadastro e metas', exact: true }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Cadastro e metas' })).toBeFocused();
-      await page.getByRole('button', { name: 'Visão geral', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Visão geral', exact: true })).toHaveAttribute('aria-current', 'page');
+      await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button', { name: 'Análises', exact: true }).click();
+      await expect(page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button', { name: 'Análises', exact: true })).toHaveAttribute('aria-current', 'page');
       await page.locator('.filter-toggle[aria-expanded="false"]').click();
       await expect(page.getByRole('combobox', { name: 'Central', exact: true })).toHaveValue('1002');
       await expect(page.getByRole('combobox', { name: 'Trimestre', exact: true })).toHaveValue('2');
@@ -147,7 +153,7 @@ export function registerPortalV2Tests({ test, expect, setup }) {
   });
   test('portal v2: all views retain focus and fit desktop and both mobile widths', async ({ page }, info) => {
     const { errors } = await setup(page);
-    const views = ['Visão geral','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas','Metas atingidas','Agenda'];
+    const views = ['Análises','Cadência dos PAs','Plano de ação','Conferência da base','Importações','Cadastro e metas','Metas atingidas','Agenda'];
     for (const width of [1440,390,320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
       for (const [index, name] of views.entries()) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, summarize } from '../lib/analytics.mjs';
+import { analyze, businessDays, summarize } from '../lib/analytics.mjs';
 import { attainmentBand } from '../lib/attainment.mjs';
 import { buildPeriodPerformance } from '../lib/period-performance.mjs';
 import { createEmptyDataset, initializeRegistry, upsertEntity } from '../lib/registry.mjs';
@@ -146,4 +146,26 @@ test('currency precision avoids false outperformance and invalid scope inputs fa
   assert.throws(() => buildPeriodPerformance({ dataset: data, unitIds: null }), /Selecione as unidades/);
   assert.throws(() => build(data, { uplift: Infinity }), /aceleração válida/);
   assert.throws(() => build({ ...data, year: NaN }), /Ano da análise inválido/);
+});
+
+test('partial monthly reference reuses the business-day engine and remains unavailable for absent, future or mixed-cutoff data', () => {
+  const first = row({ cutoff: '2026-09-14', actuals: [690, 700, 1000, 500, 1000, 500, 1000, 700, 350, null, null, null] });
+  const second = row({ cooperative: '3025', cutoff: '2026-09-14', targets: Array(12).fill(2000), annualTarget: 24000,
+    actuals: [100, 200, 300, 400, 500, 600, 700, 800, 800, null, null, null] });
+  const data = dataset([first, second]), ids = ['cooperative:1002:3017', 'cooperative:1002:3025'];
+  const model = build(data, {}, ids), partial = period(model, 'month', 8);
+  const expected = [first, second].map(unit => analyze(unit, { year: 2026, month: 8, period: 'month' })).reduce((total, unit) => total + unit.expected, 0);
+  assert.equal(partial.phase, 'partial'); assert.equal(partial.expected, expected);
+  assert.equal(partial.expected.toFixed(2), (3000 * businessDays('2026-09-01', '2026-09-14') / businessDays('2026-09-01', '2026-09-30')).toFixed(2));
+  assert.equal(businessDays('2026-09-01', '2026-09-14'), 10, 'Monday to Friday includes holidays under the established calendar');
+  assert.equal(period(model, 'month', 7).expected, 3000);
+  assert.equal(period(model, 'month', 11).expected, null);
+  const missing = build(dataset([row({ ...first, actuals: [...first.actuals.slice(0, 8), null, null, null, null] })]));
+  assert.equal(period(missing, 'month', 8).expected, null);
+  const mixed = build(dataset([first, row({ ...second, cutoff: '2026-09-11' })]), {}, ids);
+  assert.equal(period(mixed, 'month', 8).mixedCutoffs, true);
+  assert.equal(period(mixed, 'month', 8).expected, null);
+  const zero = build(dataset([row({ ...first, targets: Array(12).fill(0), annualTarget: 0 })]));
+  assert.equal(period(zero, 'month', 8).expected, 0);
+  assert.equal(period(zero, 'month', 8).attainment, null);
 });

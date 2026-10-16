@@ -8,6 +8,7 @@ import { buildEmailFile, buildOutlookLink, buildWhatsappLink, normalizeRecipient
 import type { Dataset } from '@/lib/types';
 import { money, percent } from '@/lib/analytics.mjs';
 import { attainmentBand } from '@/lib/attainment.mjs';
+import { scenarioDisplay } from '@/lib/scenario-share-presentation.mjs';
 import type { ScenarioFilters } from './scenario-panels';
 import EmailPreview from './email-preview';
 import OutlookHandoff from './outlook-handoff';
@@ -215,7 +216,8 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
 
   return <div className={styles.content}>
     <div className={styles.context}><strong>{report.scopeLabel}</strong><span>{report.metric === 'both' ? 'Venda Nova e Arrecadação' : report.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {report.periodLabel}</span></div>
-    <p className={styles.helper}>{countUnits(report.count)} no painel · Filtros e ordem da Visão geral.</p>
+    <div className={styles.cutoffs} aria-label="Datas de corte do cenário">{report.reports.map(item => <span key={item.metric}><strong>{item.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}</strong><span>{item.parts[0] ? scenarioDisplay(item.parts[0]).cutoffLabel : 'Sem data de atualização'} · {item.phaseLabel || 'Sem realizado'}</span></span>)}</div>
+    <p className={styles.helper}>{countUnits(report.count)} no painel · Filtros e ordem da visão atual, incluindo unidades fora da área visível da tabela.</p>
     <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, calculada pelo ritmo até o corte.</small></span></label>
     <details className={styles.messageEditor}><summary>Editar mensagem</summary><div className={styles.editorFields}>
       <label className={styles.field}>Assunto da mensagem<input value={subject ?? report.subject} maxLength={300} onChange={(event) => setSubject(event.target.value)} /></label>
@@ -232,7 +234,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
       {channel === 'image' ? <section className={styles.channelPanel} aria-label="Compartilhar por WhatsApp e imagem">
         <div className={styles.pageNavigation}>
           <div><h3>Imagem do cenário</h3><p aria-live="polite">{report.metric === 'both' ? `${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · ` : ''}Parte {report.metric === 'both' ? part?.index : page + 1} de {report.metric === 'both' ? part?.total : report.parts.length}{part ? ` · ${unit.plural} ${part.from} a ${part.to}` : ''}</p></div>
-          <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page >= report.parts.length - 1} onClick={() => setPartIndex(page + 1)} >Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>
+          {report.parts.length > 1 && <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page >= report.parts.length - 1} onClick={() => setPartIndex(page + 1)} >Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>}
         </div>
         <div className={styles.deliveryControls}>
         <div className={styles.imageActions}>

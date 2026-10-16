@@ -1,3 +1,5 @@
+import { registerAnalysisJourneyTests } from './analysis-journey-cases.mjs';
+import { registerAnalysisPeriodTests } from './analysis-period-cases.mjs';
 import { step, disclosure, customize, emailDelivery, whatsappDelivery, openIndividualCommunication } from './composer-navigation.mjs';
 import { registerFollowupTests } from './followup-cases.mjs';
 import { registerPortalV2Tests } from './portal-v2-cases.mjs';
@@ -172,14 +174,14 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await login.getByLabel('Senha', { exact: true }).fill('Synthetic-only-password-123!');
   await login.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(login).toBeHidden();
-  await expect(page.getByRole('heading', { name: 'Visão geral', level: 1, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Análises', level: 1, exact: true })).toBeVisible();
   if (relationshipSeed.workspaceMissing) await expect(page.getByRole('button', { name: 'Começar pelo cadastro manual', exact: true })).toBeVisible();
   else await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
   // Existing scenario tests start with controls exposed; dedicated UX tests
   // exercise the compact initial state before making this explicit choice.
   if (!relationshipSeed.workspaceMissing && !relationshipSeed.compactPortal) {
     await page.locator('.filter-toggle[aria-expanded="false"]').click();
-    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+    await page.getByRole('tab', {name:'Cooperativas e PAs',exact:true}).click();
   }
 
   return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
@@ -245,7 +247,7 @@ test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved d
 test('central and PA use their own responsible contacts and original level', async ({ page }, testInfo) => {
   const { errors } = await setup(page);
   await page.getByLabel('Agrupar por').selectOption('central');
-  await page.getByRole('button', { name: 'Gerar comunicação de Central Bahia teste', exact: true }).click();
+  await page.getByRole('button', { name: 'Compartilhar cenário de Central Bahia teste', exact: true }).click();
   const dialog = composer(page);
   await selectAugust(dialog);
   await expect(dialog.getByText('Celia Teste', { exact: true })).toBeVisible();
@@ -261,7 +263,7 @@ test('central and PA use their own responsible contacts and original level', asy
   expect(centralText).not.toContain('PA Alfa zero');
   await dialog.getByRole('button', { name: 'Fechar comunicação', exact: true }).click();
   await page.getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
-  await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
+  await page.getByRole('button', { name: 'Compartilhar cenário de PA Alfa zero', exact: true }).click();
   await selectAugust(composer(page));
   await expect(composer(page).getByText('Paula Teste', { exact: true })).toBeVisible();
   await expect(composer(page).getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');
@@ -358,3 +360,6 @@ registerFilteredSharingTests({ test, expect, setup });
 registerRegistryOnboardingTests({ test, expect, setup, owner });
 
 registerUploadLimitTests({ test, expect, setup, owner });
+
+registerAnalysisJourneyTests({test,expect,setup});
+registerAnalysisPeriodTests({test,expect,setup,owner,created});

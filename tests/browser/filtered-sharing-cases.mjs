@@ -57,8 +57,9 @@ async function september(page) {
   await select(page, 'Ordenar análise').selectOption('production');
 }
 async function generate(page, format = 'E-mail') {
-  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
-  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
+  await page.getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
+  const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
+  await select(chooser, 'Cenário do compartilhamento').selectOption('summary');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
   await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
@@ -88,7 +89,8 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await modal.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'Central').selectOption('1002');await select(page, 'Cooperativa').selectOption('1002:3017');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Bahia');
-    await page.getByRole('region', { name: 'Prioridades da carteira', exact: true }).getByRole('button', { name: 'Ver unidades: Próximas da meta', exact: true }).click();
+    await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
+    await page.getByRole('region', { name: 'Prioridades da carteira', exact: true }).getByRole('button', { name: 'Ver unidades: Concluir metas próximas', exact: true }).click();
     await expect(list(page).locator('tbody tr')).toHaveCount(1);
     await generate(page);await expect(rows).toHaveCount(1);
     await expect(bahia.locator('td[data-label="Meta"]')).toContainText(money(100));
@@ -136,17 +138,22 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await expect(portfolio(page, 'VN')).toContainText('10/09/2026');await expect(portfolio(page, 'AR')).toContainText('05/09/2026');
     await expect(portfolio(page, 'AR').locator('header')).toContainText('Dados incompletos');
     const betaAr = portfolio(page, 'AR').locator('tr[data-unit-id="cooperative:1002:3025"]');
-    await expect(betaAr.locator('[data-field="actual"]')).toContainText('Não disponível');await expect(betaAr.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
+    await expect(betaAr.locator('[data-field="actual"]')).toHaveText('—');await expect(betaAr.locator('[data-field="actual"]').getByLabel('Não disponível', {exact:true})).toHaveCount(1);await expect(betaAr.locator('[data-field="actual"]')).not.toContainText('0,00');await expect(betaAr).toContainText('Sem realizado');await expect(betaAr.locator('[data-attainment]')).toHaveAttribute('data-attainment', 'neutral');
     await expect(portfolio(page, 'VN').locator('tr[data-unit-id="cooperative:1002:3025"] [data-field="actual"]')).toContainText(money(-25.5));
     for (const width of [1440, 1280, 1024, 390]) {
       await page.setViewportSize({width, height:width===390?844:1100});
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       for (const metric of ['VN', 'AR']) {
         const units = portfolio(page, metric).getByRole('table');
-        const geometry = await units.evaluate(node => ({table:node.scrollWidth, tableWidth:node.clientWidth, wrapper:node.parentElement.scrollWidth, wrapperWidth:node.parentElement.clientWidth, right:node.getBoundingClientRect().right}));
-        expect(geometry.table, `${metric} at ${width}`).toBeLessThanOrEqual(geometry.tableWidth + 1);
-        expect(geometry.wrapper, `${metric} wrapper at ${width}`).toBeLessThanOrEqual(geometry.wrapperWidth + 1);
-        expect(geometry.right).toBeLessThanOrEqual(width + 1);
+        const geometry = await units.evaluate(node => {const wrapper=node.parentElement,bounds=wrapper.getBoundingClientRect();return {table:node.scrollWidth,tableWidth:node.clientWidth,wrapper:wrapper.scrollWidth,wrapperWidth:wrapper.clientWidth,wrapperHeight:wrapper.clientHeight,contentHeight:wrapper.scrollHeight,overflow:getComputedStyle(wrapper).overflowX,left:bounds.left,right:bounds.right,rows:[...node.tBodies[0].rows].map(row=>getComputedStyle(row).display)};});
+        expect(geometry.table, `${metric} table cells at ${width}`).toBeLessThanOrEqual(geometry.tableWidth + 1);
+        expect(geometry.left).toBeGreaterThanOrEqual(0);expect(geometry.right).toBeLessThanOrEqual(width + 1);
+        expect(geometry.contentHeight, `${metric} natural vertical flow at ${width}`).toBeLessThanOrEqual(geometry.wrapperHeight + 1);
+        expect(geometry.rows).toEqual(['table-row','table-row']);
+        if(geometry.wrapper>geometry.wrapperWidth+1)expect(geometry.overflow).toBe('auto');
+        const rightEdge=await units.evaluate(node=>{const wrapper=node.parentElement;wrapper.scrollLeft=wrapper.scrollWidth;return {cell:node.tBodies[0].rows[0].lastElementChild.getBoundingClientRect().right,wrapper:wrapper.getBoundingClientRect().right};});
+        expect(rightEdge.cell,`${metric} actions reachable at ${width}`).toBeLessThanOrEqual(rightEdge.wrapper+1);
+        await units.evaluate(node=>{node.parentElement.scrollLeft=0;});
       }
     }
     await page.setViewportSize({width:1440, height:1100});

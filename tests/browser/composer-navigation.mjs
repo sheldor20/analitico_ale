@@ -1,5 +1,5 @@
 export async function openIndividualCommunication(page, format = 'E-mail') {
-  await page.getByRole('button', { name: /^Gerar comunicação de / }).first().click();
+  await page.getByRole('button', { name: /^Compartilhar cenário de / }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
   await dialog.waitFor({ state: 'visible' });
   if (format === 'Painel resumido') await step(dialog, 2);

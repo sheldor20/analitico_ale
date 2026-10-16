@@ -49,6 +49,7 @@ async function chooseCohort(page) {
   await select(page, 'Mês de referência').selectOption('7');
   await page.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
   await select(page, 'Filtrar situação').selectOption('track');
+  await page.getByRole('tab',{name:'Por período',exact:true}).click();
   await select(panel(page), 'Ordenar períodos').selectOption('attainment-desc');
 }
 
@@ -58,21 +59,27 @@ function htmlFromEml(eml) {
 }
 
 export function registerPeriodShareTests({ test, expect, setup }) {
-  test('period sharing: the exact AR cohort and order survive all 19 periods, collapsed groups, email and one complete compact PNG', async ({ page, context }, info) => {
+  test('period sharing: the exact AR cohort and order survive all 19 periods, granularities, email and one complete compact PNG', async ({ page, context }, info) => {
     await recordCopies(page);
     const { errors, writes, relationshipWrites, contactImports, contactReads } = await setup(page, managementFixture);
     await chooseCohort(page);
-    const sourceIds = await panel(page).locator('[data-period][data-month]').evaluateAll(nodes => nodes.map(node => `${node.dataset.period}:${node.dataset.month}`));
+    const sourceIds=[];
+    for(const granularity of ['annual','month','quarter','semester']) {
+      await select(panel(page),'Granularidade dos períodos').selectOption(granularity);
+      const ids=await panel(page).locator('[data-period][data-month]').evaluateAll(nodes=>nodes.map(node=>`${node.dataset.period}:${node.dataset.month}`));
+      expect(ids).toHaveLength({annual:1,month:12,quarter:4,semester:2}[granularity]);
+      sourceIds.push(...ids);
+    }
     expect(sourceIds).toHaveLength(19);
     expect(sourceIds).toEqual([
       'annual:11', ...[2, 4, 6, 1, 7, 0, 3, 5, 8, 9, 10, 11].map(month => `month:${month}`),
       'quarter:2', 'quarter:5', 'quarter:8', 'quarter:11', 'semester:5', 'semester:11',
     ]);
-    await panel(page).getByRole('button', { name: 'Recolher resultados mensais', exact: true }).click();
-    await panel(page).getByRole('button', { name: 'Recolher resultado anual', exact: true }).click();
+    await select(panel(page),'Granularidade dos períodos').selectOption('month');
     await panel(page).getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
     const dialog = share(page);
-    await expect(select(dialog, 'Períodos para compartilhar')).toHaveValue('all');
+    await expect(select(dialog, 'Períodos para compartilhar')).toHaveValue('month');
+    await select(dialog,'Períodos para compartilhar').selectOption('all');
     await expect(projection(dialog)).not.toBeChecked();
     await expect(rows(page)).toHaveCount(19);
     expect(await rows(page).evaluateAll(nodes => nodes.map(node => node.dataset.periodShareId))).toEqual(sourceIds);

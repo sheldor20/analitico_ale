@@ -27,9 +27,9 @@ function workflowFixture(dataset) {
 }
 
 async function openGenerator(page, content, format = 'E-mail') {
-  await page.getByRole('button', { name: 'Gerar comunicação', exact: true }).click();
-  const chooser = page.getByRole('dialog', { name: 'Gerar comunicação', exact: true });
-  if (await chooser.getByRole('radio', { name: content, exact: true }).count()) throw new Error('A comunicação deve herdar o nível do dashboard, sem seleção interna de conteúdo.');
+  await page.getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
+  const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
+  await select(chooser, 'Cenário do compartilhamento').selectOption(content.startsWith('PAs') ? 'pa' : 'cooperative');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
   await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
@@ -95,7 +95,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(list(page)).toContainText('PA Alfa zero');
     await expect(list(page)).not.toContainText('PA Nordeste zero');
     await page.getByRole('button', { name: 'Voltar ao recorte anterior', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Visão geral', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Análises', exact: true })).toBeVisible();
     await expect(select(page, 'Central')).toHaveValue('1002');
     await expect(select(page, 'Filtrar situação')).toHaveValue('attention');
     await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('Alfa');
@@ -143,7 +143,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(frame(page).locator('body')).not.toContainText('PA Nordeste zero');
     await share(page).getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'PA').selectOption('1002:3017:0');
-    await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
+    await page.getByRole('button', { name: 'Compartilhar cenário de PA Alfa zero', exact: true }).click();
     const individual = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
     await expect(individual.getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');
     await expect(individual.getByText('Paula Teste', { exact: true })).toBeVisible();
