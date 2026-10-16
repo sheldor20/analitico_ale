@@ -47,7 +47,6 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
   const models = useMemo(() => suppliedModels ?? buildCurrentViewModels({ dataset, filters }), [suppliedModels, dataset, filters]);
   return <section className={styles.combined} aria-label="Venda Nova e Arrecadação">
     {controls}
-    <AttainmentLegend />
     {models.map(model => <section className={styles.portfolio} key={model.metric} aria-label={`Carteira ${model.label}`} data-portfolio={model.metric}>
       <header className={styles.heading}><div><h2>{model.label}</h2><p>{model.periodLabel} · {model.count} {model.level === 'central' ? model.count === 1 ? 'central' : 'centrais' : model.level === 'pa' ? model.count === 1 ? 'PA' : 'PAs' : model.count === 1 ? 'cooperativa' : 'cooperativas'}</p><p className={styles.cutoff}>{model.cutoff ? model.cutoffMin && model.cutoffMin !== model.cutoff ? `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}` : `Corte: ${dateLabel(model.cutoff)}` : 'Sem data de atualização'} · {model.phaseLabel}</p></div><div className={styles.actions}><button type="button" className="button secondary" disabled={!model.count} onClick={() => onShare(model.metric)}><Share2 size={16} aria-hidden="true" />Compartilhar {model.label}</button><button type="button" className="button quiet" disabled={!model.count} onClick={() => onExport(model.metric)}><Download size={16} aria-hidden="true" />Exportar {model.label}</button></div></header>
       <Headline model={model} />
@@ -65,6 +64,7 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
         })}</tbody>
       </table></div> : <p className={styles.empty}>Nenhuma unidade de {model.label} no recorte atual. Ajuste os filtros para continuar.</p>}
     </section>)}
+    <AttainmentLegend />
     <div id="resultados-por-periodo" className={styles.periods} tabIndex={-1} aria-label="Resultados por período das carteiras">
       {models.map(model => <PeriodPerformance key={model.metric} dataset={dataset} filters={model.filters} unitIds={model.unitIds} ownerId={ownerId} sectionId={`resultados-por-periodo-${model.metric.toLowerCase()}`} initialExpanded={false} expandRequest={expandRequest || undefined} />)}
     </div>

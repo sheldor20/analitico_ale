@@ -64,6 +64,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
     }
     for(const name of ['Cooperativa Alfa',betaName])for(const action of ['Ver PAs de','Detalhar']){
      const button=list.getByRole('button',{name:`${action} ${name}`,exact:true});await expect(button).toBeVisible();
+     await button.scrollIntoViewIfNeeded();
      const box=await button.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width+1);
     }
     if((width===1440&&!more)||(width===1024&&more))await list.screenshot({path:testInfo.outputPath(`cooperative-table-${width}-${more?'details':'primary'}.png`)});

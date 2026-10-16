@@ -1,5 +1,31 @@
 import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 export function registerPortalV2Tests({ test, expect, setup }) {
+  test('unit results inherit overview filters, keep only ordering and place the legend below every row', async ({page},info) => {
+    const {errors}=await setup(page);
+    const filters=page.getByRole('region',{name:'Filtros da análise',exact:true});
+    await filters.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
+    await filters.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
+    await filters.getByRole('combobox',{name:'Filtrar situação',exact:true}).selectOption('attention');
+    const result=page.getByRole('region',{name:'Lista de unidades',exact:true});
+    await expect(result.getByRole('combobox')).toHaveCount(1);
+    await expect(result.getByRole('combobox',{name:'Ordenar análise',exact:true})).toBeVisible();
+    await expect(result.getByRole('combobox',{name:'Filtrar situação',exact:true})).toHaveCount(0);
+    await expect(result.getByRole('combobox',{name:'Agrupar por',exact:true})).toHaveCount(0);
+    await expect(result.getByLabel('Buscar cooperativa ou PA')).toHaveCount(0);
+    await expect(result.locator('.unit-result-row')).toHaveCount(1);
+    await expect(result.locator('.unit-result-row')).toContainText('Cooperativa Alfa');
+    await expect.poll(()=>result.evaluate(element=>{
+      const table=element.querySelector('.unit-results-table').getBoundingClientRect();
+      const legend=element.querySelector('.overview-table-legend').getBoundingClientRect();
+      return legend.top >= table.bottom-1;
+    })).toBe(true);
+    await filters.locator('.filter-toggle').click();
+    await expect(filters.locator('.filter-description')).toContainText('Busca: Alfa');
+    await expect(filters.locator('.filter-description')).toContainText('Precisam de atenção');
+    await expect(result.locator('.unit-result-row')).toHaveCount(1);
+    await page.screenshot({path:info.outputPath('overview-scope-and-compact-result.png'),fullPage:true});
+    expect(errors).toEqual([]);
+  });
   test('compact units: all cooperatives and PAs remain in one unpaginated table with natural vertical flow', async ({page},info) => {
     const {errors}=await setup(page,dataset=>{
       for (let index=1;index<=22;index++) {
