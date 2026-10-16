@@ -5,9 +5,9 @@ export function registerPortalV2Tests({ test, expect, setup }) {
       for (let index=1;index<=22;index++) {
         const cooperative=String(5000+index),pa=String(index);
         dataset=upsertEntity(dataset,{kind:'cooperative',central:'1002',cooperative,name:`Cooperativa compacta ${index}`});
-        dataset=upsertPlanRow(dataset,{entityId:`cooperative:1002:${cooperative}`,metric:'VN',targets:Array(12).fill(100),annualTarget:1200,actuals:Array(12).fill(75),cutoff:'2026-08-31'});
+        dataset=upsertPlanRow(dataset,{entityId:`cooperative:1002:${cooperative}`,metric:'VN',targets:Array(12).fill(100),annualTarget:1200,actuals:[...Array(8).fill(75),null,null,null,null],cutoff:'2026-08-31'});
         dataset=upsertEntity(dataset,{kind:'pa',central:'1002',cooperative:'3017',pa,name:`PA compacto ${index}`,group:'P1'});
-        dataset=upsertPlanRow(dataset,{entityId:`pa:1002:3017:${pa}`,metric:'VN',targets:Array(12).fill(450),annualTarget:5400,actuals:Array(12).fill(300),cutoff:'2026-08-31'});
+        dataset=upsertPlanRow(dataset,{entityId:`pa:1002:3017:${pa}`,metric:'VN',targets:Array(12).fill(450),annualTarget:5400,actuals:[...Array(8).fill(300),null,null,null,null],cutoff:'2026-08-31'});
       }
       return dataset;
     });
