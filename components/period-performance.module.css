@@ -63,9 +63,7 @@
 .cardActual { margin-bottom:8px; }
 .cardDetails { padding-top:8px;gap:8px 12px; }
 .cardDetails>div { flex-basis:90px; }
-@container period-results (min-width:800px) {
+@container period-results (min-width:1100px) {
   .annualGrid,.quarterGrid { grid-template-columns:repeat(4,minmax(0,1fr));gap:8px; }
   .kpi>svg { display:none; }
-  .cardDetails>div { flex-basis:100%;display:flex;justify-content:space-between;align-items:baseline;gap:6px; }
-  .cardDetails dd { margin:0; }
 }
