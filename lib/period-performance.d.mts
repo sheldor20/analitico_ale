@@ -8,7 +8,7 @@ export type PerformanceFilters = Partial<{
 export type PerformancePeriod = 'month' | 'quarter' | 'semester' | 'annual';
 export type PerformanceRow = {
   id: string; period: PerformancePeriod; month: number; label: string; start: string | null; end: string | null;
-  target: number | null; actual: number | null; attainment: number | null;
+  target: number | null; actual: number | null; expected: number | null; attainment: number | null;
   projected: number | null; projectedAttainment: number | null; variance: ReturnType<typeof goalVariance>;
   complete: boolean; annualConflict: boolean; mixedCutoffs: boolean;
   phase: 'conflict' | 'future' | 'missing' | 'incomplete' | 'closed' | 'partial'; phaseLabel: string;

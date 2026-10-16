@@ -75,7 +75,7 @@ import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import PanelToggle from './ui/panel-toggle';
 import { AnalysisTabs, AnalysisBreadcrumb, OverviewUnits, AnalysisSimulation, type AnalysisTab } from './analysis-workspace';
-import { analysisEffort } from '@/lib/analysis-workspace.mjs';
+import { analysisEffort, relatedScenarioIds } from '@/lib/analysis-workspace.mjs';
 import AnalysisReportShare from './analysis-report-share';
 
 import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/portal-navigation';
@@ -197,7 +197,7 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
-  const [sharing, setSharing] = useState<{ kind: "central" | "pa" | "cooperative"; central?: string; coop?: string; metric?: "VN" | "AR"; unitIdsByMetric?: Partial<Record<"VN" | "AR", string[]>>; format?: "email" | "image" | "summary"; showProjection?: boolean } | null>(null);
+  const [sharing, setSharing] = useState<{ related?:boolean; kind: "central" | "pa" | "cooperative"; central?: string; coop?: string; metric?: "VN" | "AR"; unitIdsByMetric?: Partial<Record<"VN" | "AR", string[]>>; format?: "email" | "image" | "summary"; showProjection?: boolean } | null>(null);
   const uplift = view === "overview" && analysisTab === "simulation" ? simulationUplift : 0;
   const effectiveSource = view === "cadence" ? "cadence" : source;
   const selectedMetric = effectiveSource === "cadence" || view === "actions" && metric === "both" ? "VN" : metric;
@@ -371,11 +371,12 @@ export default function Dashboard() {
   const currentModels = useMemo(() => dataset && combinedPortfolios ? buildCurrentViewModels({dataset, filters: {central, coop, pa:'all', source:effectiveSource, metric:'both', group, level:actualLevel, period, month, uplift, sortBy, search, status:statusFilter}}) : [], [dataset, combinedPortfolios, central, coop, effectiveSource, group, actualLevel, period, month, uplift, sortBy, search, statusFilter]);
   const currentCount = combinedPortfolios ? currentModels.reduce((count, model) => count + model.count, 0) : displayed.length;
   const activeExportModel = combinedPortfolios ? currentModels.find(model => model.metric === exportMetric) : undefined;
-  const sharingFilters = sharing?.coop
+  const baseSharingFilters = sharing?.coop
     ? { ...currentFilters, source: 'cadence', metric: 'VN', level: 'pa', central: sharing.central || central, coop: sharing.coop, pa: 'all', group: 'all', search: '', status: 'all' }
     : sharing?.central
       ? { ...currentFilters, source: 'base', level: 'cooperative', central: sharing.central, coop, pa: 'all', search: '', status: 'all' }
       : { ...currentFilters, ...(sharing?.metric ? {metric:sharing.metric} : {}) };
+  const sharingFilters = {...baseSharingFilters,...(sharing?.related?{search:'',status:'all',group:'all',pa:'all'}:{})};
   const insights = buildDecisionInsights(displayed);
   const cutoffs = [...new Set(visibleLeaves.flatMap((r) => [r.cutoffMin || r.cutoff, r.cutoff]))].sort();
   const cutoff = cutoffs[0];
@@ -513,10 +514,10 @@ export default function Dashboard() {
   }
   function startCommunication(choice: CommunicationChoice, fromStart = true, portfolio?: 'VN' | 'AR') {
     setShowCommunicationStart(false); communicationFromStart.current = fromStart;
-    const unitIdsByMetric = combinedPortfolios
-      ? Object.fromEntries(currentModels.filter(model => !portfolio || model.metric === portfolio).map(model => [model.metric, model.unitIds]))
-      : { [effectiveMetric]: displayed.map(row => entityFromAnalysis(row).id) };
-    setSharing({kind:choice.content, format:choice.format, showProjection:choice.showProjection, ...(choice.content===actualLevel?{unitIdsByMetric}:{}), ...(choice.content==='pa'&&coop!=='all'?{coop,central}:{}), ...(portfolio ? {metric:portfolio} : {})});
+    const related=choice.content!==actualLevel;
+    const cohortModels=combinedPortfolios?currentModels.filter(model=>!portfolio||model.metric===portfolio):[{metric:effectiveMetric,rows:displayed,unitIds:displayed.map(row=>entityFromAnalysis(row).id)}];
+    const unitIdsByMetric=related&&dataset?Object.fromEntries((choice.content==='pa'?['VN']:cohortModels.map(model=>model.metric)).map(targetMetric=>[targetMetric,relatedScenarioIds(analysisRows(dataset),cohortModels.flatMap(model=>model.rows),choice.content,targetMetric)])):Object.fromEntries(cohortModels.map(model=>[model.metric,model.unitIds]));
+    setSharing({kind:choice.content,related,format:choice.format,showProjection:choice.showProjection,unitIdsByMetric,...(choice.content==='pa'&&coop!=='all'?{coop,central}:{}),...(portfolio?{metric:portfolio}:{})});
   }
   function showAllPeriods() {
     changeAnalysisTab('periods',false);

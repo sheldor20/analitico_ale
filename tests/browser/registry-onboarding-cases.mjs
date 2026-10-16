@@ -58,7 +58,12 @@ export function registerRegistryOnboardingTests({test,expect,setup,owner}) {
     const cooperative=page.getByRole('combobox',{name:'Cooperativa',exact:true});
     expect(await cooperative.locator('option').evaluateAll(nodes=>nodes.map(node=>node.value))).toEqual(['all','3456:6789']);
     await cooperative.selectOption('3456:6789');
+    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true})).toContainText('Cooperativa Exemplo');
+    await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
+    await expect(page.getByRole('tab',{name:'Cooperativas e PAs',exact:true})).toHaveAttribute('aria-selected','true');
     await expect(page.getByRole('region',{name:'Lista de unidades',exact:true})).toContainText('Cooperativa Exemplo');
+    await expect(central).toHaveValue('3456');
+    await expect(cooperative).toHaveValue('3456:6789');
     await expect(page.locator('body')).not.toContainText(/Bahia|Nordeste/i);
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);

@@ -71,7 +71,7 @@ function PeriodTable({ rows, title, period, indicator }: { rows: PerformanceRow[
     <thead><tr><th scope="col">{period === 'month' ? 'Mês' : 'Período'}</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção do período</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.id} data-period={row.period} data-month={row.month} data-phase={row.phase}>
       <th scope="row"><div className={styles.periodLabel}><strong>{row.label}</strong><Phase row={row} /></div></th>
-      <td className={styles.numeric} data-field="target"><FinancialValue value={row.target} /></td>
+      <td className={styles.numeric} data-field="target"><FinancialValue value={row.target} />{row.period === 'month' && row.phase === 'partial' && row.expected != null && <small className={styles.proportionalReference} data-field="expected" title="Meta mensal proporcional aos dias úteis até o corte; segunda a sexta, sem descontar feriados">Até o corte: <FinancialValue value={row.expected} /></small>}</td>
       <td className={styles.numeric} data-field="actual"><FinancialValue value={row.actual} /></td>
       <td className={styles.attainmentCell} data-field="attainment"><Attainment row={row} /></td>
       <td className={styles.numeric} data-field="variance"><Balance row={row} /></td>
@@ -108,6 +108,7 @@ function PeriodChart({ rows, indicator, title }: { rows: PerformanceRow[]; indic
       {rows.map((row, index) => <g key={row.id}>{row[indicator] != null && <circle className={styles.chartPoint} cx={x(index)} cy={y(row[indicator]!)} r="5" data-phase={row.phase}><title>{row.label}: {indicator === 'attainment' ? percent(row.attainment) : money(row[indicator])} · {row.phaseLabel}</title></circle>}<text x={x(index)} y="254" textAnchor="middle">{row.period === 'month' ? row.label.slice(0, 3) : row.period === 'quarter' ? `${Math.floor(row.month / 3) + 1}º tri.` : row.period === 'semester' ? `${Math.floor(row.month / 6) + 1}º sem.` : 'Ano'}</text>{row.phase === 'partial' && <text className={styles.chartPartial} x={x(index)} y="273" textAnchor="middle">Parcial</text>}</g>)}
     </svg>
     <p>Gráfico em ordem cronológica. Marcas preenchidas representam valores informados, inclusive zero. {indicator === 'target' ? 'Metas planejadas permanecem visíveis nos períodos após o corte.' : 'Períodos após o corte e informações ausentes permanecem sem ponto.'} Use Tabela para consultar valores e situação de cada período.</p>
+    {rows.some(row => row.phase === 'partial' && row.expected != null) && <p>Referência proporcional calculada pelos dias úteis até o corte, de segunda a sexta, sem descontar feriados. Consulte “Até o corte” na meta mensal da tabela.</p>}
   </figure>;
 }
 
