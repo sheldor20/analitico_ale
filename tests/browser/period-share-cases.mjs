@@ -140,6 +140,9 @@ export function registerPeriodShareTests({ test, expect, setup }) {
       ['Ano completo', 'Março', 'Maio', 'Julho', 'Fevereiro', 'Agosto', 'Janeiro', 'Abril', 'Junho', 'Setembro', 'Outubro', 'Novembro', 'Dezembro', '1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre', '1º semestre', '2º semestre'],
     ];
     const labels = partLabels.flat();
+    await expect(dialog.getByText('Imagem única · 19 períodos · janeiro a dezembro',{exact:true})).toBeVisible();
+    await expect(dialog.getByRole('button',{name:'Próxima parte',exact:true})).toHaveCount(0);
+    expect(partLabels.flat()).toContain('Dezembro');
     for (const index of [1]) {
       const image = dialog.getByRole('img', { name: `Cenário por período — parte ${index} de 1`, exact: true });
       await expect.poll(() => image.evaluate(node => node.naturalWidth)).toBe(1200);

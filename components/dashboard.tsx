@@ -772,7 +772,7 @@ export default function Dashboard() {
     if (error) setError("Não foi possível salvar a ação.");
     else setNotice("Ação salva.");
   }
-  const listControls = <>
+  const analysisRefinements = <>
                             <label className="control-field"><span>Situação</span><select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                               <option value="all">Todas as situações</option><option value="attention">Precisam de atenção</option><option value="track">Em rota / meta atingida</option><option value="missing">Dados ou metas pendentes</option>
                             </select></label>
@@ -800,6 +800,8 @@ export default function Dashboard() {
                                 onChange={(e) => setSearch(e.target.value)}
                               />
                             </label>
+  </>;
+  const listControls = <>
                             <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
   </>;
   const resultContextPanels = <>
@@ -1113,7 +1115,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <FilterPanel description={view === "audit" ? scopeLabel : `${metricName(selectedMetric)} · ${scopeLabel} · ${periodDescription}`} onReset={resetFilters} active={pa !== 'all' || central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
+              <FilterPanel description={view === "audit" ? scopeLabel : [metricName(selectedMetric), scopeLabel, periodDescription, statusFilter !== 'all' ? ({attention:'Precisam de atenção',track:'Em rota / meta atingida',missing:'Dados ou metas pendentes'} as Record<string,string>)[statusFilter] : '', search ? `Busca: ${search}` : ''].filter(Boolean).join(' · ')} onReset={resetFilters} active={pa !== 'all' || central !== 'all' || coop !== 'all' || group !== 'all' || Boolean(search) || statusFilter !== 'all' || uplift > 0}>
                 {view !== "audit" && <><label>
                   Fonte
                   <select
@@ -1193,6 +1195,7 @@ export default function Dashboard() {
                 {view !== 'audit' && effectiveSource === 'cadence' && <label>PA<select aria-label="PA" value={pa} onChange={event => {const value=event.target.value;setPa(value);if(value !== 'all'){const [parentCentral,parentCoop]=value.split(':');setCentral(parentCentral);setCoop(`${parentCentral}:${parentCoop}`);}}}><option value="all">Todos os PAs</option>{paOptions.map(([key, name]) => <option key={key} value={key}>{name} · Central {key.split(':')[0]}</option>)}</select></label>}
                 {view !== "audit" && <PeriodSelector period={period} month={month} year={dataset?.year ?? config.year}
                   onPeriodChange={setPeriod} onMonthChange={setMonth} />}
+                {view !== "audit" && analysisRefinements}
               </FilterPanel>
               {view !== 'audit' && (drillHistory.length > 0 || focus) && <div className="scope-navigation" aria-label="Navegação do recorte">
                 {drillHistory.length > 0 && <button type="button" className="button quiet" onClick={goBack}><ChevronLeft size={16} />Voltar ao recorte anterior</button>}
@@ -1377,16 +1380,15 @@ export default function Dashboard() {
                             <p>{displayed.length} de {analyses.length} unidades</p>
                           </div>
                           <div className="overview-block-actions">
+                            <div className="table-controls overview-unit-controls">
+                              {listControls}
+                              <label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>
+                            </div>
                             <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                             <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           </div>
                         </div>
                         <div id={unitContentId} hidden={!unitsExpanded}>
-                          <div className="table-controls overview-unit-controls">
-                            {listControls}
-                            <label className="indicator-toggle"><input type="checkbox" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Mais indicadores</label>
-                          </div>
-                          <div className="overview-table-legend"><AttainmentLegend /></div>
                         <div className="selection-toolbar" aria-live="polite">
                           <label className="unit-select-all"><input className="row-selector" type="checkbox" aria-label="Selecionar todas as unidades filtradas" checked={displayed.length > 0 && selectedKeys.length === displayed.length} ref={element => { if(element) element.indeterminate = selectedKeys.length > 0 && selectedKeys.length < displayed.length; }} onChange={event => setRowSelection({context:selectionContext, keys:event.target.checked ? displayed.map(row => row.key) : []})} />Selecionar todas</label>
                           <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar.'}</span>
@@ -1406,7 +1408,9 @@ export default function Dashboard() {
                                 </th>
                                 <th role="columnheader" scope="col" className="numeric">Meta</th>
                                 <th role="columnheader" scope="col" className="numeric">Realizado</th>
-                                <th role="columnheader" scope="col" className="numeric">Crescimento / GAP</th>
+                                <th role="columnheader" scope="col" className="numeric">Atingimento</th>
+                                <th role="columnheader" scope="col" className="numeric">GAP / Superação</th>
+                                <th role="columnheader" scope="col" className="numeric">Projeção</th>
                                 <th role="columnheader" scope="col">
                                   Ações
                                 </th>
@@ -1444,18 +1448,16 @@ export default function Dashboard() {
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="actual" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
                                       <span className="unit-field-label" aria-hidden="true">Realizado</span>
-                                      <div className="unit-actual">
-                                        <strong className="unit-money">{money(r.actual)}</strong>
-                                        <div className="attainment" data-attainment={attainmentBand(r.annualConflict ? null : r.attainment).key}>
-                                          <span>{percent(r.attainment)} <span className="unit-attainment-note">da meta</span></span>
-                                          <span className="mini-progress" aria-hidden="true"><i style={{width: `${Math.max(0, Math.min(100, (r.attainment ?? 0) * 100))}%`}} /></span>
-                                        </div>
-                                      </div>
+                                      <strong className="unit-money">{money(r.actual)}</strong>
+                                    </td>
+                                    <td role="cell" className="numeric unit-metric unit-attainment-cell" data-field="attainment">
+                                      <span className="unit-attainment-badge" data-attainment={attainmentBand(r.complete && !r.annualConflict ? r.attainment : null).key}>{r.complete && !r.annualConflict ? r.target === 0 ? 'Meta zero' : percent(r.attainment) : 'Sem avaliação'}</span>
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="variance">
                                       <span className="unit-field-label" aria-hidden="true">Crescimento / GAP</span>
                                       <div><ResultVariance actual={r.actual} target={r.target} complete={r.complete} conflict={!!r.annualConflict} /></div>
                                     </td>
+                                    <td role="cell" className="numeric unit-metric" data-field="projected" title={`${percent(r.projectedAttainment)} da meta · estimativa`}><span className="unit-money">{money(r.projected)}</span></td>
                                     <td role="cell" className="unit-actions-cell">
                                       <div className="unit-row-actions">
                                       {actualLevel === 'central' && <button type="button" className="button quiet" aria-label={`Ver cooperativas de ${r.name}`} onClick={() => openCentral(r)}>Ver cooperativas</button>}
@@ -1477,10 +1479,9 @@ export default function Dashboard() {
                                     </td>
                                   </tr>
                                   {(showMoreIndicators || sortBy === 'contribution' || sortBy === 'evolution') && <tr role="row" className={`unit-indicators-row${selectedKeys.includes(r.key) ? ' selected-result' : ''}`}>
-                                    <td role="cell" colSpan={5}>
+                                    <td role="cell" colSpan={7}>
                                       <dl className="unit-indicators" aria-label={`Indicadores adicionais de ${r.name}`}>
                                         {showMoreIndicators && <>
-                                          <div><dt>Projeção</dt><dd><span className="unit-money">{money(r.projected)}</span><small>{percent(r.projectedAttainment)} da meta · estimativa</small></dd></div>
                                           <div><dt>Necessário/dia</dt><dd><span className="unit-money">{money(r.requiredDaily)}</span></dd></div>
                                         </>}
                                         {(showMoreIndicators || sortBy === 'contribution') && <div><dt>Contribuição</dt><dd>{percent(r.contribution)}<small>{r.contribution == null ? 'Sem base comparável' : 'do realizado da seleção'}</small></dd></div>}
@@ -1488,12 +1489,13 @@ export default function Dashboard() {
                                       </dl>
                                     </td>
                                   </tr>}
-                                  {actualLevel === 'cooperative' && expandedCoops.includes(r.key) && dataset && <tr role="row" className="expanded-unit"><td role="cell" colSpan={5}><PaTable dataset={dataset} filters={{...scenarioFilters,central:r.central,coop:`${r.central}:${r.cooperative}`,pa:'all'}} expanded onToggle={() => setExpandedCoops(keys => keys.filter(key => key !== r.key))} onSelect={setSelected} onShare={() => setSharing({kind:'pa',central:r.central,coop:`${r.central}:${r.cooperative}`})} onOpenCadence={() => openCooperative(r,true)} /></td></tr>}
+                                  {actualLevel === 'cooperative' && expandedCoops.includes(r.key) && dataset && <tr role="row" className="expanded-unit"><td role="cell" colSpan={7}><PaTable dataset={dataset} filters={{...scenarioFilters,central:r.central,coop:`${r.central}:${r.cooperative}`,pa:'all'}} expanded onToggle={() => setExpandedCoops(keys => keys.filter(key => key !== r.key))} onSelect={setSelected} onShare={() => setSharing({kind:'pa',central:r.central,coop:`${r.central}:${r.cooperative}`})} onOpenCadence={() => openCooperative(r,true)} /></td></tr>}
                                 </Fragment>
                                 ))}
                             </tbody>
                           </table>
                         </div>
+                        <div className="overview-table-legend"><AttainmentLegend /></div>
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}
@@ -1865,7 +1867,7 @@ function FileSlot({
 
 function ResultVariance({ actual, target, complete, conflict }: { actual: number | null; target: number | null; complete: boolean; conflict: boolean }) {
   const value = goalVariance(actual, target, complete && !conflict);
-  return <><span className="unit-money">{money(value.value)}</span><small className="cell-note">{value.kind === 'growth' ? 'Crescimento' : value.kind === 'met' ? (target ?? 0) > 0 ? 'Meta atingida' : 'Meta zero' : value.kind === 'unknown' ? 'Sem avaliação' : 'GAP'}</small></>;
+  return <span className="unit-money unit-variance" data-variance={value.kind} title={value.label}><span className="sr-only">{value.label}: </span>{value.kind === 'growth' ? '+ ' : value.kind === 'gap' ? '− ' : ''}{money(value.value)}</span>;
 }
 
 function Modal({

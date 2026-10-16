@@ -2745,42 +2745,9 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .unit-indicators small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 3px; }
 .unit-results-table > tbody > .expanded-unit .table-scroll { contain: inline-size; }
 
-@container unit-results (max-width: 760px) {
-  .workspace-content .unit-results-table,
-  .unit-results-table > tbody { display: block; }
-  .unit-results-table > thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .workspace-content .unit-results-table > thead > tr > th { position: static; }
-  .unit-results-table > tbody > .unit-result-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
-  .workspace-content .unit-results-table > tbody > .unit-result-row > td { display: block; min-width: 0; width: auto; padding: 12px 16px; border: 0; }
-  .unit-result-row > .unit-identity,
-  .unit-result-row > .unit-actions-cell { grid-column: 1 / -1; }
-  .unit-results-table .unit-identity { display: flex !important; align-items: center; justify-content: space-between; gap: 12px; }
-  .unit-results-table .entity-cell { flex: 1; }
-  .unit-status { padding: 0; margin: 0; max-width: 35%; }
-  .unit-result-row .unit-field-label { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-bottom: 6px; white-space: normal; }
-  .unit-result-row .unit-row-actions { justify-content: flex-start; }
-  .unit-results-table > tbody > .unit-indicators-row,
-  .unit-results-table > tbody > .expanded-unit { display: block; }
-  .workspace-content .unit-results-table > tbody > .unit-indicators-row > td,
-  .workspace-content .unit-results-table > tbody > .expanded-unit > td { display: block; width: 100%; }
-}
 
-@container unit-results (max-width: 480px) {
-  .unit-results-table > tbody > .unit-result-row { grid-template-columns: minmax(0, 1fr); }
-  .workspace-content .unit-results-table > tbody > .unit-result-row > td { padding: 10px 12px; }
-  .unit-results-table .unit-identity { flex-wrap: wrap; gap: 6px; }
-  .unit-results-table .entity-cell { flex-basis: 100%; }
-  .unit-status { padding-left: 26px; max-width: none; }
-  .workspace-content .unit-results-table > tbody > .unit-result-row > .unit-metric { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 10px; font-size: 16px; }
-  .unit-result-row .unit-field-label { margin: 0; text-align: left; }
-  .unit-row-actions { gap: 6px; }
-  .unit-row-actions .icon-button { width: 42px; height: 42px; flex-basis: 42px; }
-  .workspace-content .unit-row-actions .button { min-height: 42px; }
-  .unit-indicators { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .unit-indicators > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
-  .unit-indicators dd { text-align: right; font-size: 16px; }
-  .unit-indicators dd small { max-width: 190px; }
-}
+
+
 
 /* Portal workspace: quiet surfaces, consistent controls and a clear reading order.
    Scoped to .portal so communication images and exports keep their own layout. */
@@ -2868,11 +2835,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .portal .workspace-content .unit-row-actions .button { min-height: 32px; font-size: 12px; padding: 5px; white-space: nowrap; }
 .portal .unit-row-actions .icon-button { width: 30px; height: 32px; flex-basis: 30px; }
 .portal .unit-results-table .unit-actions-cell { width: 140px; }
-@container unit-results (min-width: 761px) {
-  .portal .unit-results-table { table-layout: fixed; min-width:800px; }
-  .portal .unit-results-table .unit-identity { width: 30%; }
-  .portal .unit-row-actions { flex-wrap: nowrap; }
-}
+
 @media (min-width: 1001px) {
   .portal .workspace-content .table-controls { display: grid; grid-template-columns: repeat(2,minmax(115px,1fr)) minmax(160px,1.4fr) minmax(145px,1fr) auto; align-items:end; padding:10px 16px; gap:8px; }
   .portal .workspace-content .table-controls :is(select,.search-input) { min-height:36px; font-size:13px; }
@@ -2882,3 +2845,39 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
   .portal .unit-row-actions .icon-button { width:42px;height:42px;flex-basis:42px; }
   .portal .workspace-content .unit-row-actions .button { min-height:42px; }
 }
+
+/* Match the monthly results: one row per unit at every viewport width. */
+.portal .workspace-content .unit-results { max-width:100%;max-height:none;overflow-x:auto; }
+.portal .workspace-content .unit-results-table { display:table;width:100%;min-width:1040px;table-layout:auto;white-space:nowrap; }
+.portal .unit-results-table > thead { display:table-header-group; }
+.portal .unit-results-table > tbody { display:table-row-group; }
+.portal .unit-results-table .unit-result-row { display:table-row; }
+.portal .workspace-content .unit-results-table > tbody > .unit-result-row > td { display:table-cell;padding:6px 10px;vertical-align:middle; }
+.portal .unit-results-table .unit-identity { width:24%;min-width:220px; }
+.portal .unit-results-table .entity-button { max-width:260px; }
+.portal .unit-results-table .entity-button strong { line-height:1.3; }
+.portal .unit-results-table .entity-button small { line-height:1.2;font-size:10px; }
+.portal .unit-results-table .unit-status { margin:2px 0 0;padding-left:26px;line-height:1; }
+.portal .unit-results-table .unit-status .pill { padding:1px 5px;font-size:10px !important;white-space:nowrap; }
+.portal .unit-results-table .unit-field-label { display:none; }
+.portal .unit-results-table .unit-money { white-space:nowrap; }
+.portal .unit-results-table .unit-actions-cell { min-width:140px; }
+.portal .unit-results-table .unit-row-actions { flex-wrap:nowrap; }
+.portal .unit-attainment-badge { display:inline-block;padding:3px 7px;border:1px solid var(--attainment-border);border-radius:7px;background:var(--attainment-background);color:var(--attainment-color);font-size:12px;font-weight:650;white-space:nowrap; }
+.portal .unit-variance { position:relative; }
+.portal .unit-variance[data-variance=growth] { color:var(--green); }
+.portal .unit-variance[data-variance=gap] { color:var(--attainment-red); }
+
+.portal .unit-results-table .unit-attainment-cell { text-align:center; }
+
+/* Result controls follow the overview scope; only ordering is local. */
+.portal .workspace-content .overview-units-heading { align-items:center;gap:12px; }
+.portal .workspace-content .overview-units-heading > div:first-child { flex:1 1 200px; }
+.portal .workspace-content .overview-units-heading .overview-block-actions { display:flex;flex-wrap:wrap;align-items:end;gap:8px; }
+.portal .workspace-content .overview-unit-controls { display:flex;align-items:end;gap:8px;width:auto;padding:0;border:0;background:transparent; }
+.portal .workspace-content .overview-unit-controls .control-field { flex:0 1 190px; }
+.portal .workspace-content .overview-unit-controls select { width:190px;min-height:38px;font-size:13px; }
+.portal .workspace-content .overview-unit-controls .indicator-toggle { display:flex;flex:0 0 auto;align-items:center;gap:6px;min-height:38px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);font-size:13px;cursor:pointer; }
+.portal .overview-table-legend { padding:10px 16px;border-top:1px solid var(--line); }
+.portal .workspace-content .filters .search-input { align-self:end;min-height:42px; }
+@media(max-width:720px){.portal .workspace-content .overview-unit-controls{width:100%;flex-wrap:wrap}.portal .workspace-content .overview-unit-controls .control-field{flex:1 1 160px}.portal .workspace-content .overview-unit-controls select{width:100%;font-size:16px}}
