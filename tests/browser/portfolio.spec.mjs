@@ -175,6 +175,13 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await expect(page.getByRole('heading', { name: 'Visão geral', level: 1, exact: true })).toBeVisible();
   if (relationshipSeed.workspaceMissing) await expect(page.getByRole('button', { name: 'Começar pelo cadastro manual', exact: true })).toBeVisible();
   else await expect(page.getByRole('region', { name: 'Resultado do período', exact: true })).toBeVisible();
+  // Existing scenario tests start with controls exposed; dedicated UX tests
+  // exercise the compact initial state before making this explicit choice.
+  if (!relationshipSeed.workspaceMissing && !relationshipSeed.compactPortal) {
+    await page.locator('.filter-toggle[aria-expanded="false"]').click();
+    await page.getByRole('button', { name: 'Ver todos os períodos', exact: true }).click();
+  }
+
   return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
