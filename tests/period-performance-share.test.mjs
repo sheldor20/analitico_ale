@@ -149,3 +149,17 @@ test('empty, malformed selections and duplicate periods fail clearly rather than
   assert.throws(() => buildPeriodPerformanceShare({ model: { ...source, groups: [] } }), /Não há períodos/);
   assert.throws(() => buildPeriodPerformanceShare({ model: { ...source, groups: [source.groups[0], source.groups[0]] } }), /Não há períodos/);
 });
+
+
+test('monthly sharing contains January through December in one image, including missing and future production', () => {
+  const report=buildPeriodPerformanceShare({model:model(),period:'month',order:'chronological'});
+  assert.equal(report.parts.length,1);
+  assert.deepEqual(report.parts[0].rows.map(row=>row.month),Array.from({length:12},(_,month)=>month));
+  assert.equal(report.rows.at(-1).label,'Dezembro');
+  assert.equal(report.rows.at(-1).actual,null);
+  const layout=periodPerformanceImageLayout(report.parts[0],measure);
+  const labels=layout.commands.filter(command=>command.role==='period-label').map(command=>command.value);
+  assert.equal(labels.length,12);assert.equal(labels[0],'Janeiro');assert.equal(labels.at(-1),'Dezembro');
+  assert.ok(layout.height<2200);
+  assert.ok(layout.commands.some(command=>command.value?.includes('Imagem única · 12 períodos')));
+});
