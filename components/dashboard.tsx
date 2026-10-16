@@ -1451,7 +1451,7 @@ export default function Dashboard() {
                                       <strong className="unit-money">{money(r.actual)}</strong>
                                     </td>
                                     <td role="cell" className="numeric unit-metric unit-attainment-cell" data-field="attainment">
-                                      <span className="unit-attainment-badge" data-attainment={attainmentBand(r.complete && !r.annualConflict ? r.attainment : null).key}>{r.complete && !r.annualConflict ? percent(r.attainment) : 'Sem avaliação'}</span>
+                                      <span className="unit-attainment-badge" data-attainment={attainmentBand(r.complete && !r.annualConflict ? r.attainment : null).key}>{r.complete && !r.annualConflict ? r.target === 0 ? 'Meta zero' : percent(r.attainment) : 'Sem avaliação'}</span>
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="variance">
                                       <span className="unit-field-label" aria-hidden="true">Crescimento / GAP</span>
