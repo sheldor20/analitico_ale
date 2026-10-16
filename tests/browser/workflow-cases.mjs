@@ -143,7 +143,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(frame(page).locator('body')).not.toContainText('PA Nordeste zero');
     await share(page).getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'PA').selectOption('1002:3017:0');
-    await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
+    await page.getByRole('button', { name: 'Compartilhar cenário de PA Alfa zero', exact: true }).click();
     const individual = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
     await expect(individual.getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');
     await expect(individual.getByText('Paula Teste', { exact: true })).toBeVisible();

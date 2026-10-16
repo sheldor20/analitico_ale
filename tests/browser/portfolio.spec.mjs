@@ -247,7 +247,7 @@ test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved d
 test('central and PA use their own responsible contacts and original level', async ({ page }, testInfo) => {
   const { errors } = await setup(page);
   await page.getByLabel('Agrupar por').selectOption('central');
-  await page.getByRole('button', { name: 'Gerar comunicação de Central Bahia teste', exact: true }).click();
+  await page.getByRole('button', { name: 'Compartilhar cenário de Central Bahia teste', exact: true }).click();
   const dialog = composer(page);
   await selectAugust(dialog);
   await expect(dialog.getByText('Celia Teste', { exact: true })).toBeVisible();
@@ -263,7 +263,7 @@ test('central and PA use their own responsible contacts and original level', asy
   expect(centralText).not.toContain('PA Alfa zero');
   await dialog.getByRole('button', { name: 'Fechar comunicação', exact: true }).click();
   await page.getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
-  await page.getByRole('button', { name: 'Gerar comunicação de PA Alfa zero', exact: true }).click();
+  await page.getByRole('button', { name: 'Compartilhar cenário de PA Alfa zero', exact: true }).click();
   await selectAugust(composer(page));
   await expect(composer(page).getByText('Paula Teste', { exact: true })).toBeVisible();
   await expect(composer(page).getByLabel('Unidade selecionada')).toHaveValue('pa:1002:3017:0');

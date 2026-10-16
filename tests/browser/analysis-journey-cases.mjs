@@ -85,6 +85,13 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     const positions = await Promise.all([context(page), results(page), priorities, summary].map(item => item.boundingBox()));
     expect(positions.every(Boolean)).toBe(true);
     expect(positions.map(box => box.y)).toEqual(positions.map(box => box.y).sort((a, b) => a - b));
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    const screenIds = ['overview', 'units', 'periods', 'comparison', 'simulation'];
+    for (const [index, name] of tabs.entries()) {
+      await tab(page, name).click();
+      await page.screenshot({ path: info.outputPath(`analysis-screen-${screenIds[index]}.png`), fullPage: true });
+    }
+    await tab(page, 'Visão geral').click();
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
       for (const name of ['Ano do cadastro', 'Carteira', 'Central', 'Período']) await expect(select(page, name)).toBeVisible();
@@ -331,6 +338,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
         ['Projeção atual', item.baseline], ['Cenário simulado', await value('Cenário simulado').innerText()],
       ].map(([label, amount]) => ({ label: `${item.label} · ${label}`, amount })));
     }
+    await page.screenshot({ path: info.outputPath('analysis-dual-simulation.png'), fullPage: true });
     await page.locator('.page-heading-actions').getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
     const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
     await select(chooser, 'Cenário do compartilhamento').selectOption('simulation');
@@ -383,6 +391,8 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await filters.locator('summary').filter({ hasText: 'Gerenciar anos' }).click();
     await filters.getByRole('button', { name: 'Recarregar cadastro salvo', exact: true }).click();
     await expect(select(context(page), 'Ano do cadastro').locator('option[value="2025"]')).toHaveCount(1);
+    const years = filters.locator('details.year-management');
+    if (await years.getAttribute('open') !== null) await years.locator('summary').click();
     await august(page, '1002:3017');
     await select(context(page), 'Carteira').selectOption('both');
     await select(context(page), 'Período').selectOption('annual');
@@ -395,6 +405,10 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
       await expect(comparison.getByLabel('Critério e cortes do comparativo')).toContainText('JAN a JUL');
       await expect(comparison).toContainText(item.cutoff);
       await expect(comparison).toContainText('31/07/2025');
+      if (item.metric === 'VN') {
+        await expect(page.locator('[data-portfolio="AR"]').getByLabel('Critério e cortes do comparativo')).toContainText('10/09/2026');
+        await page.screenshot({ path: info.outputPath('analysis-dual-comparison.png'), fullPage: true });
+      }
       await comparison.getByRole('button', { name: 'Compartilhar comparativo', exact: true }).click();
       const report = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
       await expect(report.getByRole('heading', { name: 'Comparativo entre anos', exact: true })).toBeVisible();

@@ -466,6 +466,7 @@ export default function Dashboard() {
     setView(previous.view); setSource(previous.source); setMetric(previous.metric); setCentral(previous.central); setCoop(previous.coop); setPa(previous.pa); setGroup(previous.group); setLevel(previous.level); setSearch(previous.search); setStatusFilter(previous.status); setSortBy(previous.sortBy); setMonth(previous.month); setPeriod(previous.period); setUplift(previous.uplift); setExpandedPaKey(previous.expandedPaKey); setPriorityFocus(previous.priorityFocus); setDrillHistory(items => items.slice(0, -1));
   }
   function changeAnalysisTab(next:AnalysisTab,restore=true) {
+    document.querySelectorAll<HTMLDetailsElement>('.year-management[open]').forEach(element=>{element.open=false;});
     tabPositions.current[analysisTab]=window.scrollY;
     setAnalysisTab(next);setVisitedTabs(items=>items.includes(next)?items:[...items,next]);
     if(restore)requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:tabPositions.current[next]??0,behavior:'instant'})));
@@ -1457,7 +1458,7 @@ export default function Dashboard() {
                                         <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} aria-expanded={expandedCoops.includes(r.key)} onClick={() => setExpandedCoops(keys=>keys.includes(r.key)?keys.filter(key=>key!==r.key):[...keys,r.key])}>Ver PAs</button>
                                         <button type="button" className="icon-button" aria-label={`${expandedCoops.includes(r.key) ? 'Recolher' : 'Expandir'} PAs de ${r.name}`} aria-expanded={expandedCoops.includes(r.key)} onClick={() => setExpandedCoops(keys => keys.includes(r.key) ? keys.filter(key => key !== r.key) : [...keys,r.key])}><ChevronDown size={18} /></button>
                                       </>}
-                                      <button type="button" className="icon-button" aria-label={`Gerar comunicação de ${r.name}`} title="Gerar e-mail / WhatsApp"
+                                      <button type="button" className="icon-button" aria-label={`Compartilhar cenário de ${r.name}`} title="Compartilhar cenário"
                                         onClick={() => { communicationFromStart.current = false; setCommunicationFormat('email'); setCommunicationProjection(false); setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
                                       <button type="button" className="icon-button" aria-label={`Ver histórico de ${r.name}`} title="Ver histórico" onClick={()=>openUnitHistory(r)}><History size={17}/></button>
                                       <button

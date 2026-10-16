@@ -44,7 +44,7 @@ export function registerPriorityTests({ test, expect, setup }) {
     await expect(selected).not.toContainText('Meta atingida');
     await expect(list).not.toContainText('Cooperativa Beta');
     await expect(list).not.toContainText('Outra central');
-    const communicate = selected.getByRole('button', { name: 'Gerar comunicação de Cooperativa Alfa', exact: true });
+    const communicate = selected.getByRole('button', { name: 'Compartilhar cenário de Cooperativa Alfa', exact: true });
     await communicate.focus(); await page.keyboard.press('Enter');
     const dialog = page.getByRole('dialog', { name: 'Comunicar resultado', exact: true });
     await expect(dialog.getByLabel('Unidade selecionada')).toHaveValue('cooperative:1002:3017');

@@ -32,10 +32,10 @@ export function registerAnalysisPeriodTests({ test, expect, setup, owner, create
 
     await panel.getByRole('button', { name: 'Gráfico', exact: true }).click();
     await expect(panel.getByRole('img')).toHaveAttribute('aria-label', /Realizado por período/);
-    await expect(panel.locator('circle')).toHaveCount(8);
-    await expect(panel.locator('circle title').filter({ hasText: 'Janeiro:' })).toContainText('0,00');
+    await expect(panel.getByRole('img').locator('circle')).toHaveCount(8);
+    await expect(panel.getByRole('img').locator('circle title').filter({ hasText: 'Janeiro:' })).toContainText('0,00');
     await select(panel, 'Indicador dos períodos').selectOption('target');
-    await expect(panel.locator('circle')).toHaveCount(12);
+    await expect(panel.getByRole('img').locator('circle')).toHaveCount(12);
     await expect(panel).toContainText('Metas planejadas permanecem visíveis');
     await select(panel, 'Indicador dos períodos').selectOption('attainment');
     await expect(panel.getByRole('img')).toHaveAttribute('aria-label', /Escala em percentual/);
