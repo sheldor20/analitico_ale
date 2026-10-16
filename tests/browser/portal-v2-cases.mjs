@@ -1,4 +1,14 @@
 export function registerPortalV2Tests({ test, expect, setup }) {
+  test('compact unit table: desktop rows keep identity and amounts together without card stacking', async ({ page }, info) => {
+    await page.setViewportSize({width:1200,height:900});
+    const {errors}=await setup(page);
+    const row=page.locator('.unit-result-row').first();
+    const bounds=await row.evaluate(node=>({height:node.getBoundingClientRect().height,identity:node.querySelector('.unit-identity').getBoundingClientRect().top,amount:node.querySelector('[data-field="target"]').getBoundingClientRect().top}));
+    expect(bounds.height).toBeLessThan(110);
+    expect(Math.abs(bounds.identity-bounds.amount)).toBeLessThan(3);
+    await page.screenshot({path:info.outputPath('compact-units-1200.png'),fullPage:true});
+    expect(errors).toEqual([]);
+  });
   test('portal clean: context stays visible with filters and complementary periods collapsed', async ({ page }) => {
     const { errors } = await setup(page, value => value, { compactPortal: true });
     const filters = page.getByRole('region', { name: 'Filtros da análise' });

@@ -48,14 +48,14 @@ test('central sharing uses central totals from cooperative base only, preserving
   assert.equal(buildCentralScenarioReport({ dataset, filters: { ...filters, central: '1002' } }).rows[0].actual, 674.5);
 });
 
-test('both portfolios keep independent filters, values, missing data and twelve-unit image pages', () => {
+test('both portfolios keep independent filters, values, missing data and compact image pages without splitting each portfolio', () => {
   const records = Array.from({ length: 14 }, (_, i) => row({ cooperative: String(4000 + i), name: `Coop ${i}`, actuals: Array(12).fill(i ? 20 : 0) }));
   records.push(...Array.from({ length: 13 }, (_, i) => row({ metric: 'AR', cooperative: String(4000 + i), name: `Coop ${i}`, actuals: Array(12).fill(i ? -25.5 : null), targets: Array(12).fill(100), annualTarget: 1200 })));
   const dataset = data(records), byMetric = { VN: records.slice(0, 14).map(item => `cooperative:1002:${item.cooperative}`), AR: records.slice(14).map(item => `cooperative:1002:${item.cooperative}`) };
   const report = buildScenarioBundleReport({ dataset, filters: { ...filters, metric: 'both', sortBy: 'name' }, kind: 'cooperative', unitIdsByMetric: byMetric });
   assert.deepEqual(report.reports.map(item => [item.metric, item.rows.length]), [['VN', 14], ['AR', 13]]);
   assert.equal(report.count, 14, 'one unit in two portfolios is not counted as two units');
-  assert.deepEqual(report.parts.map(part => [part.metric, part.index, part.total, part.rows.length]), [['VN', 1, 2, 12], ['VN', 2, 2, 2], ['AR', 1, 2, 12], ['AR', 2, 2, 1]]);
+  assert.deepEqual(report.parts.map(part => [part.metric, part.index, part.total, part.rows.length]), [['VN', 1, 1, 14], ['AR', 1, 1, 13]]);
   assert.deepEqual([...report.html.matchAll(/data-scenario-metric="(VN|AR)"/g)].map(item => item[1]), ['VN', 'AR']);
   assert.equal((report.html.match(/<!doctype/g) || []).length, 1);
   assert.equal(report.reports[0].rows[0].actual, 0); assert.equal(report.reports[1].rows[0].actual, null);
@@ -112,4 +112,18 @@ test('dual metadata describes the union of metric-specific central scopes, inclu
   const onlyAr = buildScenarioBundleReport({ ...options, unitIdsByMetric: { VN: [], AR: ['cooperative:2007:3017'] } });
   assert.equal(onlyAr.scopeLabel, onlyAr.reports[1].scopeLabel); assert.equal(onlyAr.centralName, onlyAr.reports[1].centralName);
   assert.match(onlyAr.subject, /2007/);
+});
+
+
+test('compact unit images retain every identity across the 24-unit boundary without currency wraps', () => {
+  const dataset = data(Array.from({ length:25 }, (_, i) => row({cooperative:String(4000+i), name:`Cooperativa ${i}`, actuals:Array(12).fill(123456.78)})));
+  const report = buildScenarioBundleReport({dataset,filters,kind:'cooperative'});
+  assert.deepEqual(report.parts.map(part=>part.rows.length),[24,1]);
+  assert.deepEqual(report.parts.flatMap(part=>part.rows.map(row=>row.id)),report.rows.map(row=>row.id));
+  for (const part of report.parts) {
+    const layout = paScenarioImageLayout(part,measure);
+    assert.ok(layout.height < 2800);
+    const amounts = layout.commands.filter(command=>command.type==='text' && command.value===money(123456.78).replace(/\s+/g,' '));
+    assert.equal(amounts.length,part.rows.length);
+  }
 });

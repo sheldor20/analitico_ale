@@ -1420,6 +1420,7 @@ export default function Dashboard() {
                                       <div className="entity-cell"><input className="row-selector" type="checkbox" aria-label={`Selecionar ${r.name}`} checked={selectedKeys.includes(r.key)} onChange={() => selectRow(r.key)} />
                                       <button
                                         className="entity-button"
+                                        title={`${r.name} · ${r.cooperative || r.central}`}
                                         onClick={() => setSelected(r)}
                                       >
                                         <strong>

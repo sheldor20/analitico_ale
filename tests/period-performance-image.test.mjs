@@ -251,7 +251,7 @@ test('long labels and literal markup wrap without clipping or interpreting conte
 
 test('invalid periods, oversized amounts and excessive height fail explicitly without returning partial images', () => {
   assert.throws(() => periodPerformanceImageLayout(part([row(), row()]), measurement()), /período contém dados inválidos/);
-  assert.throws(() => periodPerformanceImageLayout(part(Array.from({ length: 13 }, (_, index) => row(index))), measurement()), /parte.*inválida/);
+  assert.throws(() => periodPerformanceImageLayout(part(Array.from({ length: 20 }, (_, index) => row(index))), measurement()), /parte.*inválida/);
   assert.throws(() => periodPerformanceImageLayout(part([row(7, { actual: Infinity })]), measurement()), /período contém dados inválidos/);
   assert.throws(() => periodPerformanceImageLayout(part([row(7, { actual: 1e100 })]), measurement()), /valor é extenso demais/);
   assert.throws(() => periodPerformanceImageLayout(part([row()], { showProjection: 'false' }), measurement()), /parte.*inválida/);

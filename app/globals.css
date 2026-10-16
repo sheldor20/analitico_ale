@@ -2745,7 +2745,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .unit-indicators small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 3px; }
 .unit-results-table > tbody > .expanded-unit .table-scroll { contain: inline-size; }
 
-@container unit-results (max-width: 1050px) {
+@container unit-results (max-width: 760px) {
   .workspace-content .unit-results-table,
   .unit-results-table > tbody { display: block; }
   .unit-results-table > thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -2765,7 +2765,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
   .workspace-content .unit-results-table > tbody > .expanded-unit > td { display: block; width: 100%; }
 }
 
-@container unit-results (max-width: 600px) {
+@container unit-results (max-width: 480px) {
   .unit-results-table > tbody > .unit-result-row { grid-template-columns: minmax(0, 1fr); }
   .workspace-content .unit-results-table > tbody > .unit-result-row > td { padding: 10px 12px; }
   .unit-results-table .unit-identity { flex-wrap: wrap; gap: 6px; }
@@ -2851,4 +2851,34 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
   .portal .workspace-content .kpi .kpi-value { font-size: 24px; }
   .portal .workspace-content .table-controls { padding: 12px; }
   .portal .workspace-content :is(input:not([type="checkbox"]):not([type="range"]), select, textarea) { font-size: 16px; }
+}
+
+/* Dense unit results keep the complete cohort in the natural page flow. */
+.portal .workspace-content .unit-results-table > thead > tr > th,
+.portal .workspace-content .unit-results-table > tbody > .unit-result-row > td { padding: 8px 10px; }
+.portal .workspace-content .unit-results-table .unit-metric { font-size: 13px; }
+.portal .workspace-content .unit-results-table .entity-button strong { font-size: 13px !important; }
+.portal .unit-results-table .entity-button { display: block; min-width: 0; width: 100%; text-align: left; }
+.portal .unit-results-table .entity-button :is(strong, small) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.portal .unit-results-table .entity-cell { min-width: 0; }
+.portal .unit-results-table .entity-button small { font-size: 11px; }
+.portal .unit-status { margin-top: 3px; }
+.portal .unit-results-table .unit-actual .attainment { font-size: 12px; margin-top: 2px; }
+.portal .unit-results-table .mini-progress { height: 3px; margin-top: 2px; }
+.portal .workspace-content .unit-row-actions .button { min-height: 32px; font-size: 12px; padding: 5px; white-space: nowrap; }
+.portal .unit-row-actions .icon-button { width: 30px; height: 32px; flex-basis: 30px; }
+.portal .unit-results-table .unit-actions-cell { width: 140px; }
+@container unit-results (min-width: 761px) {
+  .portal .unit-results-table { table-layout: fixed; min-width:800px; }
+  .portal .unit-results-table .unit-identity { width: 30%; }
+  .portal .unit-row-actions { flex-wrap: nowrap; }
+}
+@media (min-width: 1001px) {
+  .portal .workspace-content .table-controls { display: grid; grid-template-columns: repeat(2,minmax(115px,1fr)) minmax(160px,1.4fr) minmax(145px,1fr) auto; align-items:end; padding:10px 16px; gap:8px; }
+  .portal .workspace-content .table-controls :is(select,.search-input) { min-height:36px; font-size:13px; }
+  .portal .workspace-content .table-controls .indicator-toggle { min-height:36px; font-size:12px; }
+}
+@media (max-width:720px) {
+  .portal .unit-row-actions .icon-button { width:42px;height:42px;flex-basis:42px; }
+  .portal .workspace-content .unit-row-actions .button { min-height:42px; }
 }

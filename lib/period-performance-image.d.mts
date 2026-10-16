@@ -1,6 +1,7 @@
 import type { PerformanceRow } from './period-performance.mjs';
 
 export type PeriodPerformanceImagePart = {
+  compact?: boolean;
   index: number; total: number; from: number; to: number; rows: PerformanceRow[];
   year: number; metric: 'VN' | 'AR'; scopeLabel: string; centralName: string; unitLabel: string;
   periodLabel: string; cutoffMin: string | null; cutoff: string | null; showProjection: boolean;
