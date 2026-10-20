@@ -14,12 +14,14 @@ import { ManagementPriorities, type ManagementPriorityAction } from './managemen
 import { PaTable, YearComparison, type ScenarioFilters } from './scenario-panels';
 import AttainmentLegend from './ui/attainment-legend';
 import PeriodPerformance from './period-performance';
+import UnitScenarioMatrix from './unit-scenario-matrix';
 import styles from './combined-portfolio.module.css';
 
 export type CombinedPortfolioProps = {
   dataset: Dataset; filters: CurrentViewFilters; models?: CurrentViewModel[];
   ownerId?: string | null; expandRequest?: number; controls?: ReactNode;
   mode?: AnalysisTab; years?: number[]; sessionDatasets?: Map<number, Dataset>;
+  unitLayout?: 'period' | 'matrix'; onMatrixShare?: (model: CurrentViewModel) => void;
   simulationUplift?: number; onUplift?: (value: number) => void;
   onAnalysisTab?: (tab: AnalysisTab) => void;
   onPriority?: (action: ManagementPriorityAction, metric: Metric) => void;
@@ -27,7 +29,7 @@ export type CombinedPortfolioProps = {
   onSimulationShare?: (model: CurrentViewModel) => void;
   shareRequest?: number;
   onSelect: (row: CurrentViewRow) => void; onDrill: (row: CurrentViewRow) => void;
-  onHistory?: (row: CurrentViewRow) => void; onPaShare?: (row: CurrentViewRow) => void;
+  onHistory?: (row: CurrentViewRow) => void; onPaShare?: (row: CurrentViewRow) => void; onAction?: (row: CurrentViewRow) => void;
   onShare: (metric?: Metric) => void; onExport: (metric: Metric) => void;
 };
 const EMPTY_DATASETS = new Map<number, Dataset>();
@@ -57,7 +59,7 @@ function Headline({ model }: { model: CurrentViewModel }) {
   </dl>;
 }
 
-export default function CombinedPortfolio({ dataset, filters, models: suppliedModels, ownerId, expandRequest, controls, mode = 'units', years = [], sessionDatasets = EMPTY_DATASETS, simulationUplift, onUplift, onAnalysisTab, onPriority, onComparisonShare, onSimulationShare, shareRequest, onSelect, onDrill, onHistory, onPaShare, onShare, onExport }: CombinedPortfolioProps) {
+export default function CombinedPortfolio({ dataset, filters, models: suppliedModels, ownerId, expandRequest, controls, mode = 'units', unitLayout = 'period', onMatrixShare, years = [], sessionDatasets = EMPTY_DATASETS, simulationUplift, onUplift, onAnalysisTab, onPriority, onComparisonShare, onSimulationShare, shareRequest, onSelect, onDrill, onHistory, onPaShare, onAction, onShare, onExport }: CombinedPortfolioProps) {
   const models = useMemo(() => suppliedModels ?? buildCurrentViewModels({ dataset, filters }), [suppliedModels, dataset, filters]);
   const [expandedPas, setExpandedPas] = useState<string[]>([]);
   const [visitedModes, setVisitedModes] = useState<AnalysisTab[]>([mode]);
@@ -71,16 +73,29 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
       const baseline = visited('simulation') ? summarize(model.rows.map(row => analyze(row, { year: dataset.year, month: model.filters.month, period: model.filters.period, uplift: 0 }))) : null;
       const effort = visited('simulation') ? analysisEffort(model.rows, model.summary) : null;
       const scopeFilters: ScenarioFilters = { ...model.filters, central: model.filters.central ?? 'all', coop: model.filters.coop ?? 'all', group: model.filters.group ?? 'all', search: model.filters.search ?? '', status: model.filters.status ?? 'all', unitIds: model.unitIds };
-      return <section className={styles.portfolio} key={model.metric} aria-label={`Carteira ${model.label}`} data-portfolio={model.metric}>
+      const togglePas = (row: CurrentViewRow) => {
+        const key = `${model.metric}:${row.key}`;
+        setExpandedPas(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key]);
+      };
+      const shareMatrixUnit = (row: CurrentViewRow) => {
+        if (!onMatrixShare) return;
+        const entity = model.units[model.rows.findIndex(value => value.key === row.key)];
+        if (!entity) return;
+        const selected = buildCurrentViewModels({ dataset, filters: { ...model.filters, unitIds: [entity.id] } })[0];
+        if (selected?.count) onMatrixShare(selected);
+      };
+      const expandedContent = (row: CurrentViewRow) => <PaTable dataset={dataset} filters={{ ...scopeFilters, central: row.central, coop: `${row.central}:${row.cooperative}`, pa: 'all', search: '', status: 'all', unitIds: undefined }} expanded onToggle={() => togglePas(row)} onSelect={onSelect} onHistory={onHistory} onShare={onPaShare ? () => onPaShare(row) : undefined} onOpenCadence={() => onDrill(row)} />;
+      return <section className={styles.portfolio} key={model.metric} aria-label={`Carteira ${model.label}`} data-portfolio={model.metric} data-unit-layout={unitLayout}>
         <header className={styles.heading}><div><h2>{model.label}</h2><p>{model.periodLabel} · {model.count} {model.level === 'central' ? model.count === 1 ? 'central' : 'centrais' : model.level === 'pa' ? model.count === 1 ? 'PA' : 'PAs' : model.count === 1 ? 'cooperativa' : 'cooperativas'}</p><p className={styles.cutoff}>{model.cutoff ? model.cutoffMin && model.cutoffMin !== model.cutoff ? `Cortes: ${dateLabel(model.cutoffMin)} a ${dateLabel(model.cutoff)}` : `Corte: ${dateLabel(model.cutoff)}` : 'Sem data de atualização'} · {model.phaseLabel}</p></div>
-          {(mode === 'overview' || mode === 'units') && <div className={styles.actions}><button type="button" className="button secondary" disabled={!model.count} onClick={() => onShare(model.metric)}><Share2 size={16} aria-hidden="true" />Compartilhar {model.label}</button><button type="button" className="button quiet" disabled={!model.count} onClick={() => onExport(model.metric)}><Download size={16} aria-hidden="true" />Exportar {model.label}</button></div>}
+          {(mode === 'overview' || mode === 'units') && <div className={styles.actions}><button type="button" className="button secondary" disabled={!model.count || (mode === 'units' && unitLayout === 'matrix' && !onMatrixShare)} onClick={() => mode === 'units' && unitLayout === 'matrix' ? onMatrixShare?.(model) : onShare(model.metric)}><Share2 size={16} aria-hidden="true" />Compartilhar {model.label}</button><button type="button" className="button quiet" disabled={!model.count} onClick={() => onExport(model.metric)}><Download size={16} aria-hidden="true" />Exportar {model.label}</button></div>}
           {mode === 'simulation' && onSimulationShare && <button type="button" className="button secondary" disabled={!model.count} onClick={() => onSimulationShare(model)}><Share2 size={16} aria-hidden="true" />Compartilhar cenário</button>}
         </header>
         <div hidden={mode !== 'overview'}>{visited('overview') && <>
           <Headline model={model} />
-          <div className={styles.overview}><ManagementPriorities analyses={model.rows} onViewUnits={action => { if (onPriority) onPriority(action, model.metric); else navigate('units'); }} /><OverviewUnits rows={model.rows} onAnalyze={onSelect} onAll={() => navigate('units')} onPeriods={() => navigate('periods')} onCompare={() => navigate('comparison')} onSimulate={() => navigate('simulation')} /></div>
+          <div className={styles.overview}><ManagementPriorities analyses={model.rows} onViewUnits={action => { if (onPriority) onPriority(action, model.metric); else navigate('units'); }} /><OverviewUnits rows={model.rows} onAnalyze={onSelect} onAll={() => navigate('units')} /></div>
         </>}</div>
         <div hidden={mode !== 'units'}>{visited('units') && (model.count ? <>
+          {unitLayout === 'matrix' ? <div className={styles.matrixLayout}><UnitScenarioMatrix rows={model.rows} year={dataset.year} month={model.filters.month} metric={model.metric} onAnalyze={onSelect} onHistory={onHistory} onShare={onMatrixShare ? shareMatrixUnit : undefined} onAction={onAction} onExpand={model.level === 'cooperative' ? togglePas : undefined} expandedKeys={model.rows.filter(row => expandedPas.includes(`${model.metric}:${row.key}`)).map(row => row.key)} renderExpanded={model.level === 'cooperative' ? expandedContent : undefined} /></div> :
           <div className={styles.tableScroll}><table role="table" aria-label={`Unidades de ${model.label}`}>
             <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Unidade</th><th role="columnheader" scope="col">Meta</th><th role="columnheader" scope="col">Realizado</th><th role="columnheader" scope="col">Atingimento</th><th role="columnheader" scope="col">GAP / Superação</th><th role="columnheader" scope="col">Projeção</th><th role="columnheader" scope="col">Ações</th></tr></thead>
             <tbody role="rowgroup">{model.rows.map((row, index) => {
@@ -94,9 +109,9 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
                 <td role="cell" className={styles.numeric} data-label="GAP / Superação"><span data-field="variance"><Balance value={variance} /></span></td>
                 <td role="cell" className={styles.numeric} data-label="Projeção" title={`Estimativa de fechamento de ${model.periodLabel}`}><span data-field="projected"><Money value={row.projected} /></span></td>
                 <td role="cell" className={styles.actionCell} data-label="Ações"><div className={styles.rowActions}><button type="button" className="button quiet" onClick={() => onSelect(row)}>{model.level === 'pa' ? 'Analisar PA' : model.level === 'central' ? 'Analisar central' : 'Analisar cooperativa'}</button>{model.level === 'central' ? <button type="button" className="button quiet" onClick={() => onDrill(row)}>Ver cooperativas</button> : model.level === 'cooperative' ? <button type="button" className="button quiet" aria-expanded={expanded} onClick={togglePas}>{expanded ? 'Fechar PAs' : 'Ver PAs'}</button> : onHistory && <button type="button" className="button quiet" onClick={() => onHistory(row)}>Ver histórico</button>}</div></td>
-              </tr>{model.level === 'cooperative' && expanded && <tr className={styles.expandedRow}><td colSpan={7}><PaTable dataset={dataset} filters={{ ...scopeFilters, central: row.central, coop: `${row.central}:${row.cooperative}`, pa: 'all', search: '', status: 'all', unitIds: undefined }} expanded onToggle={togglePas} onSelect={onSelect} onHistory={onHistory} onShare={onPaShare ? () => onPaShare(row) : undefined} onOpenCadence={() => onDrill(row)} /></td></tr>}</Fragment>;
+              </tr>{model.level === 'cooperative' && expanded && <tr className={styles.expandedRow}><td colSpan={7}>{expandedContent(row)}</td></tr>}</Fragment>;
             })}</tbody>
-          </table></div><div className={styles.legend}><AttainmentLegend /></div>
+          </table></div>}<div className={styles.legend}><AttainmentLegend /></div>
         </> : <p className={styles.empty}>Nenhuma unidade de {model.label} no recorte atual. Ajuste os filtros para continuar.</p>)}</div>
         <div hidden={mode !== 'periods'}>{visited('periods') && <PeriodPerformance dataset={dataset} filters={model.filters} unitIds={model.unitIds} ownerId={ownerId} sectionId={`resultados-por-periodo-${model.metric.toLowerCase()}`} standalone initialExpanded expandRequest={expandRequest || undefined} shareRequest={mode === 'periods' && model.metric === firstPopulated ? shareRequest : undefined} />}</div>
         <div hidden={mode !== 'comparison'}>{visited('comparison') && <YearComparison dataset={dataset} filters={scopeFilters} owner={ownerId ?? null} years={years} sessionDatasets={sessionDatasets} standalone initialExpanded onShare={onComparisonShare ? (comparison, previousYear) => onComparisonShare(comparison, previousYear, model) : undefined} />}</div>

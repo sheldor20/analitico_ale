@@ -1,5 +1,6 @@
 import { registerAnalysisJourneyTests } from './analysis-journey-cases.mjs';
 import { registerAnalysisPeriodTests } from './analysis-period-cases.mjs';
+import { registerAnalysisDesignTests } from './analysis-design-cases.mjs';
 import { step, disclosure, customize, emailDelivery, whatsappDelivery, openIndividualCommunication } from './composer-navigation.mjs';
 import { registerFollowupTests } from './followup-cases.mjs';
 import { registerPortalV2Tests } from './portal-v2-cases.mjs';
@@ -363,3 +364,4 @@ registerUploadLimitTests({ test, expect, setup, owner });
 
 registerAnalysisJourneyTests({test,expect,setup});
 registerAnalysisPeriodTests({test,expect,setup,owner,created});
+registerAnalysisDesignTests({test,expect,setup});

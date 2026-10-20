@@ -75,3 +75,19 @@ A impressão usa A4 paisagem, cabeçalhos de tabela repetidos, valores monetári
 ## Validação
 
 Testes unitários verificam a referência do PDF, esforço com mesmo prazo, ausência de base, metas divergentes, hierarquia e simulação com coorte estável. Jornadas de navegador verificam contexto entre abas, central/cooperativa/PA, retorno com seleção e posição, prioridades, histórico, compartilhamento, simulação e impressão. A base usada nos testes e nas capturas é sintética; não substitui nem altera os dados operacionais.
+
+
+## Refinamento visual — referência de 20/10/2026
+
+A composição segue a referência de tabela de metas fornecida: cabeçalhos por horizonte, linhas compactas, identidade e códigos à esquerda e valores íntegros à direita. A identidade Sicoob, cinco abas e contexto único permanecem.
+
+- Navegação: abas com indicação por linha turquesa; filtros principais e refinamentos em faixa compacta; retorno guarda também o tipo de visualização.
+- Resultado: indicadores em faixa contínua e prioridades em até três colunas compactas; fórmulas e lista detalhada ficam no controle Critério.
+- Unidades: escolha entre Resultado do período e Mês · trimestre · ano. A matriz mantém o mesmo conjunto e ordem da lista, com meta, realizado e atingimento em cada horizonte, corte por unidade e indicação de parcial no grupo correspondente. O mês é a referência do contexto; o trimestre o contém; o ano é o mesmo cadastro.
+- Fluxo: nome abre análise; Ver PAs expande abaixo; histórico abre a aba Por período; ação abre registro contextualizado. Expansão, filtros, seleção, ordenação e posição são preservados no retorno.
+- Carteiras: uma matriz por carteira, com seus próprios cortes. PAs e cooperativas nunca são agregados juntos.
+- Compartilhamento: a matriz tem prévia completa, imagem em 1920 px e HTML completo. Até 24 registros por imagem; as partes seguintes preservam cabeçalho e contexto. Identifica central, cooperativa/PA e carteira em cada registro. O exportador de dados continua identificado pelo período do contexto.
+- Densidade: sem paginação nem rolagem vertical interna. A rolagem horizontal permanece local à tabela quando necessária para manter os nomes e valores legíveis. Cabeçalhos agrupados são explícitos para tecnologias assistivas.
+- Impressão: matriz usa os mesmos dados completos, cabeçalho repetido, fontes e colunas ajustadas à página A4 paisagem; controles ocultos.
+
+Nenhuma permissão, persistência ou fórmula financeira foi alterada. Cada horizonte chama `analyze` com aumento de ritmo zero sobre as mesmas linhas já selecionadas. Ausências, zero, meta zero e metas divergentes mantêm avaliações distintas. A projeção continua na visualização Resultado do período; a matriz representa realizado registrado.

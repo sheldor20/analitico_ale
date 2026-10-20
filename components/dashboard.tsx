@@ -74,9 +74,11 @@ import PeriodPerformance from './period-performance';
 import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import PanelToggle from './ui/panel-toggle';
-import { AnalysisTabs, AnalysisBreadcrumb, OverviewUnits, AnalysisSimulation, type AnalysisTab } from './analysis-workspace';
+import { AnalysisTabs, AnalysisBreadcrumb, OverviewUnits, AnalysisSimulation, UnitLayoutSwitch, type UnitLayout, type AnalysisTab } from './analysis-workspace';
 import { analysisEffort, relatedScenarioIds } from '@/lib/analysis-workspace.mjs';
 import AnalysisReportShare from './analysis-report-share';
+import UnitScenarioMatrix from './unit-scenario-matrix';
+import { buildUnitScenarioMatrix } from '@/lib/unit-scenario-matrix.mjs';
 
 import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/portal-navigation';
 import Kpi from './ui/metric-card';
@@ -84,7 +86,7 @@ import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
 import { clearLocalAuth } from '@/lib/session-cleanup';
 type Analysis = ReturnType<typeof analyze> & { contribution?: number | null; recentGrowth?: number | null; recentLabel?: string };
-type FilterSnapshot = { tab: AnalysisTab; scrollY:number; selection:{context:string;keys:string[]}; expandedCoops:string[]; view: View; source: 'base' | 'cadence'; metric: string; central: string; coop: string; pa: string; group: string; level: string; search: string; status: string; sortBy: string; month: number; period: string; uplift: number; expandedPaKey: string; priorityFocus: {context:string;keys:string[];label:string} | null };
+type FilterSnapshot = { tab: AnalysisTab; unitLayout:UnitLayout; scrollY:number; selection:{context:string;keys:string[]}; expandedCoops:string[]; view: View; source: 'base' | 'cadence'; metric: string; central: string; coop: string; pa: string; group: string; level: string; search: string; status: string; sortBy: string; month: number; period: string; uplift: number; expandedPaKey: string; priorityFocus: {context:string;keys:string[];label:string} | null };
 type SourceFiles = { base: File | null; cadence: File | null };
 const EMPTY_ACTION: ActionState = {
   owner: "",
@@ -115,6 +117,7 @@ export default function Dashboard() {
   const [view, setView] = useState<View>("overview"),
     [source, setSource] = useState<"base" | "cadence">("base");
   const [analysisTab,setAnalysisTab] = useState<AnalysisTab>('overview');
+  const [unitLayout,setUnitLayout] = useState<UnitLayout>('period');
   const [visitedTabs,setVisitedTabs] = useState<AnalysisTab[]>(['overview','units']);
   const tabPositions=useRef<Partial<Record<AnalysisTab,number>>>({});
   const [periodShareRequest,setPeriodShareRequest]=useState(0);
@@ -447,7 +450,7 @@ export default function Dashboard() {
     setPa('all'); setPriorityFocus(null); setRowSelection({context:'',keys:[]}); setExpandedCoops([]);
   }
   function rememberFilters() {
-    setDrillHistory(items => [...items, {tab:analysisTab,scrollY:window.scrollY,selection:rowSelection,expandedCoops,view, source, metric, central, coop, pa, group, level, search, status:statusFilter, sortBy, month, period, uplift:simulationUplift, expandedPaKey, priorityFocus:focus}]);
+    setDrillHistory(items => [...items, {tab:analysisTab,unitLayout,scrollY:window.scrollY,selection:rowSelection,expandedCoops,view, source, metric, central, coop, pa, group, level, search, status:statusFilter, sortBy, month, period, uplift:simulationUplift, expandedPaKey, priorityFocus:focus}]);
   }
   function openCentral(row: Analysis) {
     rememberFilters();setMetric(row.metric); changeAnalysisTab('units',false); setCentral(row.central); setCoop('all'); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setLevel('cooperative'); setPriorityFocus(null);
@@ -461,7 +464,7 @@ export default function Dashboard() {
   }
   function goBack() {
     const previous = drillHistory.at(-1); if (!previous) return;
-    setAnalysisTab(previous.tab); setVisitedTabs(items=>[...new Set([...items,previous.tab])]); setRowSelection(previous.selection); setExpandedCoops(previous.expandedCoops);
+    setAnalysisTab(previous.tab);setUnitLayout(previous.unitLayout); setVisitedTabs(items=>[...new Set([...items,previous.tab])]); setRowSelection(previous.selection); setExpandedCoops(previous.expandedCoops);
     requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:previous.scrollY,behavior:"instant"})));
     setView(previous.view); setSource(previous.source); setMetric(previous.metric); setCentral(previous.central); setCoop(previous.coop); setPa(previous.pa); setGroup(previous.group); setLevel(previous.level); setSearch(previous.search); setStatusFilter(previous.status); setSortBy(previous.sortBy); setMonth(previous.month); setPeriod(previous.period); setUplift(previous.uplift); setExpandedPaKey(previous.expandedPaKey); setPriorityFocus(previous.priorityFocus); setDrillHistory(items => items.slice(0, -1));
   }
@@ -489,12 +492,20 @@ export default function Dashboard() {
     setCentral('all');setCoop('all');setPa('all');changeAnalysisTab('overview');
   }
   function restoreSnapshot(previous:FilterSnapshot,history:FilterSnapshot[]=[]){
-    setView(previous.view);setAnalysisTab(previous.tab);setSource(previous.source);setMetric(previous.metric);setCentral(previous.central);setCoop(previous.coop);setPa(previous.pa);setGroup(previous.group);setLevel(previous.level);setSearch(previous.search);setStatusFilter(previous.status);setSortBy(previous.sortBy);setMonth(previous.month);setPeriod(previous.period);setUplift(previous.uplift);setExpandedPaKey(previous.expandedPaKey);setPriorityFocus(previous.priorityFocus);setRowSelection(previous.selection);setExpandedCoops(previous.expandedCoops);setDrillHistory(history);requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:previous.scrollY,behavior:'instant'})));
+    setView(previous.view);setAnalysisTab(previous.tab);setUnitLayout(previous.unitLayout);setSource(previous.source);setMetric(previous.metric);setCentral(previous.central);setCoop(previous.coop);setPa(previous.pa);setGroup(previous.group);setLevel(previous.level);setSearch(previous.search);setStatusFilter(previous.status);setSortBy(previous.sortBy);setMonth(previous.month);setPeriod(previous.period);setUplift(previous.uplift);setExpandedPaKey(previous.expandedPaKey);setPriorityFocus(previous.priorityFocus);setRowSelection(previous.selection);setExpandedCoops(previous.expandedCoops);setDrillHistory(history);requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:previous.scrollY,behavior:'instant'})));
   }
   function selectRow(key: string) {
     setRowSelection({context: selectionContext, keys: selectedKeys.includes(key) ? selectedKeys.filter(item => item !== key) : [...selectedKeys, key]});
   }
-  function openCommunicationStart() { communicationOpener.current = document.activeElement as HTMLElement | null;setShareScenario(view==='overview'&&['periods','comparison','simulation'].includes(analysisTab)?analysisTab:'summary'); setShowCommunicationStart(true); }
+  function openCommunicationStart() { communicationOpener.current = document.activeElement as HTMLElement | null;setShareScenario(view==='overview'&&analysisTab==='units'&&unitLayout==='matrix'?'matrix':view==='overview'&&['periods','comparison','simulation'].includes(analysisTab)?analysisTab:'summary'); setShowCommunicationStart(true); }
+  function shareMatrix(model?:CurrentViewModel,onlyRow?:Analysis){
+    if(!dataset)return;
+    const scopes=model?[{label:model.label,rows:onlyRow?[onlyRow]:model.rows}]:combinedPortfolios?currentModels.map(item=>({label:item.label,rows:item.rows})):[{label:metricName(selectedMetric),rows:onlyRow?[onlyRow]:displayed}];
+    const matrices=scopes.map(scope=>({...scope,matrix:buildUnitScenarioMatrix({rows:scope.rows,year:dataset.year,month})}));
+    const labels=matrices[0]?.matrix.horizons??[];
+    setShowCommunicationStart(false);
+    setReportShare({title:'Mês · trimestre · ano',context:[scopeLabel,`Referência: ${MONTHS[month]}/${dataset.year}`,`Filtro da lista: ${periodDescription}`,`Ordenação: ${SORT_OPTIONS[sortBy as keyof typeof SORT_OPTIONS]}`,search?`Busca: ${search}`:'',statusFilter!=='all'?`Situação: ${statusFilter}`:'',focus?.label??''].filter(Boolean),columns:['Carteira · Unidade',...labels.flatMap(horizon=>[`${horizon.label} · Meta`,`${horizon.label} · Realizado`,`${horizon.label} · %`]),'Corte'],rows:matrices.flatMap(scope=>scope.matrix.rows.map(item=>[`${scope.label} · ${item.unit.name} · Central ${item.unit.central}${item.unit.cooperative?` · Coop. ${item.unit.cooperative}`:''}${item.unit.pa!=null?` · PA ${item.unit.pa}`:''}`,...scope.matrix.horizons.flatMap(horizon=>{const value=item.periods[horizon.id];return [money(value.target),money(value.actual),value.annualConflict?'Revisar meta':value.target==null?'Sem meta':value.target===0?'Meta zero':value.phaseKey==='future'?'Futuro':!value.complete?'Sem avaliação':percent(value.attainment)];}),item.cutoffMin!==item.cutoff?`${shortDate(item.cutoffMin)} a ${shortDate(item.cutoff)}`:shortDate(item.cutoff)])),notes:['Mesmas unidades nos três horizontes, conforme filtros e ordenação da lista.','Realizado registrado até o corte de cada unidade. Períodos futuros e ausências não são zero.','Carteiras e fontes permanecem separadas; cooperativas não são somadas aos PAs.']});
+  }
   function shareComparison(comparison:ReturnType<typeof compareYears>,previousYear:number,model?:CurrentViewModel){
     const dates=(side:'current'|'previous')=>[...new Set(comparison.rows.flatMap(row=>{const value=row[side];return value?[value.cutoffMin??value.cutoff,value.cutoff].filter(Boolean):[];}))].sort();
     setReportShare({title:'Comparativo entre anos',context:[scopeLabel,model?.label??metricName(selectedMetric),`Recorte efetivamente comparado: ${MONTHS[comparison.first]}–${MONTHS[comparison.last]}`,`${dataset?.year} × ${previousYear} · meses fechados equivalentes`,`${dataset?.year} cortes: ${dates('current').map(shortDate).join(' a ')||'Não informado'}`,`${previousYear} cortes: ${dates('previous').map(shortDate).join(' a ')||'Não informado'}`],columns:['Unidade',`Realizado ${dataset?.year}`,`Realizado ${previousYear}`,'Variação R$','Variação %'],rows:comparison.rows.map(row=>[row.name,money(row.current?.actual),money(row.previous?.actual),money(row.delta),percent(row.growth)]),notes:['Mesmos meses fechados nos dois anos. Ausência de dado não é zero.','Variação percentual exige base anterior positiva.',search?`Busca: ${search}`:'',statusFilter!=='all'?`Situação: ${statusFilter}`:'',focus?.label??''].filter(Boolean)});
@@ -874,8 +885,8 @@ export default function Dashboard() {
   </>;
   const resultContextPanels = <>
     {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action=>{setUnitsExpanded(true);setSortBy(action.sortBy);setPriorityFocus({context:filterContext,keys:action.keys,label:({'pace':'Unidades abaixo do ritmo','near-goal':'Próximas da meta',gap:'Maiores déficits',production:'Maiores produções',review:'Dados para conferir'} as const)[action.kind]});changeAnalysisTab('units',false);requestAnimationFrame(()=>document.querySelector<HTMLElement>('[aria-label="Lista de unidades"]')?.scrollIntoView({block:'start'}));}}/>}
-    {summary.gap!=null&&leafSummary.individualGap!=null&&leafSummary.individualGap>summary.gap+0.01&&<aside className="gap-reconciliation"><Info size={16}/><span><strong>Déficits das unidades: {money(leafSummary.individualGap)}.</strong> O GAP consolidado compensa déficits com superações; cada unidade mantém a própria meta.</span><button className="button quiet" onClick={()=>{rememberFilters();setView('actions');}}>Abrir plano de ação</button></aside>}
-    {dataset&&view==='overview'&&monthlyAchievements.length>0&&<aside className="achievement-notice" aria-label="Alerta de metas atingidas"><BellRing size={17}/><span>{monthlyAchievements.length} metas atingidas · {MONTHS[achievedMonth]}/{dataset.year} · unidades e carteiras identificadas em Metas atingidas</span><button className="button quiet" onClick={()=>navigate('alerts')}>Ver conquistas <ArrowRight size={16}/></button></aside>}
+    {summary.gap!=null&&leafSummary.individualGap!=null&&leafSummary.individualGap>summary.gap+0.01&&<aside className="gap-reconciliation"><Info size={16}/><span><strong>Déficits das unidades: {money(leafSummary.individualGap)}.</strong> Superações compensam parte desse valor no consolidado.</span><button className="button quiet" onClick={()=>{rememberFilters();setView('actions');}}>Abrir plano de ação</button></aside>}
+    {dataset&&view==='overview'&&monthlyAchievements.length>0&&<aside className="achievement-notice" aria-label="Alerta de metas atingidas"><BellRing size={17}/><span>{monthlyAchievements.length} metas atingidas · {MONTHS[achievedMonth]}/{dataset.year}</span><button className="button quiet" onClick={()=>navigate('alerts')}>Ver conquistas <ArrowRight size={16}/></button></aside>}
   </>;
   const importPanel = (
     <>
@@ -1267,9 +1278,9 @@ export default function Dashboard() {
               ) : combinedPortfolios && dataset ? (
                 <>
                   <div className="overview-period-shortcut"><button type="button" className="button quiet" onClick={showAllPeriods}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button></div>
-                  <CombinedPortfolio mode={analysisTab} onAnalysisTab={changeAnalysisTab} years={[...workspaces.map(item=>item.year),...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} simulationUplift={simulationUplift} onUplift={setUplift} onComparisonShare={shareComparison} onSimulationShare={shareSimulation} onHistory={openUnitHistory} onPaShare={row=>setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`})} shareRequest={periodShareRequest}
+                  <CombinedPortfolio onAction={setSelected} unitLayout={unitLayout} onMatrixShare={shareMatrix} mode={analysisTab} onAnalysisTab={changeAnalysisTab} years={[...workspaces.map(item=>item.year),...sessionYears.current.keys()]} sessionDatasets={sessionYears.current} simulationUplift={simulationUplift} onUplift={setUplift} onComparisonShare={shareComparison} onSimulationShare={shareSimulation} onHistory={openUnitHistory} onPaShare={row=>setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`})} shareRequest={periodShareRequest}
                     onPriority={(action,portfolio)=>{priorityCarry.current={keys:action.keys,label:({pace:'Unidades abaixo do ritmo','near-goal':'Próximas da meta',gap:'Maiores déficits',review:'Dados para conferir',production:'Maiores produções'} as const)[action.kind]};setMetric(portfolio);setSortBy(action.sortBy);changeAnalysisTab('units');}}
-                    dataset={dataset} filters={currentFilters} models={currentModels} ownerId={user?.id} expandRequest={periodExpandRequest} controls={<div className="table-controls combined-controls">{listControls}</div>}
+                    dataset={dataset} filters={currentFilters} models={currentModels} ownerId={user?.id} expandRequest={periodExpandRequest} controls={<div className="table-controls combined-controls"><UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>{listControls}</div>}
                     onSelect={openUnitAnalysis} onDrill={row => actualLevel === 'central' ? openCentral(row) : openCooperative(row, true)}
                     onShare={portfolio => startCommunication({content:actualLevel === 'central' ? 'central' : 'cooperative',format:'image',showProjection:false}, false, portfolio)}
                     onExport={portfolio => {setExportMetric(portfolio);setExportMode('filtered');setShowExport(true);}} />
@@ -1282,7 +1293,7 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
-                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
+                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
                 </section>
               ) : (
                 <>
@@ -1301,7 +1312,7 @@ export default function Dashboard() {
                     </div>
                   </section>
                   {view === 'actions' && resultContextPanels}
-                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview">{resultContextPanels}<OverviewUnits rows={displayed} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')} onPeriods={showAllPeriods} onCompare={()=>changeAnalysisTab('comparison')} onSimulate={()=>changeAnalysisTab('simulation')}/></div>}
+                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview">{resultContextPanels}<OverviewUnits rows={displayed} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')}/></div>}
                   {view === "actions" ? (
                     <section className="panel action-panel" aria-label="Lista de ações">
                       <div className="panel-heading">
@@ -1371,11 +1382,12 @@ export default function Dashboard() {
                             <p>{displayed.length} de {analyses.length} unidades</p>
                           </div>
                           <div className="overview-block-actions">
+                            {view==='overview'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
                             <div className="table-controls overview-unit-controls">
                               {listControls}
-                              <label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>
+                              {(unitLayout==='period'||view!=='overview')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
                             </div>
-                            <button type="button" className="button secondary pa-share-trigger" onClick={() => startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
+                            <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{unitLayout==='matrix'&&view==='overview'?"Compartilhar matriz":actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                             <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           </div>
                         </div>
@@ -1385,7 +1397,7 @@ export default function Dashboard() {
                           <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar.'}</span>
                           {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
                         </div>
-                        <div className="table-scroll unit-results">
+                        {unitLayout==='matrix'&&view==='overview'&&dataset?<UnitScenarioMatrix rows={displayed} year={dataset.year} month={month} metric={effectiveMetric as 'VN'|'AR'} onAnalyze={openUnitAnalysis} onHistory={openUnitHistory} onShare={row=>shareMatrix(undefined,row)} onAction={setSelected} selectedKeys={selectedKeys} onSelect={selectRow} expandedKeys={expandedCoops} onExpand={actualLevel==='cooperative'&&effectiveSource==='base'?row=>setExpandedCoops(keys=>keys.includes(row.key)?keys.filter(key=>key!==row.key):[...keys,row.key]):undefined} renderExpanded={row=><PaTable dataset={dataset} filters={{...scenarioFilters,central:row.central,coop:`${row.central}:${row.cooperative}`,pa:'all'}} expanded onToggle={()=>setExpandedCoops(keys=>keys.filter(key=>key!==row.key))} onSelect={setSelected} onHistory={openUnitHistory} onShare={()=>setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`})} onOpenCadence={()=>openCooperative(row,true)}/>}/>:<div className="table-scroll unit-results">
                           <table className="unit-results-table" role="table" aria-label="Resultados das unidades filtradas">
                             <thead role="rowgroup">
                               <tr role="row">
@@ -1429,10 +1441,10 @@ export default function Dashboard() {
                                           {actualLevel === "central"
                                             ? r.central
                                             : `${r.cooperative}${r.pa != null ? ` · PA ${r.pa} · ${r.group}` : ""} · ${centralOptions.find(([id])=>id===r.central)?.[1] ?? centralName(r.central)}`}
+                                          <span className="unit-status"><Pill>{r.status}</Pill></span>
                                         </small>
                                       </button>
                                       </div>
-                                      <div className="unit-status"><Pill>{r.status}</Pill></div>
                                     </td>
                                     <td role="cell" className="numeric unit-metric" data-field="target">
                                       <span className="unit-field-label" aria-hidden="true">Meta</span>
@@ -1456,7 +1468,7 @@ export default function Dashboard() {
                                       {actualLevel === "central" && effectiveSource === "base" && <button type="button" className="button quiet" aria-label={`Compartilhar cooperativas de ${r.name}`} onClick={() => setSharing({ kind: "cooperative", central: r.central })}>Compartilhar cooperativas</button>}
                                       {actualLevel === "cooperative" && effectiveSource === "base" && r.cooperative && <>
                                         <button type="button" className="button quiet" aria-label={`Ver PAs de ${r.name}`} aria-expanded={expandedCoops.includes(r.key)} onClick={() => setExpandedCoops(keys=>keys.includes(r.key)?keys.filter(key=>key!==r.key):[...keys,r.key])}>Ver PAs</button>
-                                        <button type="button" className="icon-button" aria-label={`${expandedCoops.includes(r.key) ? 'Recolher' : 'Expandir'} PAs de ${r.name}`} aria-expanded={expandedCoops.includes(r.key)} onClick={() => setExpandedCoops(keys => keys.includes(r.key) ? keys.filter(key => key !== r.key) : [...keys,r.key])}><ChevronDown size={18} /></button>
+
                                       </>}
                                       <button type="button" className="icon-button" aria-label={`Compartilhar cenário de ${r.name}`} title="Compartilhar cenário"
                                         onClick={() => { communicationFromStart.current = false; setCommunicationFormat('email'); setCommunicationProjection(false); setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
@@ -1487,7 +1499,7 @@ export default function Dashboard() {
                                 ))}
                             </tbody>
                           </table>
-                        </div>
+                        </div>}
                         <div className="overview-table-legend"><AttainmentLegend /></div>
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
@@ -1530,8 +1542,8 @@ export default function Dashboard() {
         </Modal>
       )}
       {showCommunicationStart && dataset && currentCount > 0 && <Modal title="Compartilhar cenário" onClose={() => setShowCommunicationStart(false)}>
-        <label className="share-scenario-choice">Cenário do compartilhamento<select value={shareScenario} onChange={event=>setShareScenario(event.target.value)}><option value="summary">Resumo do cenário atual</option><option value="cooperative">Cooperativas</option><option value="pa">PAs · Venda Nova</option><option value="periods">Períodos</option><option value="comparison">Comparativo entre anos</option><option value="simulation">Simulação</option></select></label>
-        {shareScenario==='periods'?<><p>{scopeLabel} · {metricName(selectedMetric)} · {periodDescription}</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('periods');setPeriodShareRequest(value=>value+1);}}>Abrir prévia dos períodos</button></>:shareScenario==='comparison'?<><p>Compare anos e recortes equivalentes antes de gerar a prévia.</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('comparison');setNotice('Selecione os anos e use Compartilhar cenário no comparativo validado.');}}>Abrir comparativo</button></>:shareScenario==='simulation'?<><p>{scopeLabel} · {periodDescription} · aumento de ritmo +{simulationUplift}%</p><button className="button primary" onClick={()=>shareSimulation()}>Abrir prévia da simulação</button></>:<CommunicationStart key={shareScenario} level={shareScenario==='summary'?actualLevel:shareScenario==='pa'?'pa':'cooperative'} scope={scopeLabel} period={`${metricName(shareScenario==='pa'?'VN':selectedMetric)} · ${periodDescription}`} onContinue={startCommunication}/>}
+        <label className="share-scenario-choice">Cenário do compartilhamento<select value={shareScenario} onChange={event=>setShareScenario(event.target.value)}><option value="summary">Resumo do cenário atual</option><option value="matrix">Mês · trimestre · ano</option><option value="cooperative">Cooperativas</option><option value="pa">PAs · Venda Nova</option><option value="periods">Períodos</option><option value="comparison">Comparativo entre anos</option><option value="simulation">Simulação</option></select></label>
+        {shareScenario==='matrix'?<><p>{scopeLabel} · mesmas unidades no mês, trimestre e ano.</p><button className="button primary" onClick={()=>shareMatrix()}>Abrir prévia da matriz</button></>:shareScenario==='periods'?<><p>{scopeLabel} · {metricName(selectedMetric)} · {periodDescription}</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('periods');setPeriodShareRequest(value=>value+1);}}>Abrir prévia dos períodos</button></>:shareScenario==='comparison'?<><p>Compare anos e recortes equivalentes antes de gerar a prévia.</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('comparison');setNotice('Selecione os anos e use Compartilhar cenário no comparativo validado.');}}>Abrir comparativo</button></>:shareScenario==='simulation'?<><p>{scopeLabel} · {periodDescription} · aumento de ritmo +{simulationUplift}%</p><button className="button primary" onClick={()=>shareSimulation()}>Abrir prévia da simulação</button></>:<CommunicationStart key={shareScenario} level={shareScenario==='summary'?actualLevel:shareScenario==='pa'?'pa':'cooperative'} scope={scopeLabel} period={`${metricName(shareScenario==='pa'?'VN':selectedMetric)} · ${periodDescription}`} onContinue={startCommunication}/>}
       </Modal>}
       {reportShare&&<AnalysisReportShare {...reportShare} onClose={()=>setReportShare(null)}/>}
       {showExport && dataset && <Modal title="Exportar dados" onClose={() => setShowExport(false)}>
