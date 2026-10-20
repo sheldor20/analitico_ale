@@ -327,13 +327,16 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
       const pages = extraction.stdout.split('\f');
       while (pages.length && !pages.at(-1).trim()) pages.pop();
       expect(pages.length).toBeGreaterThan(0);
+      // Variable-font PDF extraction may insert spaces between glyph runs.
+      const normalized = value => value.replace(/\s+/g, '');
       const allText = pages.join(' ').replace(/\s+/g, ' ');
-      for (const name of expectedNames) expect(allText).toContain(name);
+      for (const name of expectedNames) expect(normalized(allText)).toContain(normalized(name));
+      expect(pages.length).toBeLessThanOrEqual(2);
       for (const pageText of pages) {
         const text = pageText.replace(/\s+/g, ' ');
-        const namesOnPage = expectedNames.filter(name => text.includes(name));
+        const namesOnPage = expectedNames.filter(name => normalized(text).includes(normalized(name)));
         expect(namesOnPage.length, 'Each printed page should contain unit records rather than only headings or controls').toBeGreaterThan(0);
-        for (const label of ['Mês de referência', 'Trimestre', 'Ano', 'Meta', 'Realizado', 'Corte']) expect(text).toContain(label);
+        for (const label of ['Mês de referência', 'Trimestre', 'Ano', 'Meta', 'Realizado', 'Corte']) expect(normalized(text)).toContain(normalized(label));
       }
       expect(allText).not.toContain('Compartilhar cenário');
       expect(allText).not.toContain('Selecionar todas');

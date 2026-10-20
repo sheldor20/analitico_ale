@@ -83,7 +83,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
     await select(page, 'Filtrar situação').selectOption('attention');
-    await page.getByRole('button', { name: 'Expandir PAs de Cooperativa Alfa', exact: true }).click();
+    await page.getByRole('button', { name: 'Ver PAs de Cooperativa Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Abrir cadência de Cooperativa Alfa', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Cadência dos PAs', exact: true })).toBeVisible();
     await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
