@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from 'react';
-import { ArrowRight, CircleAlert, Flag, TrendingUp } from 'lucide-react';
+import { ArrowRight, ChevronDown, CircleAlert } from 'lucide-react';
 import { money, percent } from '@/lib/analytics.mjs';
 import { buildManagementPriorities, type ManagementAnalysis, type ManagementPriority, type ManagementPriorityAction } from '@/lib/management-priorities.mjs';
 import styles from './management-priorities.module.css';
@@ -18,12 +18,12 @@ export function ManagementPriorities({ analyses, onViewUnits }: {
   const [expanded, setExpanded] = useState(true);
   const model = useMemo(() => buildManagementPriorities(analyses), [analyses]);
   return <section className={styles.section} aria-labelledby={headingId}>
-    <div className={styles.heading}><div><h2 id={headingId}>Prioridades da carteira</h2><span>Escolha o próximo acompanhamento</span></div><PanelToggle expanded={expanded} onToggle={() => setExpanded(value => !value)} controls={contentId} label="prioridades" /></div>
+    <div className={styles.heading}><h2 id={headingId}>Prioridades da carteira</h2><PanelToggle expanded={expanded} onToggle={() => setExpanded(value => !value)} controls={contentId} label="prioridades" /></div>
     <div id={contentId} hidden={!expanded}>
-      {model.items.length > 0 ? <div className={styles.grid}>{model.items.map(item => <Priority key={item.kind} item={item} onViewUnits={onViewUnits} />)}</div> : <p className={styles.empty}>{model.empty}</p>}
+      {model.items.length > 0 ? <div className={styles.grid} data-count={model.items.length}>{model.items.map(item => <Priority key={item.kind} item={item} onViewUnits={onViewUnits} />)}</div> : <p className={styles.empty}>{model.empty}</p>}
       {model.review && <div className={styles.review}>
-        <CircleAlert size={16} aria-hidden="true" /><p>{model.review.detail} Ausência de dado não é produção zero.</p>
-        <button type="button" className="button quiet" onClick={() => onViewUnits(model.review!.action)} aria-label="Ver unidades: Conferir registros">Conferir registros <ArrowRight size={14} aria-hidden="true" /></button>
+        <CircleAlert size={14} aria-hidden="true" /><p>{model.review.detail}</p>
+        <button type="button" className="button quiet" onClick={() => onViewUnits(model.review!.action)} aria-label="Ver unidades: Conferir registros">Conferir registros <ArrowRight size={13} aria-hidden="true" /></button>
       </div>}
       {model.notes.map(note => <p className={styles.note} key={note}>{note}</p>)}
     </div>
@@ -31,20 +31,25 @@ export function ManagementPriorities({ analyses, onViewUnits }: {
 }
 
 function Priority({ item, onViewUnits }: { item: ManagementPriority; onViewUnits: (action: ManagementPriorityAction) => void }) {
-  const Icon = item.kind === 'pace' ? TrendingUp : Flag;
-  const actionLabel = item.kind === 'pace' ? 'Ver unidades abaixo do ritmo' : item.kind === 'near-goal' ? 'Ver metas próximas' : 'Acompanhar déficits';
+  const detailId = useId();
+  const amount = item.detail.match(/R\$\s*[\d.,]+/)?.[0];
+  const closed = item.detail.includes('período fechado');
+  const criterion = item.kind === 'pace' ? closed ? 'Meta no prazo encerrado' : 'Ritmo até o corte' : item.kind === 'near-goal' ? '90% a menos de 100% da meta' : amount ? 'Soma dos déficits' : 'Déficits por unidade';
   return <article className={`${styles.card} ${styles[item.tone]}`} data-priority-kind={item.kind}>
-    <h3><Icon size={17} aria-hidden="true" />{item.title}</h3>
-    <p className={styles.fact}><ReadableText text={item.detail} /></p>
-    {item.concentration && <p className={styles.concentration}>
-      <strong>{percent(item.concentration.share)} dos déficits</strong> em {item.concentration.count} {item.concentration.count === 1 ? 'unidade' : 'unidades'}: {item.concentration.names.join(', ')}.
-    </p>}
-    <button className={`button quiet ${styles.action}`} type="button" onClick={() => onViewUnits(item.action)} aria-label={`Ver unidades: ${item.title}`}>{actionLabel} <ArrowRight size={15} aria-hidden="true" /></button>
-    <details className={styles.details}><summary>Critério e unidades ({item.rows.length})</summary>
-      {item.notes.map(note => <p key={note}>{note}</p>)}
-      {item.reconciliation && <p>Na seleção: déficits de <ReadableText text={money(item.reconciliation.deficits)} />, superações de <ReadableText text={money(item.reconciliation.surplus)} /> e GAP consolidado de <ReadableText text={money(item.reconciliation.consolidated)} />.</p>}
-      <ul>{item.rows.map(row => <li key={row.key}><strong>{row.name}</strong><span>{row.context} · corte {row.cutoff}</span><span className={styles.rowFact}><ReadableText text={row.detail} /></span></li>)}</ul>
-    </details>
+    <div className={styles.identity}><h3>{item.title}</h3><span className={styles.count}>{item.rows.length} {item.rows.length === 1 ? 'unidade' : 'unidades'}</span></div>
+    <p className={styles.fact} title={item.detail}>{amount && <strong><ReadableText text={amount} /></strong>}<span>{criterion}{!amount && item.detail.includes('própria data') ? ' · cortes distintos' : ''}</span></p>
+    <div className={styles.commands}>
+      <button className={`button quiet ${styles.action}`} type="button" onClick={() => onViewUnits(item.action)} aria-label={`Ver unidades: ${item.title}`}>Ver unidades <ArrowRight size={13} aria-hidden="true" /></button>
+      <details className={styles.details}><summary aria-label={`Critério e unidades de ${item.title}`} aria-controls={detailId}>Critério <ChevronDown size={12} aria-hidden="true" /></summary>
+        <div id={detailId} className={styles.detailContent}>
+          <p><ReadableText text={item.detail} /></p>
+          {item.concentration && <p className={styles.concentration}><strong>{percent(item.concentration.share)} dos déficits</strong> em {item.concentration.count} {item.concentration.count === 1 ? 'unidade' : 'unidades'}: {item.concentration.names.join(', ')}.</p>}
+          {item.notes.map(note => <p key={note}>{note}</p>)}
+          {item.reconciliation && <p>Na seleção: déficits de <ReadableText text={money(item.reconciliation.deficits)} />, superações de <ReadableText text={money(item.reconciliation.surplus)} /> e GAP consolidado de <ReadableText text={money(item.reconciliation.consolidated)} />.</p>}
+          <ul>{item.rows.map(row => <li key={row.key}><strong>{row.name}</strong><span>{row.context} · corte {row.cutoff}</span><span className={styles.rowFact}><ReadableText text={row.detail} /></span></li>)}</ul>
+        </div>
+      </details>
+    </div>
   </article>;
 }
 

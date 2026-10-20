@@ -8,6 +8,8 @@ export default function FilterPanel({ children, primary, description, onReset, a
   const id = useId();
   return <section className="filter-panel panel" aria-label="Filtros da análise">
     {primary && <section className="analysis-context" aria-label="Contexto da análise">{primary}</section>}
+    <div className="filter-summary">
+    <p className="filter-description" aria-live="polite">{description}</p>
     <div className="filter-panel-heading">
       <button className="filter-toggle" type="button" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(!expanded)}>
         <SlidersHorizontal size={17} aria-hidden="true" /><strong>Filtros</strong>
@@ -15,7 +17,7 @@ export default function FilterPanel({ children, primary, description, onReset, a
       </button>
       {active && <button className="button quiet filter-reset" onClick={onReset} type="button">Limpar filtros</button>}
     </div>
-    <p className="filter-description" aria-live="polite">{description}</p>
+    </div>
     <div className="filters" id={id} hidden={!expanded}>{children}</div>
   </section>;
 }

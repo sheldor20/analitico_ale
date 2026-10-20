@@ -20,12 +20,14 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   const alfa=rows.filter({has:page.getByRole('checkbox',{name:'Selecionar Cooperativa Alfa',exact:true})});
   const selection=beta.getByRole('checkbox',{name:`Selecionar ${betaName}`,exact:true});
   async function inlinePasFit(){
-   await list.getByRole('button',{name:'Expandir PAs de Cooperativa Alfa',exact:true}).click();
+   const toggle=list.getByRole('button',{name:'Ver PAs de Cooperativa Alfa',exact:true});
+   await expect(toggle).toHaveAttribute('aria-expanded','false');await toggle.click();
+   await expect(toggle).toHaveAttribute('aria-expanded','true');
    const nested=list.getByRole('region',{name:'PAs da cooperativa',exact:true});
    await expect(nested.getByRole('table')).toBeVisible();await expect(nested).toContainText('PA Alfa zero');
    expect(await wrapper.evaluate(element=>getComputedStyle(element).overflowX)).toBe('auto');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
-   await list.getByRole('button',{name:'Recolher PAs de Cooperativa Alfa',exact:true}).click();
+   await toggle.click();await expect(toggle).toHaveAttribute('aria-expanded','false');
    await expect(nested).toHaveCount(0);
   }
   await selection.check();

@@ -1,11 +1,16 @@
 'use client';
 import {useId} from 'react';
-import { ArrowRight, BarChart3, Building2, CalendarRange, GitCompareArrows, Gauge, LayoutDashboard } from 'lucide-react';
+import { ArrowRight, Building2, CalendarRange, GitCompareArrows, Gauge, LayoutDashboard } from 'lucide-react';
 import { money, percent } from '@/lib/analytics.mjs';
 import {goalVariance} from '@/lib/goal-variance.mjs';
 import type { CurrentViewRow } from '@/lib/current-view.mjs';
 
 export type AnalysisTab = 'overview' | 'units' | 'periods' | 'comparison' | 'simulation';
+export type UnitLayout = 'period' | 'matrix';
+export function UnitLayoutSwitch({value,onChange}:{value:UnitLayout;onChange:(layout:UnitLayout)=>void}) {
+  const name=useId();
+  return <fieldset className="unit-layout-switch"><legend className="sr-only">Visualização das unidades</legend>{([{value:'period',label:'Resultado do período'},{value:'matrix',label:'Mês · trimestre · ano'}] as const).map(option=><label key={option.value} data-selected={value===option.value}><input type="radio" name={name} value={option.value} checked={value===option.value} onChange={()=>onChange(option.value)}/><span>{option.label}</span></label>)}</fieldset>;
+}
 export const ANALYSIS_TABS = [
   {id:'overview',label:'Visão geral',icon:LayoutDashboard},
   {id:'units',label:'Cooperativas e PAs',icon:Building2},
@@ -22,12 +27,12 @@ export function AnalysisTabs({active,onChange}:{active:AnalysisTab;onChange:(tab
 export function AnalysisBreadcrumb({items}:{items:{label:string;onClick?:()=>void}[]}) {
   return <nav className="analysis-breadcrumb" aria-label="Trilha da análise"><ol>{items.map((item,index)=><li key={`${index}:${item.label}`}>{item.onClick?<button type="button" aria-current={index===items.length-1?'location':undefined} onClick={item.onClick}>{item.label}</button>:<span aria-current="location">{item.label}</span>}</li>)}</ol></nav>;
 }
-export function OverviewUnits({rows,onAnalyze,onAll,onPeriods,onCompare,onSimulate}:{rows:CurrentViewRow[];onAnalyze:(row:CurrentViewRow)=>void;onAll:()=>void;onPeriods:()=>void;onCompare:()=>void;onSimulate:()=>void}) {
+export function OverviewUnits({rows,onAnalyze,onAll}:{rows:CurrentViewRow[];onAnalyze:(row:CurrentViewRow)=>void;onAll:()=>void}) {
   return <>
     <section className="panel overview-unit-summary" aria-label="Resumo das unidades"><header><div><h2>Unidades do recorte</h2><p>{rows.length} unidades · até 5 em destaque na ordem selecionada</p></div><button type="button" className="button secondary" onClick={onAll}>Ver todas as unidades <ArrowRight size={16}/></button></header>
       <div className="table-scroll"><table aria-label="Resumo das unidades filtradas"><thead><tr><th>Unidade</th><th className="numeric">Realizado</th><th className="numeric">Atingimento</th><th className="numeric">GAP / Superação</th><th>Ação</th></tr></thead><tbody>{rows.map((row,index)=><tr key={row.key} className={index>=5?'summary-row-extra':undefined}><th scope="row"><strong>{row.name}</strong><small>{row.cooperative?`Coop. ${row.cooperative}`:`Central ${row.central}`}{row.pa!=null?` · PA ${row.pa}`:''} · {row.status}</small></th><td className="numeric">{money(row.actual)}</td><td className="numeric">{row.complete&&!row.annualConflict?row.target===0?'Meta zero':percent(row.attainment):'Sem avaliação'}</td><td className="numeric">{(()=>{const balance=goalVariance(row.actual,row.target,row.complete&&!row.annualConflict);return balance.value==null?'—':`${balance.kind==='growth'?'+ ':balance.kind==='gap'?'− ':''}${money(balance.value)}`;})()}</td><td><button type="button" className="button quiet" onClick={()=>onAnalyze(row)}>{row.pa!=null?'Analisar PA':row.cooperative?'Analisar cooperativa':'Analisar central'}</button></td></tr>)}</tbody></table>{!rows.length&&<p className="empty">Nenhuma unidade corresponde aos filtros.</p>}</div>
     </section>
-    <section className="analysis-paths" aria-label="Próximos caminhos"><button onClick={onAll}><Building2 size={20}/><strong>Cooperativas e PAs</strong><span>Resultado → unidade → ação</span><ArrowRight size={17}/></button><button onClick={onPeriods}><BarChart3 size={20}/><strong>Por período</strong><span>Meses, trimestres e semestres</span><ArrowRight size={17}/></button><button onClick={onCompare}><GitCompareArrows size={20}/><strong>Comparar anos</strong><span>Mesmo recorte, bases equivalentes</span><ArrowRight size={17}/></button><button onClick={onSimulate}><Gauge size={20}/><strong>Simulação</strong><span>Premissas, impacto e esforço</span><ArrowRight size={17}/></button></section>
+
   </>;
 }
 type SimulationSummary={actual:number|null;target:number|null;projected:number|null;projectedAttainment:number|null;gap:number|null};

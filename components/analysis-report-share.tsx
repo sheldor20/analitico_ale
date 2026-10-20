@@ -36,7 +36,7 @@ async function renderImage(report: Report, page: number) {
   if (document.fonts?.load) await Promise.all([document.fonts.load('400 18px "Sicoob Sans"'), document.fonts.load('700 24px "Sicoob Sans"')]);
   const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
   if (!context) throw new Error('O navegador não conseguiu gerar a imagem. Baixe o HTML completo.');
-  const width = 1200, inset = 32, usable = width - inset * 2;
+  const width = report.columns.length > 7 ? 1920 : 1200, inset = 32, usable = width - inset * 2;
   const firstWidth = report.columns.length > 1 ? Math.max(220, usable * .25) : usable;
   const widths = report.columns.map((_, index) => index === 0 ? firstWidth : (usable - firstWidth) / (report.columns.length - 1));
   const positions = widths.map((_, index) => inset + widths.slice(0, index).reduce((sum, value) => sum + value, 0));
