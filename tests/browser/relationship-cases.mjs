@@ -145,8 +145,8 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
     });
     await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
     const notice = page.getByRole('complementary', { name: 'Alerta de metas atingidas' });
-    await expect(notice).toContainText('5 metas atingidas');
-    await notice.getByRole('button', { name: 'Ver conquistas' }).click();
+    await expect(notice).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Metas atingidas', exact: true }).click();
     const alerts = page.getByRole('region', { name: 'Metas atingidas no mês' });
     await expect(alerts.getByLabel('Mês de referência', { exact: true })).toHaveValue('7');
     for (const name of ['Central Bahia teste', 'Cooperativa Beta', 'PA Beta zero']) await expect(alerts.getByRole('heading', { name, exact: true })).toBeVisible();

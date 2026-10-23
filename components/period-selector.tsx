@@ -35,10 +35,10 @@ export function usePeriodSelection(initialPeriod = 'ytd', initialMonth?: number)
 type Props = {
   period: string; month: number; year: number;
   onPeriodChange: (value: string) => void; onMonthChange: (value: number) => void;
-  label?: string;
+  label?: string; showCoverage?: boolean;
 };
 
-export default function PeriodSelector({ period, month, year, onPeriodChange, onMonthChange, label = 'Período' }: Props) {
+export default function PeriodSelector({ period, month, year, onPeriodChange, onMonthChange, label = 'Período', showCoverage = true }: Props) {
   return <>
     <label>{label}<select aria-label={label} value={period} onChange={event => onPeriodChange(event.target.value)}>
       {Object.entries(PERIOD_OPTIONS).map(([value, text]) => <option value={value} key={value}>{value === "ytd" ? "Acumulado no ano" : text}</option>)}
@@ -52,7 +52,7 @@ export default function PeriodSelector({ period, month, year, onPeriodChange, on
     {period === 'semester' && <label>Semestre<select aria-label="Semestre" value={Math.floor(month / 6) + 1} onChange={event => onMonthChange(Number(event.target.value) * 6 - 1)}>
       {[1, 2].map(value => <option value={value} key={value}>{value}º semestre · {MONTHS[(value - 1) * 6]} a {MONTHS[value * 6 - 1]} / {year}</option>)}
     </select></label>}
-    {(period === 'annual' || period === 'ytd') && <div className={styles.coverage} aria-live="polite" aria-label="Abrangência do período">
+    {showCoverage && (period === 'annual' || period === 'ytd') && <div className={styles.coverage} aria-live="polite" aria-label="Abrangência do período">
       <span>{period === 'annual' ? 'Ano completo' : 'Até o mês atual'}</span>
       <strong>{periodCoverage(period, month, year)}</strong>
     </div>}
