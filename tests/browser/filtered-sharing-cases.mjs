@@ -114,7 +114,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await modal.getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(modal.getByRole('button', { name: 'Abrir Outlook e colar painel', exact: true })).toBeDisabled();
     await modal.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Limpar prioridade', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Limpar prioridade', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Buscar cooperativa ou PA')).toHaveValue('Bahia');
     await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
     await list(page).getByRole('button', { name: 'Compartilhar cooperativas de Central Bahia teste', exact: true }).click();
