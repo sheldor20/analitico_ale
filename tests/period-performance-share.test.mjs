@@ -164,5 +164,5 @@ test('monthly sharing contains January through December in one image, including 
   const labels=layout.commands.filter(command=>command.role==='period-label').map(command=>command.value);
   assert.equal(labels.length,12);assert.equal(labels[0],'Janeiro');assert.equal(labels.at(-1),'Dezembro');
   assert.ok(layout.height<2200);
-  assert.ok(layout.commands.some(command=>command.value?.includes('Imagem única · 12 períodos')));
+  assert.ok(!layout.commands.some(command=>command.value?.includes('Imagem única · 12 períodos')));
 });
