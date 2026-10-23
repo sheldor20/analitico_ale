@@ -17,7 +17,7 @@ const unitRow = (page, name) => units(page).locator('tr.unit-result-row').filter
 async function advancedFilters(page) {
   const filters = page.getByRole('region', { name: 'Filtros da análise', exact: true });
   const toggle = filters.locator('.filter-toggle');
-  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  if (await toggle.count() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
   return filters;
 }
 
@@ -388,6 +388,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
       const body = (request.headers().accept || '').includes('vnd.pgrst.object') ? selected[0] || null : selected;
       return route.fulfill({ status: 200, headers, contentType: 'application/json', body: JSON.stringify(body) });
     });
+    await tab(page, 'Cooperativas e PAs').click();
     const filters = await advancedFilters(page);
     await filters.locator('summary').filter({ hasText: 'Gerenciar anos' }).click();
     await filters.getByRole('button', { name: 'Recarregar cadastro salvo', exact: true }).click();

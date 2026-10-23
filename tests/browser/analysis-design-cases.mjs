@@ -19,7 +19,7 @@ const unavailable = /Não disponível|—/;
 async function advancedFilters(page) {
   const panel = page.getByRole('region', { name: 'Filtros da análise', exact: true });
   const toggle = panel.locator('.filter-toggle');
-  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  if (await toggle.count() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
   return panel;
 }
 

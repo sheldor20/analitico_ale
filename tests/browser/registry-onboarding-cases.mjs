@@ -51,7 +51,6 @@ export function registerRegistryOnboardingTests({test,expect,setup,owner}) {
     await expect(frame.locator('body')).not.toContainText(/Bahia|Nordeste|1002|2007/i);
     await composer.getByRole('button',{name:'Fechar comunicação',exact:true}).click();
     await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Análises',exact:true}).click();
-    await page.locator('.filter-toggle[aria-expanded="false"]').click();
     const central=page.getByRole('combobox',{name:'Central',exact:true});
     expect(await central.locator('option').evaluateAll(nodes=>nodes.map(node=>node.value))).toEqual(['all','3456']);
     await central.selectOption('3456');
@@ -63,6 +62,7 @@ export function registerRegistryOnboardingTests({test,expect,setup,owner}) {
     await expect(page.getByRole('tab',{name:'Cooperativas e PAs',exact:true})).toHaveAttribute('aria-selected','true');
     await expect(page.getByRole('region',{name:'Lista de unidades',exact:true})).toContainText('Cooperativa Exemplo');
     await expect(central).toHaveValue('3456');
+    await page.locator('.filter-toggle[aria-expanded="false"]').click();
     await expect(cooperative).toHaveValue('3456:6789');
     await expect(page.locator('body')).not.toContainText(/Bahia|Nordeste/i);
     await page.setViewportSize({width:390,height:844});

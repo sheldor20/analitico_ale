@@ -181,8 +181,8 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   // Existing scenario tests start with controls exposed; dedicated UX tests
   // exercise the compact initial state before making this explicit choice.
   if (!relationshipSeed.workspaceMissing && !relationshipSeed.compactPortal) {
-    await page.locator('.filter-toggle[aria-expanded="false"]').click();
     await page.getByRole('tab', {name:'Cooperativas e PAs',exact:true}).click();
+    await page.locator('.filter-toggle[aria-expanded="false"]').click();
   }
 
   return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };

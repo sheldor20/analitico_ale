@@ -6,7 +6,7 @@ const periods = page => page.getByRole('region', { name: 'Resultados por períod
 async function advancedFilters(page) {
   const filters = page.getByRole('region', { name: 'Filtros da análise', exact: true });
   const toggle = filters.locator('.filter-toggle');
-  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  if (await toggle.count() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
   return filters;
 }
 
@@ -69,6 +69,7 @@ export function registerAnalysisPeriodTests({ test, expect, setup, owner, create
       const selected = year ? workspaces.filter(row => `eq.${row.year}` === year) : workspaces;
       await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify((route.request().headers().accept || '').includes('vnd.pgrst.object') ? selected[0] || null : selected) });
     });
+    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
     await advancedFilters(page);
     await page.locator('summary').filter({ hasText: 'Gerenciar anos' }).click();
     await page.getByRole('button', { name: 'Recarregar cadastro salvo', exact: true }).click();

@@ -3052,3 +3052,8 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
   .portal .unit-scenario-matrix .matrix-period-heading strong { font-size:8pt; }
   .portal .unit-scenario-matrix .matrix-period-heading span { font-size:7pt; }
 }
+
+/* Visão geral: contexto direto, sem o painel de filtros adicionais. */
+.portal .filter-panel-compact .analysis-context { grid-template-columns:90px minmax(145px,1fr) minmax(160px,1.2fr) minmax(180px,1.5fr) minmax(145px,1fr) minmax(140px,1fr);border-bottom:0; }
+@media(max-width:1300px){.portal .filter-panel-compact .analysis-context{grid-template-columns:90px repeat(2,minmax(0,1fr))}.portal .filter-panel-compact .analysis-context>label:nth-of-type(4){grid-column:1/3}.portal .filter-panel-compact .analysis-context>label:nth-of-type(5){grid-column:auto}}
+@media(max-width:720px){.portal .filter-panel-compact .analysis-context{grid-template-columns:90px minmax(0,1fr)}.portal .filter-panel-compact .analysis-context>label:nth-of-type(n+3){grid-column:1/-1}}
