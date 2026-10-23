@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { installAuthFixture } from './auth-db-fixture.mjs';
 const A='00000000-0000-0000-0000-000000000001', B='00000000-0000-0000-0000-000000000002';
-const TABLES=['commercial_imports','commercial_actions','commercial_workspaces','commercial_entity_contacts','commercial_communication_drafts','commercial_message_templates','commercial_entity_profiles','commercial_entity_appointments','commercial_goal_alert_states'];
+const TABLES=['commercial_imports','commercial_actions','commercial_cnv_actions','commercial_workspaces','commercial_entity_contacts','commercial_communication_drafts','commercial_message_templates','commercial_entity_profiles','commercial_entity_appointments','commercial_goal_alert_states'];
 test('security: real PostgreSQL RLS requires approval, verified email and active matching session on every business table', async () => {
   const db=new PGlite();
   try {

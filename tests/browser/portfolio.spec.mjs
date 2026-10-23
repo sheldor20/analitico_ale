@@ -1,3 +1,4 @@
+import { registerCnvTests } from './cnv-cases.mjs';
 import { registerAnalysisJourneyTests } from './analysis-journey-cases.mjs';
 import { registerAnalysisPeriodTests } from './analysis-period-cases.mjs';
 import { registerAnalysisDesignTests } from './analysis-design-cases.mjs';
@@ -365,3 +366,5 @@ registerUploadLimitTests({ test, expect, setup, owner });
 registerAnalysisJourneyTests({test,expect,setup});
 registerAnalysisPeriodTests({test,expect,setup,owner,created});
 registerAnalysisDesignTests({test,expect,setup});
+
+registerCnvTests({test,expect,setup,owner,created});
