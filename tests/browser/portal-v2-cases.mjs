@@ -39,6 +39,21 @@ export function registerPortalV2Tests({ test, expect, setup }) {
     });
     const table=page.getByRole('table',{name:'Resultados das unidades filtradas',exact:true});
     await expect(table.locator('tbody > .unit-result-row')).toHaveCount(25);
+    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+    const overview=page.getByRole('region',{name:'Resumo das unidades',exact:true});
+    await expect(overview.locator('tbody tr')).toHaveCount(25);
+    await expect(page.getByLabel('Abrangência do período',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('region',{name:'Prioridades da carteira',exact:true})).toHaveCount(0);
+    await expect(page.locator('.gap-reconciliation,.achievement-notice')).toHaveCount(0);
+    for(const width of [1440,1100,768,390,320]){
+      await page.setViewportSize({width,height:900});
+      expect(await overview.locator('tbody tr').evaluateAll(rows=>rows.every(row=>getComputedStyle(row).display==='table-row'))).toBe(true);
+      const geometry=await overview.locator('.table-scroll').evaluate(node=>({height:node.clientHeight,scroll:node.scrollHeight}));
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.height+1);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }
+    await page.setViewportSize({width:1440,height:900});
+    await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
     await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Cadência dos PAs',exact:true}).click();
     await expect(table.locator('tbody > .unit-result-row')).toHaveCount(24);
     for (const width of [1440,768,390]) {

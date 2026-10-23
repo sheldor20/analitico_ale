@@ -10,7 +10,7 @@ import { analysisEffort } from '@/lib/analysis-workspace.mjs';
 import type { compareYears } from '@/lib/scenarios.mjs';
 import type { Dataset, Metric } from '@/lib/types';
 import { AnalysisSimulation, OverviewUnits, type AnalysisTab } from './analysis-workspace';
-import { ManagementPriorities, type ManagementPriorityAction } from './management-priorities';
+import { type ManagementPriorityAction } from './management-priorities';
 import { PaTable, YearComparison, type ScenarioFilters } from './scenario-panels';
 import AttainmentLegend from './ui/attainment-legend';
 import PeriodPerformance from './period-performance';
@@ -92,7 +92,7 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
         </header>
         <div hidden={mode !== 'overview'}>{visited('overview') && <>
           <Headline model={model} />
-          <div className={styles.overview}><ManagementPriorities analyses={model.rows} onViewUnits={action => { if (onPriority) onPriority(action, model.metric); else navigate('units'); }} /><OverviewUnits rows={model.rows} onAnalyze={onSelect} onAll={() => navigate('units')} /></div>
+          <div className={styles.overview}><OverviewUnits rows={model.rows} onAnalyze={onSelect} onAll={() => navigate('units')} /></div>
         </>}</div>
         <div hidden={mode !== 'units'}>{visited('units') && (model.count ? <>
           {unitLayout === 'matrix' ? <div className={styles.matrixLayout}><UnitScenarioMatrix rows={model.rows} year={dataset.year} month={model.filters.month} metric={model.metric} onAnalyze={onSelect} onHistory={onHistory} onShare={onMatrixShare ? shareMatrixUnit : undefined} onAction={onAction} onExpand={model.level === 'cooperative' ? togglePas : undefined} expandedKeys={model.rows.filter(row => expandedPas.includes(`${model.metric}:${row.key}`)).map(row => row.key)} renderExpanded={model.level === 'cooperative' ? expandedContent : undefined} /></div> :

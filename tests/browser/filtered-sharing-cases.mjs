@@ -90,7 +90,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await select(page, 'Central').selectOption('1002');await select(page, 'Cooperativa').selectOption('1002:3017');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Bahia');
     await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
-    await page.getByRole('region', { name: 'Prioridades da carteira', exact: true }).getByRole('button', { name: 'Ver unidades: Concluir metas próximas', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
     await expect(list(page).locator('tbody tr')).toHaveCount(1);
     await generate(page);await expect(rows).toHaveCount(1);
     await expect(bahia.locator('td[data-label="Meta"]')).toContainText(money(100));

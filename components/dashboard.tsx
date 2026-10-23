@@ -7,7 +7,6 @@ import {
   ArrowDownToLine,
   ArrowRight,
   BarChart3,
-  BellRing,
   Building2,
   Check,
   CheckCircle2,
@@ -52,7 +51,6 @@ import ConsolidatedAgenda from "@/components/consolidated-agenda";
 import { zonedDateTimeInput } from "@/lib/relationship.mjs";
 import type { EntityAppointment } from "@/lib/relationship-store";
 import GoalAlerts from "@/components/goal-alerts";
-import { buildMonthlyGoalAlerts, defaultGoalAlertMonth } from '@/lib/goal-alerts.mjs';
 import PortfolioCommunication from "@/components/portfolio-communication";
 import PaScenarioShare from "@/components/pa-scenario-share";
 import CommunicationStart, { type CommunicationChoice } from './communication-start';
@@ -60,7 +58,6 @@ import ResultExport from './result-export';
 import CombinedPortfolio from './combined-portfolio';
 import type {CurrentViewModel} from '@/lib/current-view.mjs';
 import { buildCurrentViewModels } from '@/lib/current-view.mjs';
-import { ManagementPriorities } from './management-priorities';
 import { entityFromAnalysis } from "@/lib/portfolio-communication.mjs";
 import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows } from "@/lib/registry.mjs";
 import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
@@ -137,8 +134,6 @@ export default function Dashboard() {
   const [registryDirty, setRegistryDirty] = useState(false);
   const [registrySaving, setRegistrySaving] = useState(false);
   const [agendaRequest, setAgendaRequest] = useState<{ owner: string; year: number; entityId: string; date: string; request: number } | null>(null);
-  const achievedMonth = useMemo(() => dataset ? defaultGoalAlertMonth(dataset) : 0, [dataset]);
-  const monthlyAchievements = useMemo(() => dataset ? buildMonthlyGoalAlerts(dataset, achievedMonth) : [], [dataset, achievedMonth]);
   const [importMode, setImportMode] = useState("production");
   const [sortBy, setSortBy] = useState("attainment-desc");
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
@@ -884,9 +879,7 @@ export default function Dashboard() {
                             <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
   </>;
   const resultContextPanels = <>
-    {view !== 'actions' && <ManagementPriorities analyses={scopedRows} onViewUnits={action=>{setUnitsExpanded(true);setSortBy(action.sortBy);setPriorityFocus({context:filterContext,keys:action.keys,label:({'pace':'Unidades abaixo do ritmo','near-goal':'Próximas da meta',gap:'Maiores déficits',production:'Maiores produções',review:'Dados para conferir'} as const)[action.kind]});changeAnalysisTab('units',false);requestAnimationFrame(()=>document.querySelector<HTMLElement>('[aria-label="Lista de unidades"]')?.scrollIntoView({block:'start'}));}}/>}
     {summary.gap!=null&&leafSummary.individualGap!=null&&leafSummary.individualGap>summary.gap+0.01&&<aside className="gap-reconciliation"><Info size={16}/><span><strong>Déficits das unidades: {money(leafSummary.individualGap)}.</strong> Superações compensam parte desse valor no consolidado.</span><button className="button quiet" onClick={()=>{rememberFilters();setView('actions');}}>Abrir plano de ação</button></aside>}
-    {dataset&&view==='overview'&&monthlyAchievements.length>0&&<aside className="achievement-notice" aria-label="Alerta de metas atingidas"><BellRing size={17}/><span>{monthlyAchievements.length} metas atingidas · {MONTHS[achievedMonth]}/{dataset.year}</span><button className="button quiet" onClick={()=>navigate('alerts')}>Ver conquistas <ArrowRight size={16}/></button></aside>}
   </>;
   const importPanel = (
     <>
@@ -1188,7 +1181,7 @@ export default function Dashboard() {
                 <label>Carteira<select aria-label="Carteira" value={selectedMetric} disabled={effectiveSource==='cadence'} onChange={event=>setMetric(event.target.value)}><option value="VN">Venda Nova</option><option value="AR">Arrecadação</option>{view==='overview'&&<option value="both">Venda Nova + Arrecadação</option>}</select></label>
                 <label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option value={id} key={id}>{id} · {name.replace('Sicoob Central ','')}</option>)}</select></label>
                 {view==='overview'&&analysisTab==='overview'&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
-                <PeriodSelector period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
+                <PeriodSelector showCoverage={!(view==='overview'&&analysisTab==='overview')} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
               </>:undefined} description={view==='audit'?scopeLabel:[metricName(selectedMetric),scopeLabel,periodDescription,cutoff?`Corte ${shortDate(cutoff)}`:'Sem corte',...new Set(displayed.map(row=>row.phase)),statusFilter!=='all'?({attention:'Precisam de atenção',track:'Em rota / meta atingida',missing:'Dados ou metas pendentes'} as Record<string,string>)[statusFilter]:'',search?`Busca: ${search}`:''].filter(Boolean).join(' · ')} onReset={resetFilters} active={pa!=='all'||central!=='all'||coop!=='all'||group!=='all'||Boolean(search)||statusFilter!=='all'||uplift>0}>
                 {view!=='audit'&&<label>Fonte<select value={effectiveSource} onChange={event=>{setSource(event.target.value as 'base'|'cadence');setPa('all');setGroup('all');if(view==='cadence')setView('overview');}}><option value="base">Cooperativas</option><option value="cadence">Cadência PA</option></select></label>}
                 {view==='audit'&&<label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}
@@ -1313,7 +1306,7 @@ export default function Dashboard() {
                     </div>
                   </section>
                   {view === 'actions' && resultContextPanels}
-                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview">{resultContextPanels}<OverviewUnits rows={displayed} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')}/></div>}
+                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview"><OverviewUnits rows={displayed} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')}/></div>}
                   {view === "actions" ? (
                     <section className="panel action-panel" aria-label="Lista de ações">
                       <div className="panel-heading">

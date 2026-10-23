@@ -77,12 +77,11 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await expect(tab(page, 'Visão geral')).toHaveAttribute('aria-selected', 'true');
     await expect(tablist(page).getByRole('tab', { selected: true })).toHaveCount(1);
     const summary = page.getByRole('region', { name: 'Resumo das unidades', exact: true });
-    const priorities = page.getByRole('region', { name: 'Prioridades da carteira', exact: true });
     await expect(results(page).getByRole('article')).toHaveCount(4);
     await expect(summary).toBeVisible();
     await expect(units(page)).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Resultados por período', exact: true })).toHaveCount(0);
-    const positions = await Promise.all([context(page), results(page), priorities, summary].map(item => item.boundingBox()));
+    const positions = await Promise.all([context(page), results(page), summary].map(item => item.boundingBox()));
     expect(positions.every(Boolean)).toBe(true);
     expect(positions.map(box => box.y)).toEqual(positions.map(box => box.y).sort((a, b) => a - b));
     await page.setViewportSize({ width: 1440, height: 1100 });
@@ -130,7 +129,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await expect(kpis).toContainText(money(515331.67));
     await expect(kpis).toContainText('89,2%');
     await expect(kpis).toContainText(money(62228.33));
-    await expect(page.getByText(/^Déficits das unidades:/i)).toContainText(money(70936.13));
+    await expect(page.getByText(/^Déficits das unidades:/i)).toHaveCount(0);
     await tab(page, 'Cooperativas e PAs').click();
     await expect(units(page).locator('tr.unit-result-row')).toHaveCount(2);
     const table = units(page).getByRole('table', { name: 'Resultados das unidades filtradas', exact: true });
@@ -184,8 +183,8 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     }), { compactPortal: true });
     await august(page);
     await select(context(page), 'Mês de referência').selectOption('8');
-    const priorities = page.getByRole('region', { name: 'Prioridades da carteira', exact: true });
-    await priorities.getByRole('button', { name: /Ver unidades: (Próximas da meta|Concluir metas próximas)/ }).click();
+    await select(context(page), 'Cooperativa').selectOption('1002:3017');
+    await tab(page, 'Cooperativas e PAs').click();
     await expect(tab(page, 'Cooperativas e PAs')).toHaveAttribute('aria-selected', 'true');
     await expect(units(page).locator('tr.unit-result-row')).toHaveCount(1);
     await expect(unitRow(page, 'Cooperativa Alfa')).toContainText('95%');
