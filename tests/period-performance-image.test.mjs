@@ -46,14 +46,14 @@ function geometry(layout, context, width = 1200) {
   }
 }
 
-test('period PNG keeps the three-line brand header, exact financial columns and one shared cutoff without mutating input', () => {
+test('period PNG keeps the concise brand header, exact financial columns and one shared cutoff without mutating input', () => {
   const source = part(), before = structuredClone(source), measure = measurement(), layout = periodPerformanceImageLayout(source, measure);
   const drawn = texts(layout), header = drawn.filter(command => command.y < layout.commands[0].height);
-  assert.deepEqual(header.map(command => command.value), ['Gestão comercial · Arrecadação', 'Sicoob Central Bahia', 'Resultados por período · 2026']);
+  assert.deepEqual(header.map(command => command.value), ['Gestão comercial · Arrecadação', 'Sicoob Central Bahia']);
   assert.equal(drawn.filter(command => command.value === source.scopeLabel).length, 1);
   assert.equal(drawn.filter(command => command.value.includes('14/08/2026')).length, 1);
-  assert.ok(drawn.some(command => command.value.includes('Parte 1 de 1 · Períodos 1–1')));
-  assert.ok(drawn.some(command => command.value.includes('Ordem: Cronológica')));
+  assert.ok(!drawn.some(command => /Parte 1|Imagem única|Resultados por período · 2026/.test(command.value)));
+  assert.ok(!drawn.some(command => command.value.includes('Ordem:')));
   const currencies = [1000, 700, 300].map(value => drawn.filter(command => command.value === amount(value)));
   assert.ok(currencies.every(commands => commands.length === 1));
   assert.deepEqual(currencies.map(([command]) => command.x), [256, 504, 928]);
@@ -102,7 +102,7 @@ test('assumptions stay complete below the results without expanding the compact 
   assert.deepEqual(actualRows, baselineRows, 'notes must not move the table below its scope and date context');
   const tableBottom = Math.max(...layout.commands.filter(command => command.type === 'rect' && command.x === 36 && ['#f0f7f4', '#ffffff'].includes(command.fill)).map(command => command.y + command.height));
   const footer = drawn.filter(command => command.y > tableBottom);
-  assert.equal(footer.map(command => command.value).join(' '), [...notes, 'Valores em reais · Resultados por período.'].join(' '));
+  assert.equal(footer.map(command => command.value).join(' '), notes.slice(2).join(' '));
   assert.ok(footer.every(command => command.size === 19));
   assert.ok(!drawn.some(command => command.value === 'Projeção é uma estimativa de produção.'));
   geometry(layout, measure, 1440);
