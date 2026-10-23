@@ -62,6 +62,7 @@ export function registerRegistryOnboardingTests({test,expect,setup,owner}) {
     await expect(page.getByRole('tab',{name:'Cooperativas e PAs',exact:true})).toHaveAttribute('aria-selected','true');
     await expect(page.getByRole('region',{name:'Lista de unidades',exact:true})).toContainText('Cooperativa Exemplo');
     await expect(central).toHaveValue('3456');
+    await page.locator('.filter-toggle[aria-expanded="false"]').click();
     await expect(cooperative).toHaveValue('3456:6789');
     await expect(page.locator('body')).not.toContainText(/Bahia|Nordeste/i);
     await page.setViewportSize({width:390,height:844});
