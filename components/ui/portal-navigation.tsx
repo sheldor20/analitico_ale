@@ -1,8 +1,8 @@
-import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, ShieldCheck } from 'lucide-react';
-export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda';
+import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, Megaphone, ShieldCheck } from 'lucide-react';
+export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda' | 'cnv';
 export const VIEW_TITLES: Record<PortalView, string> = {
   overview: 'Análises', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
-  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda',
+  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda', cnv: 'Ações CNV 2026',
 };
 export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   overview: 'Metas e produção da carteira.',
@@ -13,10 +13,11 @@ export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   registry: 'Unidades, contatos, carteira e metas anuais.',
   alerts: 'Reconheça os resultados do mês.',
   agenda: 'Programação das centrais, cooperativas e PAs.',
+  cnv: 'Regulamentos, produtos, metas e comunicação das ações.',
 };
 const groups = [
   { label: 'Acompanhamento', items: [
-    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList },
+    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList }, { id: 'cnv', icon: Megaphone },
   ] },
   { label: 'Relacionamento', items: [
     { id: 'agenda', icon: CalendarDays }, { id: 'alerts', icon: BellRing },

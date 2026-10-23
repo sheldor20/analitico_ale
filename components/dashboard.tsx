@@ -1,4 +1,5 @@
 "use client";
+import dynamic from 'next/dynamic';
 import { goalVariance } from '@/lib/goal-variance.mjs';
 import { readWorkbookFile, XLSX_FILE_LIMIT_MB } from "@/lib/xlsx-safety.mjs";
 import { Fragment, useEffect, useId, useMemo, useState, useRef } from "react";
@@ -82,6 +83,7 @@ import Kpi from './ui/metric-card';
 import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
 import { clearLocalAuth } from '@/lib/session-cleanup';
+const CnvActions = dynamic(() => import('./cnv-actions'), { loading: () => <p role="status">Carregando ações CNV…</p> });
 type Analysis = ReturnType<typeof analyze> & { contribution?: number | null; recentGrowth?: number | null; recentLabel?: string };
 type FilterSnapshot = { tab: AnalysisTab; unitLayout:UnitLayout; scrollY:number; selection:{context:string;keys:string[]}; expandedCoops:string[]; view: View; source: 'base' | 'cadence'; metric: string; central: string; coop: string; pa: string; group: string; level: string; search: string; status: string; sortBy: string; month: number; period: string; uplift: number; expandedPaKey: string; priorityFocus: {context:string;keys:string[];label:string} | null };
 type SourceFiles = { base: File | null; cadence: File | null };
@@ -407,7 +409,7 @@ export default function Dashboard() {
   }, [view, activeAgendaRequest]);
   function canLeaveRegistry() {
     if (registrySaving) return false;
-    if (registryDirty && !window.confirm(view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
+    if (registryDirty && !window.confirm(view === "cnv" ? "Há uma ação não salva. Deseja sair sem salvar?" : view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
     setRegistryDirty(false); return true;
   }
   function navigate(next: View) {
@@ -1021,7 +1023,7 @@ export default function Dashboard() {
             Gestão comercial
           </div>
           <div className="top-actions">
-            {dataset && (
+            {dataset && view !== "cnv" && (
               <button
                 className="button quiet"
                 disabled={!!busy || !!datasetId}
@@ -1044,21 +1046,21 @@ export default function Dashboard() {
               <LogOut size={17} />
               <span>Sair</span>
             </button>
-            <button
+{view !== "cnv" && <button
               className="button primary"
               disabled={!!busy || registrySaving}
               onClick={() => setShowImport(true)}
             >
               <Upload size={17} />
               Importar base
-            </button>
+            </button>}
           </div>
         </header>
         <main id="conteudo" className={`workspace-content view-${view} analysis-${analysisTab}`} tabIndex={-1}>
           <div className="page-heading">
             <div>
               <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
-              {!dataset && <p>Escolha uma base para começar.</p>}
+              {!dataset && view !== "cnv" && <p>Escolha uma base para começar.</p>}
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
               <div className="page-heading-actions">
@@ -1108,8 +1110,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {historical && dataset && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
-          {dataset && !historical && !["overview","cadence","actions"].includes(view) && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
+          {historical && dataset && view !== "cnv" && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
+          {dataset && !historical && !["overview","cadence","actions","cnv"].includes(view) && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
             <label>Ano <select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy || registrySaving} onChange={(e) => openWorkspace(Number(e.target.value))}>
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
@@ -1119,7 +1121,9 @@ export default function Dashboard() {
 </div></details>
             <span className="muted">{user && workspaceRevision ? "Cadastro salvo" : "Dados nesta sessão"}</span>
           </div>}
-          {view === "alerts" && dataset && user ? (
+          {view === "cnv" ? (
+            user ? <CnvActions key={user.id} ownerId={user.id} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} /> : <p role="status">Carregando sua conta…</p>
+          ) : view === "alerts" && dataset && user ? (
             <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
           ) : view === "agenda" && dataset && user ? (
             historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} disabled={!!busy} />

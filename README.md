@@ -221,3 +221,9 @@ npm run build
 O CI executa testes de cálculos e importação, além da migração em PostgreSQL embarcado (PGlite) para verificar sintaxe, RLS entre usuários, deduplicação, imutabilidade dos snapshots e propriedade das ações. Os fixtures são sintéticos; as bases comerciais reais ficam fora do repositório.
 
 Documentação técnica: [Next.js](https://nextjs.org/docs), [ExcelJS](https://github.com/exceljs/exceljs), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+### Ações CNV 2026
+
+A aba permite cadastrar regulamentos PDF (até 20 MB e 200 páginas), revisar o resumo extraído e consultar painéis com produtos, metas, período, elegibilidade e premiação. A leitura ocorre no navegador; PDFs sem texto selecionável permitem preenchimento manual. O resumo sempre exige conferência antes de salvar e mantém referências das páginas originais.
+
+As ações são independentes do cadastro anual de produção e pertencem à conta autenticada. A migration `20261023034657_cnv_actions_and_private_regulations.sql` cria `commercial_cnv_actions` e o bucket privado `commercial-cnv-regulations`, com isolamento por proprietário e sessão ativa. O regulamento original pode ser aberto ou baixado; WhatsApp/e-mail recebem uma mensagem editável, o PDF pelo compartilhamento do dispositivo ou um link temporário de 24 horas gerado por escolha explícita. A aplicação não envia mensagens automaticamente nem calcula atingimento comercial a partir dos regulamentos.
