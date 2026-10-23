@@ -170,6 +170,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await expect(frame(page).locator('body')).not.toContainText('PA Alfa zero');await expect(frame(page).locator('body')).not.toContainText(money(999999));
     await modal.getByRole('textbox', { name: 'Destinatários do e-mail', exact: true }).fill('duas-carteiras@example.com');
     await modal.getByRole('button', { name: 'Copiar painel', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.__filteredCopies.html.length)).toBeGreaterThan(0);
     const copied = await page.evaluate(() => window.__filteredCopies.html.at(-1));
     expect((copied.match(/data-scenario-metric=/g) || [])).toHaveLength(2);
     const download = page.waitForEvent('download');await modal.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true }).click();
