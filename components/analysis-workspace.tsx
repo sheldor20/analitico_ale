@@ -40,5 +40,25 @@ export function AnalysisSimulation({baseline,simulated,uplift,onChange,period,da
   const sliderId=useId();
   const impact=baseline.projected!=null&&simulated.projected!=null?simulated.projected-baseline.projected:null;
   const projectedGap=simulated.target!=null&&simulated.projected!=null?Math.max(0,simulated.target-simulated.projected):null;
-  return <section className="panel analysis-simulation" aria-label="Simulação comercial"><header><div><h2>Simulação de fechamento</h2><p>{period} · estimativa, sem alterar metas ou realizado</p></div><button type="button" className="button secondary" onClick={()=>onChange(0)}>Restaurar premissas</button></header><div className="simulation-premises"><label htmlFor={sliderId}>Aumento do ritmo futuro <strong>+{uplift}%</strong></label><input id={sliderId} type="range" min="0" max="100" step="5" value={uplift} onChange={event=>onChange(Number(event.target.value))}/><p>Aplica o aumento à produção futura estimada pelo ritmo observado e pelas metas restantes. Não representa probabilidade de fechamento.</p></div><dl className="simulation-results"><div><dt>Realizado até o corte</dt><dd>{money(baseline.actual)}</dd><small>Valor registrado</small></div><div><dt>Projeção atual</dt><dd>{money(baseline.projected)}</dd><small>{percent(baseline.projectedAttainment)} da meta · estimativa</small></div><div><dt>Cenário simulado</dt><dd>{money(simulated.projected)}</dd><small>{percent(simulated.projectedAttainment)} da mesma meta · +{uplift}% no ritmo futuro</small></div></dl><dl className="simulation-impact"><div><dt>Impacto na projeção</dt><dd>{money(impact)}</dd></div><div><dt>GAP projetado do período</dt><dd>{money(projectedGap)}</dd></div><div><dt>GAP consolidado atual</dt><dd>{money(baseline.gap)}</dd></div><div><dt>Esforço por dia útil restante</dt><dd>{money(daily)}</dd><small>{days==null?'Cortes ou prazos distintos · consulte por unidade':`${days} dias úteis · segunda a sexta, sem feriados`}</small></div><div><dt>Esforço por mês equivalente</dt><dd>{money(monthly)}</dd><small>Mesma meta e mesmo prazo do período</small></div></dl><p className="helper">Valores sem base suficiente aparecem como travessão. A simulação fica restrita a esta aba e é identificada no compartilhamento.</p></section>;
+  return <section className="panel analysis-simulation" aria-label="Simulação comercial">
+    <header><div className="simulation-heading"><h2>Simulação de fechamento</h2><span className="simulation-estimate">Estimativa</span></div><button type="button" className="button secondary" onClick={()=>onChange(0)}>Restaurar premissas</button></header>
+    <div className="simulation-premises">
+      <label htmlFor={sliderId}>Aumento do ritmo futuro <strong>+{uplift}%</strong></label>
+      <input id={sliderId} type="range" min="0" max="100" step="5" value={uplift} onChange={event=>onChange(Number(event.target.value))}/>
+      <div className="simulation-scale" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>
+    </div>
+    <dl className="simulation-results">
+      <div><dt>Realizado até o corte</dt><dd>{money(baseline.actual)}</dd></div>
+      <div><dt>Projeção atual</dt><dd>{money(baseline.projected)}</dd><small>{percent(baseline.projectedAttainment)} da meta</small></div>
+      <div><dt>Cenário simulado</dt><dd aria-live="polite">{money(simulated.projected)}</dd><small>{percent(simulated.projectedAttainment)} da meta</small></div>
+    </dl>
+    <dl className="simulation-impact">
+      <div><dt>Impacto na projeção</dt><dd>{money(impact)}</dd></div>
+      <div><dt>GAP projetado do período</dt><dd>{money(projectedGap)}</dd></div>
+      <div><dt>GAP consolidado atual</dt><dd>{money(baseline.gap)}</dd></div>
+      <div><dt>Esforço por dia útil restante</dt><dd>{money(daily)}</dd><small>{days==null?'Cortes ou prazos distintos':`${days} dias úteis restantes`}</small></div>
+      <div><dt>Esforço por mês equivalente</dt><dd>{money(monthly)}</dd></div>
+    </dl>
+    <details className="simulation-method"><summary>Como a simulação funciona</summary><p>{period}. Aplica o aumento à produção futura estimada pelo ritmo observado e pelas metas restantes. Não altera metas ou realizado e não representa probabilidade de fechamento.</p><p>Dias úteis: segunda a sexta, sem feriados. Valores sem base suficiente aparecem como travessão. Cortes e prazos distintos devem ser consultados por unidade. A simulação fica restrita a esta aba e é identificada no compartilhamento.</p></details>
+  </section>;
 }

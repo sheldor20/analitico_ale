@@ -3129,3 +3129,27 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 @media(max-width:720px){.portal .overview-units-heading .export-selection-options{left:0;right:auto}}
 @media print{.portal .export-selection{display:none!important}}
 .portal .workspace-content .overview-units:has(.export-selection[open]){overflow:visible}
+
+/* Simulation follows the compact visual rhythm of the other analysis tabs. */
+.portal .analysis-simulation .simulation-heading{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.portal .simulation-estimate{font-size:11px;padding:3px 8px;border:1px solid #dddbf2;border-radius:5px;background:#f0effa;color:#49479d}
+.portal .analysis-simulation header .button{min-height:34px;padding:5px 10px;font-size:12px}
+.portal .simulation-premises{padding:12px 14px}
+.portal .simulation-premises label{align-items:center;font-size:12px}
+.portal .simulation-premises label strong{padding:4px 10px;background:#e3f5f2;color:#003641;border-radius:5px;font-size:14px}
+.portal .simulation-premises input[type="range"]{height:20px;min-height:20px;margin:8px 0 0;padding:0;cursor:pointer}
+.portal .simulation-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+.portal .simulation-results{padding:12px 14px;gap:10px}
+.portal .simulation-results>div{padding:12px;border-top:3px solid #bed1d5;background:#f8fafb}
+.portal .simulation-results>div:nth-child(2){border-top-color:#49479d;background:#f5f4fb}
+.portal .simulation-results>div:last-child{border-top:3px solid #00ae9d;background:#e3f5f2}
+.portal .simulation-results dd{font-size:clamp(18px,1.8vw,26px);margin:8px 0 4px}
+.portal .simulation-impact{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:2px 14px 14px}
+.portal .simulation-impact>div{min-width:0;border-left:2px solid var(--line);padding-left:10px}
+.portal .simulation-impact dt{font-size:11px;line-height:1.4}
+.portal .simulation-impact dd{font-size:16px;margin:5px 0}
+.portal .simulation-method{border-top:1px solid var(--line);padding:10px 14px;font-size:12px;color:var(--muted)}
+.portal .simulation-method summary{cursor:pointer;font-weight:600;color:var(--ink)}
+.portal .simulation-method p{margin:8px 0 0;max-width:960px;line-height:1.5}
+@media(max-width:1000px){.portal .simulation-impact{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.portal .simulation-results{grid-template-columns:1fr}.portal .simulation-impact{grid-template-columns:repeat(2,minmax(0,1fr))}.portal .simulation-results dd{font-size:24px}}
