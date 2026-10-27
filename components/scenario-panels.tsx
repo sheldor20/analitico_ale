@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useState } from 'react';
 import { MONTHS, money, percent } from '@/lib/analytics.mjs';
 import { compareYears, networkSummary, sortAnalysis } from '@/lib/scenarios.mjs';
 import { loadWorkspace } from '@/lib/workspace-store';
@@ -12,27 +12,45 @@ import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import { ChevronDown, MessageSquareText } from 'lucide-react';
 export type ScenarioFilters = { central: string; coop: string; pa?: string; unitIds?: string[]; source: string; metric: string; group: string; level: string; period: string; month: number; uplift: number; sortBy: string; search: string; status: string };
-export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpenCadence, expanded = false, onToggle, compact = true, showLegend = false }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onHistory?: (row: any) => void; onShare?: () => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void; compact?: boolean; showLegend?: boolean }) {
+export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpenCadence, expanded = false, onToggle, compact = true, showLegend = false }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onHistory?: (row: any) => void; onShare?: (sortBy?: string) => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void; compact?: boolean; showLegend?: boolean }) {
   const model = useMemo(() => networkSummary(dataset, { ...filters, source: 'base', search: '', status: 'all' }), [dataset, filters]);
-  const rows = sortAnalysis(model.pas, filters.sortBy);
+  const [order, setOrder] = useState('attainment-desc');
+  const [groupBy, setGroupBy] = useState(false);
+  const [page, setPage] = useState(0);
+  const rows = useMemo(() => {
+    const sorted = sortAnalysis(model.pas, order);
+    return groupBy ? sorted.sort((a: any, b: any) => String(a.group || 'Sem grupo').localeCompare(String(b.group || 'Sem grupo'), 'pt-BR', { numeric: true })) : sorted;
+  }, [model.pas, order, groupBy]);
+  const pages = Math.max(1, Math.ceil(rows.length / 50));
+  const currentPage = Math.min(page, pages - 1);
+  const visibleRows = rows.slice(currentPage * 50, (currentPage + 1) * 50);
+  useEffect(() => setPage(0), [dataset, filters.central, filters.coop, filters.period, filters.month, order, groupBy]);
+  const achieved = model.pas.filter((row: any) => row.complete && !row.annualConflict && row.target > 0 && row.attainment >= 1).length;
+  const zero = model.pas.filter((row: any) => row.actual === 0).length;
   const contentId = useId();
   const [moreIndicators, setMoreIndicators] = useState(!compact);
   return <section className={`panel ${styles.section} ${styles.paSection}`} aria-label="PAs da cooperativa">
-    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><p>{rows.length} PAs · {model.paAchieved} com meta atingida · Venda Nova</p></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
+    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><p>Venda Nova · {periodTitle(filters.period, filters.month, dataset.year)}</p></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
     <div id={contentId} hidden={!expanded}>
+      <div className={styles.paSummary} aria-label="Indicadores dos PAs">
+        <div><strong>{model.pas.length}</strong><span>Total de PAs</span></div>
+        <div><strong>{achieved}</strong><span>Com meta entregue</span></div>
+        <div><strong>{zero}</strong><span>Com produção zerada</span></div>
+        <div><strong>{model.pas.length ? percent(achieved / model.pas.length) : '0%'}</strong><span>Dos PAs com meta entregue</span></div>
+      </div>
       <div className={styles.paToolbar}>
-        <span>{periodTitle(filters.period, filters.month, dataset.year)}</span>
+        <div><label>Ordenar por<select aria-label="Ordenar PAs por" value={order} onChange={event => setOrder(event.target.value)}><option value="attainment-desc">Maior atingimento</option><option value="production">Maior produção</option><option value="name">Nome / código</option></select></label><label className={styles.paIndicators}><input type="checkbox" checked={groupBy} onChange={event => setGroupBy(event.target.checked)} />Agrupar por P1, P2 e demais grupos</label></div>
         <div>
           <label className={styles.paIndicators}><input type="checkbox" checked={moreIndicators} onChange={event => setMoreIndicators(event.target.checked)} />Mais indicadores</label>
           {onOpenCadence && <button type="button" className="button quiet" aria-label={`Abrir cadência de ${dataset.registry?.entities.find(entity => entity.id === `cooperative:${filters.coop}`)?.name ?? filters.coop}`} onClick={onOpenCadence}>Abrir cadência</button>}
-          {onShare && rows.length > 0 && <button type="button" className="button secondary pa-share-trigger" aria-label="Compartilhar PAs" onClick={onShare}><MessageSquareText size={16} aria-hidden="true" />Compartilhar cenário</button>}
+          {onShare && rows.length > 0 && <button type="button" className="button secondary pa-share-trigger" aria-label="Compartilhar PAs" onClick={() => onShare(order)}><MessageSquareText size={16} aria-hidden="true" />Compartilhar cenário</button>}
         </div>
       </div>
       <p className={styles.paMethod}>Cadência de Venda Nova dos PAs. Estes valores não são somados à produção da cooperativa.</p>
-      <div className="table-scroll"><table className={styles.paTable}><thead><tr><th scope="col">Unidade</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th>{moreIndicators && <><th scope="col">GAP projetado</th><th scope="col" title="GAP do período dividido pelos dias úteis restantes do mesmo período">Necessário/dia útil</th><th scope="col" title="GAP do período dividido pelos meses equivalentes restantes">Necessário/mês equivalente</th><th scope="col">Corte</th><th scope="col">Ritmo do período</th></>}<th scope="col">Ações</th></tr></thead><tbody>{rows.map((row: any) => {
+      <div className="table-scroll"><table className={styles.paTable}><thead><tr><th scope="col">Unidade</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th>{moreIndicators && <><th scope="col">GAP projetado</th><th scope="col" title="GAP do período dividido pelos dias úteis restantes do mesmo período">Necessário/dia útil</th><th scope="col" title="GAP do período dividido pelos meses equivalentes restantes">Necessário/mês equivalente</th><th scope="col">Corte</th><th scope="col">Ritmo do período</th></>}<th scope="col">Ações</th></tr></thead><tbody>{visibleRows.map((row: any, index: number) => {
         const assessable = row.complete && !row.annualConflict && row.target > 0;
         const dataState = row.annualConflict ? 'Metas divergentes' : row.actual == null ? 'Sem realizado' : !row.complete ? 'Dados incompletos' : row.target == null ? 'Sem meta' : row.target === 0 ? 'Meta zero' : null;
-        return <tr key={row.key} data-pa={row.pa}>
+        return <Fragment key={row.key}>{groupBy && (index === 0 || visibleRows[index - 1].group !== row.group) && <tr className={styles.paGroup}><th colSpan={moreIndicators ? 12 : 7} scope="rowgroup">{row.group || 'Sem grupo'}</th></tr>}<tr data-pa={row.pa}>
           <th scope="row"><strong>PA {row.pa} · {row.name}</strong><small className="cell-note">{row.group} · Coop. {row.cooperative}{dataState ? ` · ${dataState}` : ''}</small></th>
           <td className="numeric">{money(row.target)}</td>
           <td className="numeric">{money(row.actual)}</td>
@@ -41,8 +59,9 @@ export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpen
           <td className="numeric" title={`Estimativa de fechamento: ${periodTitle(filters.period, filters.month, dataset.year)}`}>{money(row.projected)}</td>
           {moreIndicators && <><td className="numeric">{money(row.projectionGap)}</td><td className="numeric">{money(row.requiredDaily)}</td><td className="numeric">{money(row.requiredMonthly)}</td><td>{row.cutoff?.split('-').reverse().join('/') ?? 'Sem corte'}</td><td>{row.status}</td></>}
           <td><div className={styles.paActions}>{onSelect && <button type="button" className="button quiet" aria-label={`Analisar PA ${row.pa} · ${row.name}`} onClick={() => onSelect(row)}>Analisar PA</button>}{onHistory && <button type="button" className="button quiet" aria-label={`Ver histórico do PA ${row.pa} · ${row.name}`} onClick={() => onHistory(row)}>Ver histórico</button>}{!onSelect && !onHistory && <span className="helper">Sem ações disponíveis</span>}</div></td>
-        </tr>;
+        </tr></Fragment>;
       })}</tbody></table></div>
+      <nav className={styles.paPagination} aria-label="Paginação dos PAs"><span>{rows.length ? currentPage * 50 + 1 : 0} a {Math.min((currentPage + 1) * 50, rows.length)} de {rows.length} PAs</span><div><button type="button" className="button secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</button><span>Página {currentPage + 1} de {pages}</span><button type="button" className="button secondary" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)}>Próxima</button></div></nav>
       {showLegend && <AttainmentLegend />}
       {!rows.length && <p className="empty">Nenhum PA cadastrado para esta cooperativa neste ano. Importe a cadência PA ou inclua no cadastro fixo.</p>}
     </div>

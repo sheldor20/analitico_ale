@@ -85,10 +85,10 @@ test('each period uses the same analytical values and never adds cooperative/bas
   }
 });
 
-test('12-PA image parts cover all 46 identities once and keep the full email/text list', () => {
-  assert.equal(PA_SCENARIO_PAGE_SIZE, 12);
+test('50-PA image parts cover all 46 identities once and keep the full email/text list', () => {
+  assert.equal(PA_SCENARIO_PAGE_SIZE, 50);
   const result = report(dataset(Array.from({ length: 46 }, (_, index) => row(index))));
-  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 4, 1, 12, 12], [2, 4, 13, 24, 12], [3, 4, 25, 36, 12], [4, 4, 37, 46, 10]]);
+  assert.deepEqual(result.parts.map(part => [part.index, part.total, part.from, part.to, part.rows.length]), [[1, 1, 1, 46, 46]]);
   assert.deepEqual(result.parts.flatMap(part => part.rows.map(item => item.id)), result.rows.map(item => item.id));
   assert.equal((result.html.match(/data-pa-id=/g) || []).length, 46);
   for (const item of result.rows) assert.ok(result.text.includes(`PA ${item.pa} · ${item.name} | Meta:`));
@@ -246,4 +246,10 @@ test('default attainment ranks PAs globally across parents in every channel and 
   assert.deepEqual(drawn, labels);
   assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' } }).rows.map(item => item.pa), ['2', '1', '0']);
   assert.deepEqual(report(data, { filters: { ...withoutSort, sortBy: 'production' }, sortBy: 'attainment' }).rows.map(item => item.pa), ['0', '2', '1']);
+});
+
+test('PA sharing paginates 101 units into 50, 50 and 1 without losing identities', () => {
+  const result = report(dataset(Array.from({ length: 101 }, (_, index) => row(index))));
+  assert.deepEqual(result.parts.map(part => part.rows.length), [50, 50, 1]);
+  assert.deepEqual(result.parts.flatMap(part => part.rows.map(item => item.id)), result.rows.map(item => item.id));
 });

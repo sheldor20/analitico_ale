@@ -36,6 +36,6 @@ export type ScenarioReportOptions = {
   dataset: Dataset; filters: PaScenarioFilters; mode?: 'all' | 'filtered' | 'selected';
   selectedIds?: string[]; sortBy?: string; showProjection?: boolean; customization?: ScenarioCustomization;
 };
-export const PA_SCENARIO_PAGE_SIZE: 12;
+export const PA_SCENARIO_PAGE_SIZE: 50;
 export function buildPaScenarioReport(options: ScenarioReportOptions): PaScenarioReport;
 export { renderPaScenarioPng } from './pa-scenario-image.mjs';

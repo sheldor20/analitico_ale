@@ -33,7 +33,7 @@ A fonte Sicoob Sans foi obtida do arquivo público utilizado pela página oficia
 ## Comportamento visual
 
 - Priorizar filtros legíveis, números com alinhamento consistente, ações claras e informação em português do Brasil.
-- Exibir todas as unidades filtradas na mesma tabela. Expandir a tabela na página, sem rolagem vertical interna; manter rolagem horizontal somente quando necessária e contador; não cortar a lista por paginação no acompanhamento de cooperativas/PAs.
+- Disponibilizar todas as unidades filtradas na tabela. Expandir a tabela na página, sem rolagem vertical interna; manter rolagem horizontal somente quando necessária e contador; manter cooperativas na mesma tabela e paginar PAs em até 50 registros por página, conforme atualização de 27/10/2026.
 - Preservar o gráfico mensal com SVG diretamente filho de `.monthly-chart`. Seu seletor de dimensionamento é `.monthly-chart > svg`; ícones de expansão têm 16 × 16 px e regras próprias. Nunca aplicar `width: 100%` ou altura mínima a todos os SVGs descendentes.
 - Evitar textos claros sobre branco; usar `--ink` e `--muted`. Cor complementa o rótulo de situação, sem ser o único sinal.
 - No celular, manter os campos com texto de 16 px, navegação inferior com rolagem horizontal, margem segura e marca completa no cabeçalho.

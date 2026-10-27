@@ -382,3 +382,9 @@ test('compact flag and central identities are validated without weakening PA ide
   assert.throws(() => paScenarioImageLayout(part([row(0, { central: '', cooperative: '', pa: '' })], { compact: true, kind: 'central' }), measurement()), /unidade contém dados inválidos/);
   assert.throws(() => paScenarioImageLayout(part([row(0, { cooperative: '', pa: '' })], { compact: true, kind: 'cooperative' }), measurement()), /unidade contém dados inválidos/);
 });
+
+test('50 PAs fit within the supported image dimensions', () => {
+  const measure = measurement();
+  const layout = paScenarioImageLayout(part(Array.from({ length: 50 }, (_, index) => row(index)), { kind: 'pa' }), measure);
+  assertGeometry(layout, measure);
+});
