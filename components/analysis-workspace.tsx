@@ -5,16 +5,17 @@ import { money, percent } from '@/lib/analytics.mjs';
 import {goalVariance} from '@/lib/goal-variance.mjs';
 import type { CurrentViewRow } from '@/lib/current-view.mjs';
 
-export type AnalysisTab = 'overview' | 'units' | 'periods' | 'comparison' | 'simulation';
+export type AnalysisTab = 'overview' | 'units' | 'pas' | 'periods' | 'comparison' | 'simulation';
 export type UnitLayout = 'period' | 'matrix';
 export function UnitLayoutSwitch({value,onChange}:{value:UnitLayout;onChange:(layout:UnitLayout)=>void}) {
   const name=useId();
   return <fieldset className="unit-layout-switch"><legend className="sr-only">Visualização das unidades</legend>{([{value:'period',label:'Resultado do período'},{value:'matrix',label:'Mês · trimestre · ano'}] as const).map(option=><label key={option.value} data-selected={value===option.value}><input type="radio" name={name} value={option.value} checked={value===option.value} onChange={()=>onChange(option.value)}/><span>{option.label}</span></label>)}</fieldset>;
 }
 export const ANALYSIS_TABS = [
-  {id:'overview',label:'Visão geral',icon:LayoutDashboard},
-  {id:'units',label:'Cooperativas e PAs',icon:Building2},
-  {id:'periods',label:'Por período',icon:CalendarRange},
+  {id:'overview',label:'Central',icon:LayoutDashboard},
+  {id:'units',label:'Cooperativas',icon:Building2},
+  {id:'pas',label:'PAs',icon:Building2},
+  {id:'periods',label:'Período',icon:CalendarRange},
   {id:'comparison',label:'Comparar anos',icon:GitCompareArrows},
   {id:'simulation',label:'Simulação',icon:Gauge},
 ] as const;

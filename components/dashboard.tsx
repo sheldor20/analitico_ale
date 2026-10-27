@@ -199,7 +199,7 @@ export default function Dashboard() {
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
   const [sharing, setSharing] = useState<{ related?:boolean; kind: "central" | "pa" | "cooperative"; central?: string; coop?: string; metric?: "VN" | "AR"; unitIdsByMetric?: Partial<Record<"VN" | "AR", string[]>>; format?: "email" | "image" | "summary"; showProjection?: boolean } | null>(null);
   const uplift = view === "overview" && analysisTab === "simulation" ? simulationUplift : 0;
-  const effectiveSource = view === "cadence" ? "cadence" : source;
+  const effectiveSource = view === "cadence" || view === "overview" && analysisTab === "pas" ? "cadence" : view === "overview" && ["overview", "units"].includes(analysisTab) ? "base" : source;
   const selectedMetric = effectiveSource === "cadence" || view === "actions" && metric === "both" ? "VN" : metric;
   const combinedPortfolios = selectedMetric === "both";
   const effectiveMetric = selectedMetric === "AR" ? "AR" : "VN";
@@ -328,7 +328,7 @@ export default function Dashboard() {
       ? "pa"
       : view === "actions"
         ? "cooperative"
-        : level === "pa" ? "cooperative" : level;
+        : view === "overview" && analysisTab === "units" ? "cooperative" : level === "pa" ? "cooperative" : level;
   const analyses = useMemo(
     () =>
       aggregate(filtered, actualLevel)
@@ -353,6 +353,12 @@ export default function Dashboard() {
   const cohort = focus ? scopedRows.filter(row => focus.keys.includes(row.key)) : scopedRows;
   const displayed: Analysis[] = sortAnalysis(analysisIndicators(uplift ? cohort.map(row=>analyze(row,options)) : cohort, options), sortBy);
   const selectionContext = `${filterContext}:${focus?.label ?? ''}`;
+  const [paPagination,setPaPagination] = useState({context:'',page:0});
+  const paPageContext = `${filterContext}:${sortBy}`;
+  const paPageCount = Math.max(1,Math.ceil(displayed.length/50));
+  const paPage = paPagination.context===paPageContext ? Math.min(paPagination.page,paPageCount-1) : 0;
+  const tableRows = analysisTab==='pas' ? displayed.slice(paPage*50,(paPage+1)*50) : displayed;
+
   useEffect(()=>{
     if(selectionCarry.current===null)return;
     const keys=selectionCarry.current.filter(key=>displayed.some(row=>row.key===key));
@@ -467,6 +473,7 @@ export default function Dashboard() {
   }
   function changeAnalysisTab(next:AnalysisTab,restore=true) {
     document.querySelectorAll<HTMLDetailsElement>('.year-management[open]').forEach(element=>{element.open=false;});
+    if(next==='pas'||analysisTab==='pas'){setPa('all');setGroup('all');setSearch('');setStatusFilter('all');setPriorityFocus(null);}
     tabPositions.current[analysisTab]=window.scrollY;
     setAnalysisTab(next);setVisitedTabs(items=>items.includes(next)?items:[...items,next]);
     if(restore)requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:tabPositions.current[next]??0,behavior:'instant'})));
@@ -1180,12 +1187,12 @@ export default function Dashboard() {
                 ...(coop!=='all'?[{label:cooperatives.find(([id])=>id===coop)?.[1]??`Cooperativa ${coop.split(':')[1]}`,onClick:()=>returnToAncestor('cooperative')}]:[]),
                 ...(pa!=='all'?[{label:paOptions.find(([id])=>id===pa)?.[1]??`PA ${pa.split(':').at(-1)}`}]:[]),
               ]}/><AnalysisTabs active={analysisTab} onChange={changeAnalysisTab}/></>}
-              <FilterPanel compact={view==='overview'&&['overview','units','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
+              <FilterPanel compact={view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
                 {dataset&&<label>Ano<select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy||registrySaving} onChange={event=>openWorkspace(Number(event.target.value))}>{[...new Set([dataset.year,...workspaces.map(item=>item.year),...sessionYears.current.keys()])].sort((a,b)=>b-a).map(year=><option key={year} value={year}>{year}</option>)}</select></label>}
                 <label>Carteira<select aria-label="Carteira" value={selectedMetric} disabled={effectiveSource==='cadence'} onChange={event=>setMetric(event.target.value)}><option value="VN">Venda Nova</option><option value="AR">Arrecadação</option>{view==='overview'&&<option value="both">Venda Nova + Arrecadação</option>}</select></label>
                 <label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option value={id} key={id}>{id} · {name.replace('Sicoob Central ','')}</option>)}</select></label>
-                {view==='overview'&&['overview','units','simulation'].includes(analysisTab)&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
-                <PeriodSelector showCoverage={!(view==='overview'&&['overview','units','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
+                {view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab)&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
+                <PeriodSelector showCoverage={!(view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
               </>:undefined} description={view==='audit'?scopeLabel:[metricName(selectedMetric),scopeLabel,periodDescription,cutoff?`Corte ${shortDate(cutoff)}`:'Sem corte',...new Set(displayed.map(row=>row.phase)),statusFilter!=='all'?({attention:'Precisam de atenção',track:'Em rota / meta atingida',missing:'Dados ou metas pendentes'} as Record<string,string>)[statusFilter]:'',search?`Busca: ${search}`:''].filter(Boolean).join(' · ')} onReset={resetFilters} active={pa!=='all'||central!=='all'||coop!=='all'||group!=='all'||Boolean(search)||statusFilter!=='all'||uplift>0}>
                 {view!=='audit'&&<label>Fonte<select value={effectiveSource} onChange={event=>{setSource(event.target.value as 'base'|'cadence');setPa('all');setGroup('all');if(view==='cadence')setView('overview');}}><option value="base">Cooperativas</option><option value="cadence">Cadência PA</option></select></label>}
                 {view==='audit'&&<label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}
@@ -1291,11 +1298,11 @@ export default function Dashboard() {
                   <button className="button secondary" onClick={resetFilters}>
                     Limpar filtros
                   </button>
-                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
+                  {sourceRows.some(row => row.cooperative && (central === "all" || row.central === central) && (coop === "all" || `${row.central}:${row.cooperative}` === coop)) && <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'&&analysisTab!=='pas'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>}
                 </section>
               ) : (
                 <>
-                  <section className="overview-metrics" aria-label="Resultado do período" hidden={view==='overview'&&!(['overview','units'] as AnalysisTab[]).includes(analysisTab)}>
+                  <section className="overview-metrics" aria-label="Resultado do período" hidden={view==='overview'&&!(['overview','units','pas'] as AnalysisTab[]).includes(analysisTab)}>
                     <div className="overview-block-heading"><div><h2>Resultado do período</h2><p className="overview-cutoff">{cutoff ? cutoffs.length > 1 ? `Cortes: ${shortDate(cutoff)} a ${shortDate(cutoffs[cutoffs.length-1])}` : `Dados até ${shortDate(cutoff)}` : 'Sem data de atualização'}{displayed.length > 0 && ` · ${[...new Set(displayed.map(row => row.phase))].join(' / ')}`}</p></div><div className="overview-block-actions">{view !== 'actions' && <button type="button" className="button quiet" onClick={showAllPeriods}>Ver todos os períodos <ArrowRight size={16} aria-hidden="true" /></button>}<PanelToggle expanded={metricsExpanded} onToggle={() => setMetricsExpanded(value => !value)} controls={metricContentId} label="indicadores do período" /></div></div>
                     <div className="kpi-grid" id={metricContentId} hidden={!metricsExpanded}>
                     <Kpi title="Meta do período" value={displayed.length ? money(summary.target) : '—'} sub={periodDescription} icon={<Target size={20} />} />
@@ -1367,7 +1374,7 @@ export default function Dashboard() {
                     </section>
                   ) : (
                     <>
-                      <div id="analysis-panel-units" role={view==='overview'?'tabpanel':undefined} aria-labelledby={view==='overview'?'analysis-tab-units':undefined} hidden={view==='overview'&&analysisTab!=='units'}><section className="panel table-panel overview-units" aria-label="Lista de unidades" tabIndex={-1}>
+                      <div id={analysisTab==='pas'?'analysis-panel-pas':'analysis-panel-units'} role={view==='overview'?'tabpanel':undefined} aria-labelledby={view==='overview'?`analysis-tab-${analysisTab==='pas'?'pas':'units'}`:undefined} hidden={view==='overview'&&!['units','pas'].includes(analysisTab)}><section className="panel table-panel overview-units" aria-label="Lista de unidades" tabIndex={-1}>
                         <div className="panel-heading table-heading overview-units-heading">
                           <div>
                             <h2>
@@ -1381,10 +1388,11 @@ export default function Dashboard() {
                           </div>
                           <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           <div className="overview-block-actions">
-                            {view==='overview'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
+                            {view==='overview'&&analysisTab!=='pas'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
                             <div className="table-controls overview-unit-controls">
                               {listControls}
-                              {(unitLayout==='period'||view!=='overview')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
+                              {analysisTab==='pas'&&<label className="control-field"><span>Grupo do PA</span><select aria-label="Grupo do PA" value={group} onChange={event=>{setGroup(event.target.value);setPa('all');}}><option value="all">Todos os grupos</option>{groups.map(item=><option key={item} value={item}>{item}</option>)}</select></label>}
+                              {(unitLayout==='period'||view!=='overview'||analysisTab==='pas')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
                             </div>
 
                             <details className="export-selection"><summary><span aria-live="polite">{selectedKeys.length ? `${selectedKeys.length} selecionadas` : 'Selecionar para exportar'}</span><ChevronDown size={15} aria-hidden="true"/></summary>
@@ -1394,12 +1402,12 @@ export default function Dashboard() {
                           {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
                         </div>
                             </details>
-                            <button type="button" className="button primary pa-share-trigger" aria-label="Compartilhar resultado das unidades" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar</button>
+                            <button type="button" className="button primary pa-share-trigger" aria-label="Compartilhar resultado das unidades" onClick={() => unitLayout==='matrix'&&view==='overview'&&analysisTab!=='pas'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar</button>
                           </div>
                         </div>
                         <div id={unitContentId} hidden={!unitsExpanded}>
 
-                        {unitLayout==='matrix'&&view==='overview'&&dataset?<UnitScenarioMatrix rows={displayed} year={dataset.year} month={month} metric={effectiveMetric as 'VN'|'AR'} onAnalyze={openUnitAnalysis} onHistory={openUnitHistory} onShare={row=>shareMatrix(undefined,row)} onAction={setSelected} selectedKeys={selectedKeys} onSelect={selectRow} expandedKeys={expandedCoops} onExpand={actualLevel==='cooperative'&&effectiveSource==='base'?row=>setExpandedCoops(keys=>keys.includes(row.key)?keys.filter(key=>key!==row.key):[...keys,row.key]):undefined} renderExpanded={row=><PaTable dataset={dataset} filters={{...scenarioFilters,central:row.central,coop:`${row.central}:${row.cooperative}`,pa:'all'}} expanded onToggle={()=>setExpandedCoops(keys=>keys.filter(key=>key!==row.key))} onSelect={setSelected} onHistory={openUnitHistory} onShare={order=>{if(order)setSortBy(order);setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`});}} onOpenCadence={()=>openCooperative(row,true)}/>}/>:<div className="table-scroll unit-results">
+                        {unitLayout==='matrix'&&view==='overview'&&analysisTab!=='pas'&&dataset?<UnitScenarioMatrix rows={displayed} year={dataset.year} month={month} metric={effectiveMetric as 'VN'|'AR'} onAnalyze={openUnitAnalysis} onHistory={openUnitHistory} onShare={row=>shareMatrix(undefined,row)} onAction={setSelected} selectedKeys={selectedKeys} onSelect={selectRow} expandedKeys={expandedCoops} onExpand={actualLevel==='cooperative'&&effectiveSource==='base'?row=>setExpandedCoops(keys=>keys.includes(row.key)?keys.filter(key=>key!==row.key):[...keys,row.key]):undefined} renderExpanded={row=><PaTable dataset={dataset} filters={{...scenarioFilters,central:row.central,coop:`${row.central}:${row.cooperative}`,pa:'all'}} expanded onToggle={()=>setExpandedCoops(keys=>keys.filter(key=>key!==row.key))} onSelect={setSelected} onHistory={openUnitHistory} onShare={order=>{if(order)setSortBy(order);setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`});}} onOpenCadence={()=>openCooperative(row,true)}/>}/>:<div className="table-scroll unit-results">
                           <table className="unit-results-table" role="table" aria-label="Resultados das unidades filtradas">
                             <thead role="rowgroup">
                               <tr role="row">
@@ -1422,7 +1430,7 @@ export default function Dashboard() {
                               </tr>
                             </thead>
                             <tbody role="rowgroup">
-                              {displayed.map((r) => (
+                              {tableRows.map((r) => (
                                 <Fragment key={r.key}>
                                   <tr role="row" className={`unit-result-row${selectedKeys.includes(r.key) ? ' selected-result' : ''}`}>
                                     <td role="cell" className="unit-identity">
@@ -1502,6 +1510,7 @@ export default function Dashboard() {
                             </tbody>
                           </table>
                         </div>}
+                        {analysisTab==='pas'&&<nav className="selection-toolbar" aria-label="Paginação dos PAs"><span>{displayed.length ? paPage*50+1 : 0} a {Math.min((paPage+1)*50,displayed.length)} de {displayed.length} PAs</span><button type="button" className="button secondary" disabled={paPage===0} onClick={()=>setPaPagination({context:paPageContext,page:paPage-1})}>Anterior</button><span>Página {paPage+1} de {paPageCount}</span><button type="button" className="button secondary" disabled={paPage>=paPageCount-1} onClick={()=>setPaPagination({context:paPageContext,page:paPage+1})}>Próxima</button></nav>}
                         <div className="overview-table-legend"><AttainmentLegend /></div>
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
