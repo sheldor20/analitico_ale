@@ -3153,3 +3153,19 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .portal .simulation-method p{margin:8px 0 0;max-width:960px;line-height:1.5}
 @media(max-width:1000px){.portal .simulation-impact{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.portal .simulation-results{grid-template-columns:1fr}.portal .simulation-impact{grid-template-columns:repeat(2,minmax(0,1fr))}.portal .simulation-results dd{font-size:24px}}
+
+/* Approved two-row header: title/count above a single aligned toolbar. */
+.portal .workspace-content .overview-units-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px 14px}
+.portal .workspace-content .overview-units-heading>div:first-child{grid-column:1;display:flex;align-items:center;gap:10px}
+.portal .workspace-content .overview-units-heading>button{grid-column:2;grid-row:1;justify-self:end}
+.portal .workspace-content .overview-units-heading>div:first-child>p{font-size:13px;font-weight:650;min-width:30px;text-align:center;padding:4px 8px;color:#003641}
+.portal .workspace-content .overview-units-heading .overview-block-actions{grid-column:1/-1;display:flex;justify-content:flex-start;align-items:center;flex-wrap:nowrap;gap:8px;min-width:0;width:100%}
+.portal .workspace-content .overview-units-heading .unit-layout-switch{flex:0 1 auto;width:auto}
+.portal .workspace-content .overview-units-heading .unit-layout-switch label{font-size:11px;padding:5px 8px;min-height:28px}
+.portal .workspace-content .overview-units-heading .table-controls{flex-wrap:nowrap;flex:0 1 auto;min-width:0}
+.portal .workspace-content .overview-units-heading .control-field>select{width:165px;min-width:130px}
+.portal .workspace-content .overview-units-heading .export-selection{margin-left:auto}
+.portal .workspace-content .overview-units-heading .export-selection>summary{height:36px;box-sizing:border-box}
+.portal .workspace-content .overview-units-heading .button,.portal .workspace-content .overview-units-heading .indicator-toggle{height:36px;min-height:36px;padding:5px 10px}
+@media(max-width:1100px){.portal .workspace-content .overview-units-heading .overview-block-actions{flex-wrap:wrap}.portal .workspace-content .overview-units-heading .export-selection{margin-left:0}}
+@media(max-width:720px){.portal .workspace-content .overview-units-heading .table-controls{flex-wrap:wrap}.portal .workspace-content .overview-units-heading .unit-layout-switch{max-width:100%}}

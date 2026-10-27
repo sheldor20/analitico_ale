@@ -1377,8 +1377,9 @@ export default function Dashboard() {
                                   ? "Resultado por central"
                                   : "Resultado por cooperativa"}
                             </h2>
-                            <p>{displayed.length} de {analyses.length} unidades</p>
+                            <p aria-label={`${displayed.length} unidades filtradas`} title={`${displayed.length} unidades filtradas`}>{displayed.length}</p>
                           </div>
+                          <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           <div className="overview-block-actions">
                             {view==='overview'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
                             <div className="table-controls overview-unit-controls">
@@ -1393,8 +1394,7 @@ export default function Dashboard() {
                           {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
                         </div>
                             </details>
-                            <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{unitLayout==='matrix'&&view==='overview'?"Compartilhar matriz":actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
-                            <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
+                            <button type="button" className="button primary pa-share-trigger" aria-label="Compartilhar resultado das unidades" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />Compartilhar</button>
                           </div>
                         </div>
                         <div id={unitContentId} hidden={!unitsExpanded}>
