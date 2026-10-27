@@ -32,3 +32,26 @@
 @media print{.section{padding:0!important;margin:8px 0;border:0;break-inside:auto}.controls,.paToolbar,.paActions,.section :global(.panel-heading>button){display:none!important}.section :global(.table-scroll){overflow:visible}.section :global(table){min-width:0;width:100%;table-layout:auto}.section :global(thead){display:table-header-group}.section :global(tr){break-inside:avoid;page-break-inside:avoid}.section :global(th),.section :global(td){font-size:9px!important;padding:4px 3px!important}.paTable th:first-child{min-width:0}.comparisonCharts{grid-template-columns:1fr 1.3fr}.chartCard{break-inside:avoid}.comparisonContext{break-inside:avoid}.paSection{margin-left:6px}}
 
 .paSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 16px}.paSummary>div{padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);display:flex;flex-direction:column;gap:4px}.paSummary strong{font-size:24px;color:var(--ink);font-variant-numeric:tabular-nums}.paSummary span{font-size:12px;color:var(--muted)}.paPagination,.paPagination>div{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.paPagination{padding-top:12px;font-size:12px}.paToolbar select{display:block;min-height:36px;max-width:220px}.paGroup th{background:#e3f5f1;color:var(--ink)}@media(max-width:650px){.paSummary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* PA panel: approved compact controls and semantic indicator colors. */
+.paContext{display:flex;align-items:center;flex-wrap:wrap;gap:6px 9px;margin-top:7px;font-size:12px;color:var(--muted)}
+.paContext strong{font-size:12px;font-weight:650;color:var(--ink)}
+.paContextDivider{height:16px;border-left:1px solid var(--line);margin:0 4px}
+.paPeriod{border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:#fff}
+.paSummary{margin:14px 0 12px}
+.paSummary>div{position:relative;padding:12px 14px;border:1px solid var(--line);border-left:4px solid #00ae9d;gap:5px}
+.paSummary>div>svg{position:absolute;right:14px;top:14px;width:20px;height:20px}
+.paSummary strong{font-size:26px;padding-right:28px}
+.paSummary>div[data-tone="total"]{background:#e3f5f2;color:#006b62;border-color:#c5e9e3;border-left-color:#00ae9d}
+.paSummary>div[data-tone="achieved"]{background:#edf4ff;color:#1858ab;border-color:#d3e3fa;border-left-color:#3981df}
+.paSummary>div[data-tone="zero"]{background:#fff8e5;color:#805600;border-color:#f2e5bf;border-left-color:#bd8a0a}
+.paSummary>div[data-tone="rate"]{background:#f0effa;color:#49479d;border-color:#dddbf2;border-left-color:#49479d}
+.paSummary>div strong{color:inherit}
+.paSummary span{color:#435c60}
+.paSection .paToolbar{gap:10px 18px;margin-bottom:12px;align-items:flex-end}
+.paToolbar>div{gap:10px;align-items:flex-end}
+.paToolbar label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:550;min-width:0}
+.paSection .paToolbar select{width:190px;max-width:100%;height:36px;min-height:36px!important;padding:6px 10px;font-size:13px}
+.paSection .paToolbar :global(.button){min-height:36px;height:36px;padding:6px 12px;font-size:13px;gap:7px;width:auto}
+.paIndicatorButton[aria-pressed="true"]{background:#e3f5f2;border-color:#00ae9d;color:#003641}
+@media(max-width:650px){.paContext{gap:6px}.paContextDivider{display:none}.paSection .paToolbar>div{width:100%;flex-wrap:wrap}.paToolbar label{flex:1 1 150px}.paSection .paToolbar select{width:100%;font-size:16px}.paSummary strong{font-size:24px}.paSummary>div{padding:10px}.paSummary>div>svg{right:10px;top:10px}.paSection .paToolbar :global(.button){height:auto;min-height:36px}}

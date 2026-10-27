@@ -10,7 +10,7 @@ import { periodTitle } from '@/lib/periods.mjs';
 import { goalVariance } from '@/lib/goal-variance.mjs';
 import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
-import { ChevronDown, MessageSquareText } from 'lucide-react';
+import { ChevronDown, MessageSquareText, CalendarDays, Building2, Target, ChartNoAxesColumnIncreasing, UsersRound, Columns3, Share2 } from 'lucide-react';
 export type ScenarioFilters = { central: string; coop: string; pa?: string; unitIds?: string[]; source: string; metric: string; group: string; level: string; period: string; month: number; uplift: number; sortBy: string; search: string; status: string };
 export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpenCadence, expanded = false, onToggle, compact = true, showLegend = false }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onHistory?: (row: any) => void; onShare?: (sortBy?: string) => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void; compact?: boolean; showLegend?: boolean }) {
   const model = useMemo(() => networkSummary(dataset, { ...filters, source: 'base', search: '', status: 'all' }), [dataset, filters]);
@@ -30,23 +30,22 @@ export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpen
   const contentId = useId();
   const [moreIndicators, setMoreIndicators] = useState(!compact);
   return <section className={`panel ${styles.section} ${styles.paSection}`} aria-label="PAs da cooperativa">
-    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><p>Venda Nova · {periodTitle(filters.period, filters.month, dataset.year)}</p></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
+    <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><div className={styles.paContext}><span>Carteira</span><strong>Venda Nova</strong><span className={styles.paContextDivider} aria-hidden="true"/><CalendarDays size={16} aria-hidden="true"/><span>Período de referência</span><strong className={styles.paPeriod}>{periodTitle(filters.period, filters.month, dataset.year)}</strong></div></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
     <div id={contentId} hidden={!expanded}>
       <div className={styles.paSummary} aria-label="Indicadores dos PAs">
-        <div><strong>{model.pas.length}</strong><span>Total de PAs</span></div>
-        <div><strong>{achieved}</strong><span>Com meta entregue</span></div>
-        <div><strong>{zero}</strong><span>Com produção zerada</span></div>
-        <div><strong>{model.pas.length ? percent(achieved / model.pas.length) : '0%'}</strong><span>Dos PAs com meta entregue</span></div>
+        <div data-tone="total"><Building2 size={20} aria-hidden="true"/><strong>{model.pas.length}</strong><span>Total de PAs</span></div>
+        <div data-tone="achieved"><Target size={20} aria-hidden="true"/><strong>{achieved}</strong><span>Com meta entregue</span></div>
+        <div data-tone="zero"><ChartNoAxesColumnIncreasing size={20} aria-hidden="true"/><strong>{zero}</strong><span>Com produção zerada</span></div>
+        <div data-tone="rate"><UsersRound size={20} aria-hidden="true"/><strong>{model.pas.length ? percent(achieved / model.pas.length) : '0%'}</strong><span>PAs com meta entregue</span></div>
       </div>
       <div className={styles.paToolbar}>
-        <div><label>Ordenar por<select aria-label="Ordenar PAs por" value={order} onChange={event => setOrder(event.target.value)}><option value="attainment-desc">Maior atingimento</option><option value="production">Maior produção</option><option value="name">Nome / código</option></select></label><label className={styles.paIndicators}><input type="checkbox" checked={groupBy} onChange={event => setGroupBy(event.target.checked)} />Agrupar por P1, P2 e demais grupos</label></div>
+        <div><label>Ordenar por<select aria-label="Ordenar PAs por" value={order} onChange={event => setOrder(event.target.value)}><option value="attainment-desc">Maior atingimento</option><option value="production">Maior produção</option><option value="name">Nome / código</option></select></label><label>Agrupar por<select aria-label="Agrupar PAs por" value={groupBy ? "group" : "none"} onChange={event => setGroupBy(event.target.value === "group")}><option value="none">Sem agrupamento</option><option value="group">Grupo do PA · P1, P2…</option></select></label></div>
         <div>
-          <label className={styles.paIndicators}><input type="checkbox" checked={moreIndicators} onChange={event => setMoreIndicators(event.target.checked)} />Mais indicadores</label>
-          {onOpenCadence && <button type="button" className="button quiet" aria-label={`Abrir cadência de ${dataset.registry?.entities.find(entity => entity.id === `cooperative:${filters.coop}`)?.name ?? filters.coop}`} onClick={onOpenCadence}>Abrir cadência</button>}
-          {onShare && rows.length > 0 && <button type="button" className="button secondary pa-share-trigger" aria-label="Compartilhar PAs" onClick={() => onShare(order)}><MessageSquareText size={16} aria-hidden="true" />Compartilhar cenário</button>}
+          <button type="button" className={`button secondary ${styles.paIndicatorButton}`} aria-label="Mais indicadores" aria-pressed={moreIndicators} onClick={() => setMoreIndicators(value => !value)}><Columns3 size={16} aria-hidden="true"/>Indicadores</button>
+          {onOpenCadence && <button type="button" className="button secondary" aria-label={`Abrir cadência de ${dataset.registry?.entities.find(entity => entity.id === `cooperative:${filters.coop}`)?.name ?? filters.coop}`} onClick={onOpenCadence}>Abrir cadência</button>}
+          {onShare && rows.length > 0 && <button type="button" className="button primary pa-share-trigger" aria-label="Compartilhar PAs" onClick={() => onShare(order)}><Share2 size={16} aria-hidden="true" />Compartilhar cenário</button>}
         </div>
       </div>
-      <p className={styles.paMethod}>Cadência de Venda Nova dos PAs. Estes valores não são somados à produção da cooperativa.</p>
       <div className="table-scroll"><table className={styles.paTable}><thead><tr><th scope="col">Unidade</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th>{moreIndicators && <><th scope="col">GAP projetado</th><th scope="col" title="GAP do período dividido pelos dias úteis restantes do mesmo período">Necessário/dia útil</th><th scope="col" title="GAP do período dividido pelos meses equivalentes restantes">Necessário/mês equivalente</th><th scope="col">Corte</th><th scope="col">Ritmo do período</th></>}<th scope="col">Ações</th></tr></thead><tbody>{visibleRows.map((row: any, index: number) => {
         const assessable = row.complete && !row.annualConflict && row.target > 0;
         const dataState = row.annualConflict ? 'Metas divergentes' : row.actual == null ? 'Sem realizado' : !row.complete ? 'Dados incompletos' : row.target == null ? 'Sem meta' : row.target === 0 ? 'Meta zero' : null;
