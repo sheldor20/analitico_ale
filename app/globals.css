@@ -3068,3 +3068,50 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 @media(min-width:721px) and (max-width:1100px){
   .portal .filter-panel-compact .analysis-context:has(>label:nth-of-type(6))>label:nth-of-type(4){grid-column:auto}
 }
+
+/* Compact result heading: identity, count and actions share available space. */
+.portal .workspace-content .overview-units-heading{
+  display:flex;align-items:center;justify-content:space-between;gap:10px 16px;
+  padding:12px 14px;margin-bottom:0;
+}
+.portal .workspace-content .overview-units-heading>div:first-child{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;flex:0 1 auto;
+}
+.portal .workspace-content .overview-units-heading h2{margin:0;font-size:16px;line-height:1.3}
+.portal .workspace-content .overview-units-heading>div:first-child>p{
+  margin:0;padding:3px 8px;border-radius:5px;background:#edf5f4;color:#435c60;font-size:11px;white-space:nowrap;
+}
+.portal .workspace-content .overview-units-heading .overview-block-actions{
+  flex:1 1 auto;justify-content:flex-end;align-items:center;gap:8px;
+}
+.portal .workspace-content .overview-units-heading .table-controls{
+  display:flex;flex:0 1 auto;width:auto;align-items:center;gap:8px;
+}
+.portal .workspace-content .overview-units-heading .table-controls>.control-field{
+  display:flex;flex-direction:row;align-items:center;gap:6px;flex:0 1 auto;max-width:none;
+}
+.portal .workspace-content .overview-units-heading .control-field>span{font-size:11px;white-space:nowrap}
+.portal .workspace-content .overview-units-heading .control-field>select{
+  width:170px;min-height:34px!important;height:34px;padding:5px 9px;font-size:12px;
+}
+.portal .workspace-content .overview-units-heading .button,
+.portal .workspace-content .overview-units-heading .indicator-toggle{
+  min-height:34px;height:34px;padding:5px 9px;font-size:12px;width:auto;white-space:nowrap;
+}
+.portal .workspace-content .overview-units-heading .unit-layout-switch label{
+  min-height:28px;padding:4px 8px;font-size:11px;
+}
+.portal .workspace-content .overview-units .selection-toolbar{
+  padding:8px 14px;gap:6px 10px;min-height:40px;margin:0;border-top:0;font-size:12px;
+}
+@media(max-width:1100px){
+  .portal .workspace-content .overview-units-heading .overview-block-actions{justify-content:flex-start}
+}
+@media(max-width:720px){
+  .portal .workspace-content .overview-units-heading{padding:10px;gap:8px}
+  .portal .workspace-content .overview-units-heading .overview-block-actions{width:100%;gap:6px}
+  .portal .workspace-content .overview-units-heading .unit-layout-switch{width:auto;max-width:100%}
+  .portal .workspace-content .overview-units-heading .table-controls>.control-field{flex-wrap:wrap}
+  .portal .workspace-content .overview-units-heading .control-field>select{font-size:16px!important;width:180px;max-width:100%}
+  .portal .workspace-content .overview-units-heading .button{height:auto;min-height:36px}
+}
