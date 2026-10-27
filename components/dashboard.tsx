@@ -1385,16 +1385,20 @@ export default function Dashboard() {
                               {listControls}
                               {(unitLayout==='period'||view!=='overview')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
                             </div>
+
+                            <details className="export-selection"><summary><span aria-live="polite">{selectedKeys.length ? `${selectedKeys.length} selecionadas` : 'Selecionar para exportar'}</span><ChevronDown size={15} aria-hidden="true"/></summary>
+                        <div className="selection-toolbar export-selection-options">
+                          <label className="unit-select-all"><input className="row-selector" type="checkbox" aria-label="Selecionar todas as unidades filtradas" checked={displayed.length > 0 && selectedKeys.length === displayed.length} ref={element => { if(element) element.indeterminate = selectedKeys.length > 0 && selectedKeys.length < displayed.length; }} onChange={event => setRowSelection({context:selectionContext, keys:event.target.checked ? displayed.map(row => row.key) : []})} />Selecionar todas</label>
+                          <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione na tabela ou marque todas.'}</span>
+                          {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
+                        </div>
+                            </details>
                             <button type="button" className="button secondary pa-share-trigger" onClick={() => unitLayout==='matrix'&&view==='overview'?shareMatrix():startCommunication({content:actualLevel === "central" ? "central" : actualLevel === "pa" ? "pa" : "cooperative",format:"image",showProjection:false},false)}><MessageSquareText size={17} aria-hidden="true" />{unitLayout==='matrix'&&view==='overview'?"Compartilhar matriz":actualLevel === "central" ? "Compartilhar centrais" : actualLevel === "pa" ? "Compartilhar PAs" : "Compartilhar cooperativas"}</button>
                             <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
                           </div>
                         </div>
                         <div id={unitContentId} hidden={!unitsExpanded}>
-                        <div className="selection-toolbar" aria-live="polite">
-                          <label className="unit-select-all"><input className="row-selector" type="checkbox" aria-label="Selecionar todas as unidades filtradas" checked={displayed.length > 0 && selectedKeys.length === displayed.length} ref={element => { if(element) element.indeterminate = selectedKeys.length > 0 && selectedKeys.length < displayed.length; }} onChange={event => setRowSelection({context:selectionContext, keys:event.target.checked ? displayed.map(row => row.key) : []})} />Selecionar todas</label>
-                          <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione unidades para exportar.'}</span>
-                          {selectedKeys.length > 0 && <><button className="button quiet" onClick={() => setRowSelection({context:selectionContext,keys:[]})}>Limpar seleção</button><button className="button secondary" onClick={() => {setExportMode('selected');setShowExport(true);}}>Exportar selecionadas</button></>}
-                        </div>
+
                         {unitLayout==='matrix'&&view==='overview'&&dataset?<UnitScenarioMatrix rows={displayed} year={dataset.year} month={month} metric={effectiveMetric as 'VN'|'AR'} onAnalyze={openUnitAnalysis} onHistory={openUnitHistory} onShare={row=>shareMatrix(undefined,row)} onAction={setSelected} selectedKeys={selectedKeys} onSelect={selectRow} expandedKeys={expandedCoops} onExpand={actualLevel==='cooperative'&&effectiveSource==='base'?row=>setExpandedCoops(keys=>keys.includes(row.key)?keys.filter(key=>key!==row.key):[...keys,row.key]):undefined} renderExpanded={row=><PaTable dataset={dataset} filters={{...scenarioFilters,central:row.central,coop:`${row.central}:${row.cooperative}`,pa:'all'}} expanded onToggle={()=>setExpandedCoops(keys=>keys.filter(key=>key!==row.key))} onSelect={setSelected} onHistory={openUnitHistory} onShare={order=>{if(order)setSortBy(order);setSharing({kind:'pa',central:row.central,coop:`${row.central}:${row.cooperative}`});}} onOpenCadence={()=>openCooperative(row,true)}/>}/>:<div className="table-scroll unit-results">
                           <table className="unit-results-table" role="table" aria-label="Resultados das unidades filtradas">
                             <thead role="rowgroup">
