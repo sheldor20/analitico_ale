@@ -12,6 +12,18 @@ import { attainmentBand } from '@/lib/attainment.mjs';
 import AttainmentLegend from './ui/attainment-legend';
 import { ChevronDown, MessageSquareText, CalendarDays, Building2, Target, ChartNoAxesColumnIncreasing, UsersRound, Columns3, Share2 } from 'lucide-react';
 export type ScenarioFilters = { central: string; coop: string; pa?: string; unitIds?: string[]; source: string; metric: string; group: string; level: string; period: string; month: number; uplift: number; sortBy: string; search: string; status: string };
+export function PaSummary({rows}: {rows: {complete: boolean; annualConflict?: boolean; target: number | null; actual: number | null; attainment: number | null}[]}) {
+  const achieved = rows.filter(row => row.complete && !row.annualConflict && (row.target ?? 0) > 0 && (row.attainment ?? 0) >= 1).length;
+  const zero = rows.filter(row => row.actual === 0).length;
+  return (
+      <div className={styles.paSummary} aria-label="Indicadores dos PAs">
+        <div data-tone="total"><Building2 size={20} aria-hidden="true"/><strong>{rows.length}</strong><span>Total de PAs</span></div>
+        <div data-tone="achieved"><Target size={20} aria-hidden="true"/><strong>{achieved}</strong><span>Com meta entregue</span></div>
+        <div data-tone="zero"><ChartNoAxesColumnIncreasing size={20} aria-hidden="true"/><strong>{zero}</strong><span>Com produção zerada</span></div>
+        <div data-tone="rate"><UsersRound size={20} aria-hidden="true"/><strong>{rows.length ? percent(achieved / rows.length) : '0%'}</strong><span>PAs com meta entregue</span></div>
+      </div>
+  );
+}
 export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpenCadence, expanded = false, onToggle, compact = true, showLegend = false }: { dataset: Dataset; filters: ScenarioFilters; onSelect?: (row: any) => void; onHistory?: (row: any) => void; onShare?: (sortBy?: string) => void; onOpenCadence?: () => void; expanded?: boolean; onToggle: () => void; compact?: boolean; showLegend?: boolean }) {
   const model = useMemo(() => networkSummary(dataset, { ...filters, source: 'base', search: '', status: 'all' }), [dataset, filters]);
   const [order, setOrder] = useState('attainment-desc');
@@ -25,19 +37,12 @@ export function PaTable({ dataset, filters, onSelect, onHistory, onShare, onOpen
   const currentPage = Math.min(page, pages - 1);
   const visibleRows = rows.slice(currentPage * 50, (currentPage + 1) * 50);
   useEffect(() => setPage(0), [dataset, filters.central, filters.coop, filters.period, filters.month, order, groupBy]);
-  const achieved = model.pas.filter((row: any) => row.complete && !row.annualConflict && row.target > 0 && row.attainment >= 1).length;
-  const zero = model.pas.filter((row: any) => row.actual === 0).length;
   const contentId = useId();
   const [moreIndicators, setMoreIndicators] = useState(!compact);
   return <section className={`panel ${styles.section} ${styles.paSection}`} aria-label="PAs da cooperativa">
     <div className="panel-heading"><div><h2>PAs desta cooperativa</h2><div className={styles.paContext}><span>Carteira</span><strong>Venda Nova</strong><span className={styles.paContextDivider} aria-hidden="true"/><CalendarDays size={16} aria-hidden="true"/><span>Período de referência</span><strong className={styles.paPeriod}>{periodTitle(filters.period, filters.month, dataset.year)}</strong></div></div><button type="button" className="button quiet" onClick={onToggle} aria-expanded={expanded} aria-controls={contentId}>{expanded ? "Fechar PAs" : "Ver PAs"}<ChevronDown size={16} className={expanded ? styles.rotated : undefined} /></button></div>
     <div id={contentId} hidden={!expanded}>
-      <div className={styles.paSummary} aria-label="Indicadores dos PAs">
-        <div data-tone="total"><Building2 size={20} aria-hidden="true"/><strong>{model.pas.length}</strong><span>Total de PAs</span></div>
-        <div data-tone="achieved"><Target size={20} aria-hidden="true"/><strong>{achieved}</strong><span>Com meta entregue</span></div>
-        <div data-tone="zero"><ChartNoAxesColumnIncreasing size={20} aria-hidden="true"/><strong>{zero}</strong><span>Com produção zerada</span></div>
-        <div data-tone="rate"><UsersRound size={20} aria-hidden="true"/><strong>{model.pas.length ? percent(achieved / model.pas.length) : '0%'}</strong><span>PAs com meta entregue</span></div>
-      </div>
+      <PaSummary rows={model.pas}/>
       <div className={styles.paToolbar}>
         <div><label>Ordenar por<select aria-label="Ordenar PAs por" value={order} onChange={event => setOrder(event.target.value)}><option value="attainment-desc">Maior atingimento</option><option value="production">Maior produção</option><option value="name">Nome / código</option></select></label><label>Agrupar por<select aria-label="Agrupar PAs por" value={groupBy ? "group" : "none"} onChange={event => setGroupBy(event.target.value === "group")}><option value="none">Sem agrupamento</option><option value="group">Grupo do PA · P1, P2…</option></select></label></div>
         <div>

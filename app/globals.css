@@ -3169,3 +3169,5 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .portal .workspace-content .overview-units-heading .button,.portal .workspace-content .overview-units-heading .indicator-toggle{height:36px;min-height:36px;padding:5px 10px}
 @media(max-width:1100px){.portal .workspace-content .overview-units-heading .overview-block-actions{flex-wrap:wrap}.portal .workspace-content .overview-units-heading .export-selection{margin-left:0}}
 @media(max-width:720px){.portal .workspace-content .overview-units-heading .table-controls{flex-wrap:wrap}.portal .workspace-content .overview-units-heading .unit-layout-switch{max-width:100%}}
+
+.portal .overview-units-heading .cadence-pa-summary{grid-column:1/-1;min-width:0;width:100%}.portal .cadence-pa-summary>div{margin:2px 0 0}

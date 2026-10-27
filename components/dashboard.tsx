@@ -64,7 +64,7 @@ import { initializeRegistry, createEmptyDataset, mergeProduction, analysisRows }
 import { listWorkspaces, loadWorkspace, saveWorkspace } from "@/lib/workspace-store";
 import { supabase } from "@/lib/supabase";
 import { compareYears, analysisIndicators, sortAnalysis, SORT_OPTIONS } from "@/lib/scenarios.mjs";
-import { NetworkSummary, PaTable, YearComparison } from "@/components/scenario-panels";
+import { NetworkSummary, PaTable, PaSummary, YearComparison } from "@/components/scenario-panels";
 import type { ActionState, DataRow, Dataset, ImportConfig, RegistryEntity } from "@/lib/types";
 import PeriodSelector, { usePeriodSelection } from './period-selector';
 import { periodTitle } from '@/lib/periods.mjs';
@@ -1387,6 +1387,7 @@ export default function Dashboard() {
                             <p aria-label={`${displayed.length} unidades filtradas`} title={`${displayed.length} unidades filtradas`}>{displayed.length}</p>
                           </div>
                           <PanelToggle expanded={unitsExpanded} onToggle={() => setUnitsExpanded(value => !value)} controls={unitContentId} label="lista de unidades" />
+                          {effectiveSource==='cadence'&&unitsExpanded&&<div className="cadence-pa-summary"><PaSummary rows={displayed}/></div>}
                           <div className="overview-block-actions">
                             {view==='overview'&&analysisTab!=='pas'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
                             <div className="table-controls overview-unit-controls">
