@@ -61,7 +61,7 @@ async function generate(page, format = 'E-mail') {
   const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
   await select(chooser, 'Cenário do compartilhamento').selectOption('summary');
   await chooser.getByRole('radio', { name: format, exact: true }).check();
-  await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await chooser.getByRole('button', { name: 'Ver prévia', exact: true }).click();
 }
 async function noScopePicker(expect, modal) {
   for (const name of ['Selecionar unidades', 'Todas as cooperativas da seleção', 'Somente cooperativas filtradas']) await expect(modal.getByRole('radio', { name, exact: true })).toHaveCount(0);
@@ -89,8 +89,10 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await modal.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
     await select(page, 'Central').selectOption('1002');await select(page, 'Cooperativa').selectOption('1002:3017');
     await page.getByLabel('Buscar cooperativa ou PA').fill('Bahia');
-    await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
+    await page.getByRole('tab', { name: 'Central', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();
+    await select(page,'Agrupar por').selectOption('central');
+    await page.getByLabel('Buscar cooperativa ou PA').fill('Bahia');
     await expect(list(page).locator('tbody tr')).toHaveCount(1);
     await generate(page);await expect(rows).toHaveCount(1);
     await expect(bahia.locator('td[data-label="Meta"]')).toContainText(money(100));
@@ -105,7 +107,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     await expect(ready).toBeVisible();expect(new URL(await ready.getAttribute('href')).searchParams.get('body') || '').toBe('');
     expect((await page.evaluate(() => window.__filteredCopies.html.at(-1))).match(/data-central-id=/g)).toHaveLength(1);
     await captureScenarioDocument(page, frame(page), info.outputPath('filtered-central-partial-email.png'));
-    await modal.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await modal.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await modal.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__filteredCopies.png.length)).toBe(1);
     const drawn = await page.evaluate(() => window.__filteredCopies.drawings.at(-1));
@@ -181,7 +183,7 @@ export function registerFilteredSharingTests({ test, expect, setup }) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     expect(await frame(page).locator('body').evaluate(node => node.ownerDocument.documentElement.scrollWidth <= node.ownerDocument.defaultView.innerWidth + 1)).toBe(true);
     await captureScenarioDocument(page, frame(page), info.outputPath('both-portfolios-email-320.png'));
-    await modal.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await modal.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await select(modal, 'Texto do WhatsApp').selectOption('report');await modal.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     const text = await page.evaluate(() => window.__filteredCopies.text.at(-1));
     for (const value of ['Gestão comercial · Venda nova', 'Gestão comercial · Arrecadação', '10/09/2026', '05/09/2026', money(95), money(-25.5), money(700)]) expect(text).toContain(value);

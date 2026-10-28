@@ -10,7 +10,7 @@ export function registerPeriodTests({test,expect,setup,composer}) {
     await expect(select(page,'Período').locator('option[value="daily"]')).toHaveCount(0);
     await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');
     await expect(select(page,'Mês de referência')).toHaveCount(0);
-    await select(page,'Cooperativa').selectOption('1002:3017');
+    await select(page,'Central').selectOption('1002');await select(page,'Cooperativa').selectOption('1002:3017');
     await expect(target(page)).toContainText('900,00');
     await select(page,'Período').selectOption('quarter');
     await expect(select(page,'Trimestre').locator('option')).toHaveCount(4);
@@ -49,7 +49,7 @@ export function registerPeriodTests({test,expect,setup,composer}) {
   });
   test('periods: exact quarter propagates to CSV, email, WhatsApp and saved draft',async({page},info)=>{
     const {errors,writes}=await setup(page);
-    await select(page,'Cooperativa').selectOption('1002:3017');
+    await select(page,'Central').selectOption('1002');await select(page,'Cooperativa').selectOption('1002:3017');
     await select(page,'Período').selectOption('quarter');await select(page,'Trimestre').selectOption('2');
     await page.getByRole('button',{name:'Exportar dados',exact:true}).click();
     const exportDialog=page.getByRole('dialog',{name:'Exportar dados',exact:true});
@@ -83,7 +83,7 @@ export function registerPeriodTests({test,expect,setup,composer}) {
   });
   test('periods: YTD refreshes after calendar rollover without changing source dates',async({page})=>{
     const {errors}=await setup(page);
-    await select(page,'Cooperativa').selectOption('1002:3017');
+    await select(page,'Central').selectOption('1002');await select(page,'Cooperativa').selectOption('1002:3017');
     await page.clock.setFixedTime(new Date('2026-10-01T02:59:59Z'));
     await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
     await expect(page.getByLabel('Abrangência do período',{exact:true})).toContainText('JAN–SET/2026');

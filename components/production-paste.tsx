@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, ClipboardPaste, LoaderCircle } from 'lucide-r
 import type { DataRow, ImportConfig, Issue } from '@/lib/types';
 import { money, MONTHS } from '@/lib/analytics.mjs';
 import styles from './production-paste.module.css';
+import { productionChanges, type ProductionChange } from '@/lib/production-changes.mjs';
 
 type PasteSource = 'base' | 'cadence';
 type Preview = {
@@ -17,6 +18,7 @@ type Preview = {
   cellCount: number;
   afterCutoff: number;
   manualCount: number;
+  changes: ProductionChange[];
 };
 type Props = {
   config: ImportConfig;
@@ -37,6 +39,7 @@ export default function ProductionPaste({ config, existingRows, allowedCentrals,
   const [arCutoff, setArCutoff] = useState(config.arCutoff);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState('');
+  const [changePage,setChangePage]=useState(0);
   const [pending, setPending] = useState(false);
   const [applying, setApplying] = useState(false);
   const operation = useRef(0);
@@ -98,7 +101,8 @@ export default function ProductionPaste({ config, existingRows, allowedCentrals,
       }
       if (!cellCount) throw new Error('Não há valores de produção até a data de corte informada. Confira os meses e a data.');
       if (operation.current !== request) return;
-      setPreview({ source, rows: part.rows, issues: part.issues, skipped: part.skipped, months: [...months].sort((a, b) => a - b), newCount, cellCount, afterCutoff, manualCount });
+      setChangePage(0);
+      setPreview({ source, rows: part.rows, issues: part.issues, skipped: part.skipped, months: [...months].sort((a, b) => a - b), newCount, cellCount, afterCutoff, manualCount, changes:productionChanges(existingRows,part.rows) });
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (cause) {
       if (operation.current === request) setError(cause instanceof Error ? cause.message : 'Não foi possível conferir os dados colados.');
@@ -124,6 +128,13 @@ export default function ProductionPaste({ config, existingRows, allowedCentrals,
     }
   }
 
+  function downloadChanges(){
+    if(!validPreview)return;
+    const quote=(value:unknown,numeric=false)=>'"'+(numeric?String(value??''):String(value??'').replace(/^[=+@-]/,"'$&")).replaceAll('"','""')+'"';
+    const rows=[['Unidade','Central','Cooperativa','PA','Carteira','Mês','Anterior','Novo','Diferença'],...validPreview.changes.map(row=>[row.name,row.central,row.cooperative,row.pa,row.metric,MONTHS[row.month],row.before==null?'':row.before.toFixed(2).replace('.',','),row.after.toFixed(2).replace('.',','),row.delta==null?'':row.delta.toFixed(2).replace('.',',')])];
+    const url=URL.createObjectURL(new Blob(['\uFEFF'+rows.map((row,n)=>row.map((value,index)=>quote(value,n>0&&index>=6)).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+    const link=document.createElement('a');link.href=url;link.download=`conferencia-producao-${config.year}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
   return <section className={styles.root} aria-label="Atualização por dados colados">
     <header className={styles.header}>
       <div><h3>{cadence ? 'Colar produção dos PAs' : 'Colar produção das cooperativas'}</h3><p>Copie as células da planilha com o cabeçalho e cole abaixo.</p></div>
@@ -156,11 +167,11 @@ export default function ProductionPaste({ config, existingRows, allowedCentrals,
       </div>
       {!cadence && <div className={styles.metricTotals}>{metrics.map(metric => <div key={metric}><span>{metric === 'VN' ? 'Venda Nova' : 'Arrecadação'} · {dateLabel(metric === 'VN' ? vnCutoff : arCutoff)}</span><strong>{money(previewRows.filter(row => row.metric === metric).reduce((value, row) => value + total(row), 0))}</strong><small>Produção colada até o corte</small></div>)}</div>}
       <p className={styles.note}>{validPreview.cellCount} valores mensais recebidos · {validPreview.months.map(month => MONTHS[month]).join(' · ')}</p>
-      {validPreview.newCount > 0 && <p className={styles.notice}>{validPreview.newCount} {cadence ? validPreview.newCount === 1 ? 'PA novo será incluído' : 'PAs novos serão incluídos' : validPreview.newCount === 1 ? 'novo registro de produção será incluído' : 'novos registros de produção serão incluídos'} com {!cadence || config.paTargetMode === 'source' || config.year < 2026 && config.paTargetMode !== 'group' ? 'as metas da planilha' : 'as metas da regra P1–P5'}. As metas já cadastradas permanecem iguais.</p>}
+      {validPreview.newCount > 0 && <p className={styles.notice}>{validPreview.newCount} {cadence ? validPreview.newCount === 1 ? 'PA novo será incluído' : 'PAs novos serão incluídos' : validPreview.newCount === 1 ? 'novo registro de produção será incluído' : 'novos registros de produção serão incluídos'} com {!cadence || config.paTargetMode === 'source' || config.year !== 2026 && config.paTargetMode !== 'group' ? 'as metas da planilha' : 'as metas da regra P1–P5'}. As metas já cadastradas permanecem iguais.</p>}
       {validPreview.skipped > 0 && <p className={styles.notice}>{validPreview.skipped} {validPreview.skipped === 1 ? 'linha de central fora do cadastro foi desconsiderada' : 'linhas de centrais fora do cadastro foram desconsideradas'}.</p>}
       {validPreview.afterCutoff > 0 && <p className={styles.notice}>{validPreview.afterCutoff} {validPreview.afterCutoff === 1 ? 'valor após o corte não será aplicado' : 'valores após o corte não serão aplicados'} nesta atualização.</p>}
       {validPreview.manualCount > 0 && <p className={styles.notice}>{validPreview.manualCount} {validPreview.manualCount === 1 ? 'ajuste manual do mesmo corte será mantido' : 'ajustes manuais do mesmo corte serão mantidos'}. Para substituir {validPreview.manualCount === 1 ? 'esse ajuste' : 'esses ajustes'}, use uma posição mais recente.</p>}
-      <div className={styles.tableScroll}><table><caption>Amostra: {Math.min(5, previewRows.length)} de {previewRows.length} {cadence ? 'PAs' : 'registros'}</caption><thead><tr><th>{cadence ? 'PA' : 'Cooperativa'}</th><th>{cadence ? 'Central / Cooperativa / PA' : 'Central / Cooperativa'}</th>{!cadence && <th>Carteira</th>}<th>Produção até o corte</th></tr></thead><tbody>{previewRows.slice(0, 5).map(row => <tr key={row.key}><th scope="row">{row.name}</th><td>{row.central} / {row.cooperative}{cadence ? ` / ${row.pa}` : ''}</td>{!cadence && <td>{row.metric === 'VN' ? 'Venda Nova' : 'Arrecadação'}</td>}<td>{money(total(row))}</td></tr>)}</tbody></table></div>
+      <section className={styles.changeReview} aria-label="Diferenças da produção"><div><strong>{validPreview.changes.length} valores serão alterados</strong><button type="button" className="button secondary" onClick={downloadChanges} disabled={!validPreview.changes.length}>Baixar todas as diferenças</button></div><p>Vazio mantém o valor anterior; ajustes manuais protegidos não aparecem como alterações.</p>{!validPreview.changes.length?<p>Os valores recebidos já correspondem ao cadastro. O corte informado ainda será conferido na gravação.</p>:<><div className={styles.tableScroll}><table><caption>Alterações {changePage*50+1} a {Math.min((changePage+1)*50,validPreview.changes.length)} de {validPreview.changes.length}</caption><thead><tr><th>Unidade / carteira</th><th>Mês</th><th>Anterior</th><th>Novo</th><th>Diferença</th></tr></thead><tbody>{validPreview.changes.slice(changePage*50,(changePage+1)*50).map(row=><tr key={`${row.key}:${row.month}`}><th scope="row">{row.name}<small>{row.central} / {row.cooperative}{row.pa!=null?` / PA ${row.pa}`:''} · {row.metric==='AR'?'Arrecadação':'Venda Nova'}</small></th><td>{MONTHS[row.month]}</td><td>{row.before==null?'Não informado':money(row.before)}</td><td>{money(row.after)}</td><td>{row.delta==null?'Novo valor':money(row.delta)}</td></tr>)}</tbody></table></div>{validPreview.changes.length>50&&<nav aria-label="Páginas da prévia"><button type="button" className="button secondary" disabled={!changePage} onClick={()=>setChangePage(value=>value-1)}>Anterior</button><span>Página {changePage+1} de {Math.ceil(validPreview.changes.length/50)}</span><button type="button" className="button secondary" disabled={(changePage+1)*50>=validPreview.changes.length} onClick={()=>setChangePage(value=>value+1)}>Próxima</button></nav>}</>}</section>
       {validPreview.issues.length > 0 && <details className={styles.details}><summary>Conferências da origem ({validPreview.issues.length})</summary><ul>{validPreview.issues.slice(0, 10).map((issue, index) => <li key={index}>{issue.message}</li>)}</ul>{validPreview.issues.length > 10 && <p>As demais conferências estarão disponíveis na Conferência da base após a atualização.</p>}</details>}
       <footer className={styles.footer}><span>Os valores dos meses recebidos substituirão a produção correspondente.</span><button type="button" className="button primary" disabled={locked} onClick={() => void apply()}>{applying ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <ArrowRight size={16} aria-hidden="true" />}Atualizar produção</button></footer>
     </div>}

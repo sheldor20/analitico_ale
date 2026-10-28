@@ -6,9 +6,9 @@ export function registerScenarioTests({test,expect,setup,composer,owner,created}
     await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');
     await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
     await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
-    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
-    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true}).locator('tbody tr')).toHaveCount(2);
-    await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
+    await page.getByRole('tab',{name:'Central',exact:true}).click();
+    await expect(page.getByRole('region',{name:'Resumo das unidades',exact:true}).locator('tbody tr')).toHaveCount(1);
+    await page.getByRole('tab',{name:'Cooperativas',exact:true}).click();
     await page.getByLabel('Ordenar análise').selectOption('attainment-desc');
     const table=page.locator('.table-panel tbody');
     await expect(table.locator('tr').first()).toContainText('Cooperativa Beta');

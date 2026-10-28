@@ -1,5 +1,5 @@
 'use client';
-import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
+import { useDialogLifecycle } from '@/lib/use-dialog-lifecycle';
 import ShareFlow from './ui/share-flow';
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -123,11 +123,7 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
   const parts = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)), currentPage = Math.min(page, parts - 1);
   const text = useMemo(() => reportText(report), [report]), html = useMemo(() => reportHtml(report), [report]);
   const filename = `${title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90) || 'cenario'}`;
-  useLayoutEffect(() => {
-    const opener = document.activeElement as HTMLElement | null, releaseScroll = lockBodyScroll();
-     closeButton.current?.focus();
-    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
-  }, []);
+  const dialogKeyDown = useDialogLifecycle(onClose, closeButton);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let active = true, url = '';
@@ -151,13 +147,7 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
     finally { if (alive.current) setBusy(false); }
   }
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className={styles.dialog} data-share-dialog role="dialog" aria-modal="true" aria-label="Compartilhar cenário" aria-describedby={titleId} onKeyDown={event => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
-      if (event.key !== 'Tab') return;
-      const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],textarea,summary')].filter(node => node.getClientRects().length);
-      if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1)?.focus(); }
-      else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0]?.focus(); }
-    }}>
+    <section className={styles.dialog} data-share-dialog role="dialog" aria-modal="true" aria-label="Compartilhar cenário" aria-describedby={titleId} onKeyDown={dialogKeyDown}>
       <header className={styles.heading}><div><p>Compartilhar cenário</p><h2 id={titleId}>{title}</h2></div><button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento do cenário" onClick={onClose}><X size={22} aria-hidden="true" /></button></header>
       <div className={styles.content}>
         <ShareFlow formatOnly/>

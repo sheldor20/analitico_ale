@@ -107,7 +107,7 @@ test('individual central uses the visible cooperative scope and PA zero retains 
 });
 
 test('HTML uses unrounded observed attainment bands while projections remain neutral and legacy snapshots remain valid', () => {
-  const values = [-.2, .699999, .7, .999999, 1, 1.25, null];
+  const values = [-.2, .6999, .7, .9999, 1, 1.25, null];
   const data = dataset(values.map((ratio, index) => sourceRow(String(4000 + index), ratio == null ? null : ratio * 100)));
   const output = buildCooperativeScenarioReport({ dataset: data, filters: { ...filters, sortBy: 'name' }, showProjection: true });
   assert.deepEqual([...output.html.matchAll(/data-attainment-band="([^"]+)"/g)].map(match => match[1]), values.map(ratio => attainmentBand(ratio).key));

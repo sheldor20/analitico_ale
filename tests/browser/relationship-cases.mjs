@@ -143,11 +143,11 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
       outbound.push(route.request().url());
       await route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>WhatsApp test handoff</title>' });
     });
-    await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+    await page.getByRole('tab',{name:'Central',exact:true}).click();
     const notice = page.getByRole('complementary', { name: 'Alerta de metas atingidas' });
     await expect(notice).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Metas atingidas', exact: true }).click();
-    const alerts = page.getByRole('region', { name: 'Metas atingidas no mês' });
+    const alerts = page.getByRole('region', { name: 'Metas atingidas por período' });
     await expect(alerts.getByLabel('Mês de referência', { exact: true })).toHaveValue('7');
     for (const name of ['Central Bahia teste', 'Cooperativa Beta', 'PA Beta zero']) await expect(alerts.getByRole('heading', { name, exact: true })).toBeVisible();
     await expect(alerts.getByRole('heading', { name: 'Cooperativa Alfa', exact: true })).toHaveCount(0);
@@ -187,7 +187,7 @@ export function registerRelationshipTests({ test, expect, setup, owner, created 
     expect(currentState()?.read_at).toBeTruthy();
     expect(currentState()?.notified_at).toBeTruthy();
     await alerts.getByLabel('Mês de referência', { exact: true }).selectOption('8');
-    await expect(alerts.getByRole('heading', { name: 'Nenhuma meta atingida neste mês', exact: true })).toBeVisible();
+    await expect(alerts.getByRole('heading', { name: 'Nenhuma meta atingida neste período', exact: true })).toBeVisible();
     await alerts.getByLabel('Mês de referência', { exact: true }).selectOption('7');
     await expect(beta.getByText('Lida', { exact: true })).toBeVisible();
     await page.reload();

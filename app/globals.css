@@ -3062,7 +3062,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 /* Keep the reference period immediately beside the period selector. */
 @media(min-width:1101px){
   .portal .filter-panel-compact .analysis-context:has(>label:nth-of-type(6)){
-    grid-template-columns:80px minmax(125px,1fr) minmax(140px,1.15fr) minmax(160px,1.4fr) minmax(130px,1fr) minmax(140px,1fr);
+    grid-template-columns:80px minmax(0,1fr) minmax(0,1.15fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);
   }
 }
 @media(min-width:721px) and (max-width:1100px){
@@ -3222,7 +3222,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 @media(max-width:720px){.share-flow{justify-content:flex-start;gap:10px;font-size:11px;flex-wrap:wrap}.share-flow li+li:before{display:none}.share-flow li>span{width:22px;height:22px}[data-share-dialog] .button{min-height:40px}}
 
 /* Compact sidebar with searchable navigation and an optional icon rail. */
-@media(min-width:721px){
+@media(min-width:1001px){
  .portal .sidebar{width:260px;padding:22px 12px 14px;background:#003641}
  .portal .main-shell{margin-left:260px;width:calc(100% - 260px)}
  .portal .brand{padding:0 12px;margin-bottom:18px;align-items:flex-start}
@@ -3258,6 +3258,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
  .portal.menu-collapsed .sidebar-foot{padding:10px 0 0}
 }
 @media(max-width:720px){.sidebar-toggle,.sidebar-collapse,.menu-search,.menu-empty{display:none!important}}
+@media(min-width:721px) and (max-width:1000px){.sidebar-toggle,.sidebar-collapse,.menu-search,.menu-empty{display:none!important}}
 @media print{.portal.menu-collapsed .main-shell,.portal .main-shell{margin-left:0;width:100%}}
 
 /* Entrada unificada do compartilhamento de cenários. */
@@ -3291,3 +3292,19 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .import-methods button.active{background:var(--sicoob-dark);color:#fff}
 .import-methods button:focus-visible{outline:2px solid var(--sicoob-turquoise);outline-offset:2px}
 .import-methods button:disabled{opacity:.6;cursor:wait}
+
+/* Consolidated legibility and operational context. */
+.portal { --text-body:14px; --text-label:13px; --text-support:12px; }
+.portal .workspace-content :is(label,.control-field>span){font-size:var(--text-label)}
+.portal .workspace-content :is(.helper,.muted,.overview-cutoff,.path,.cutoff,.method-footer,.source-row p){font-size:var(--text-support);line-height:1.5}
+.portal .session-state{min-width:0;font-size:12px}.portal .session-state>span:last-child{min-width:0}
+.portal .session-state small{display:block;font-size:12px;overflow-wrap:anywhere;line-height:1.4}
+.import-account{font-size:13px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.workspace-versions{margin-top:16px}.workspace-versions h2{font-size:18px;margin:0}.workspace-versions p{font-size:13px;color:var(--muted);line-height:1.5}
+.workspace-version-content{padding:14px}.workspace-version-content ul{list-style:none;margin:0;padding:0}.workspace-version-content li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.workspace-version-content li>div{display:grid;gap:5px;min-width:0}.workspace-version-content :is(span,small){font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.portal .audit-list details{margin-top:6px;font-size:13px}.portal .audit-list details ul{padding-left:18px}
+.portal .workspace-content .registry-detail{padding:20px}.portal .registry-entity-heading{margin-bottom:12px}
+@media(max-width:720px){.workspace-version-content li{align-items:flex-start;flex-direction:column}.portal .workspace-content :is(select,input:not([type=checkbox]):not([type=radio])){font-size:16px}.portal .topbar{gap:10px}}
+.calendar-settings{margin-bottom:14px;padding:12px 14px;font-size:13px}.calendar-settings>summary{cursor:pointer;font-weight:650;color:var(--ink)}.calendar-settings>div{display:grid;gap:10px;margin-top:12px;max-width:650px}.calendar-settings p{margin:0;line-height:1.5;color:var(--muted)}.calendar-settings textarea{width:100%;border:1px solid var(--line);padding:10px;font:inherit;border-radius:7px}.calendar-settings button{justify-self:start}.cnv-year{display:grid;gap:5px;max-width:180px;font-size:13px}.cnv-year select{min-height:36px}
+.account-menu{position:relative;align-self:center;flex:0 0 auto}.account-menu>summary{display:grid;place-items:center;list-style:none;cursor:pointer;width:32px;height:32px;border:1px solid var(--line);border-radius:50%;background:var(--green-light);color:var(--ink);font-size:12px;font-weight:700}.account-menu>summary::-webkit-details-marker{display:none}.account-menu>div{position:absolute;top:calc(100% + 8px);right:0;z-index:40;display:grid;gap:8px;width:280px;max-width:calc(100vw - 24px);padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:0 5px 20px #00364118;color:var(--ink);overflow-wrap:anywhere}.account-menu>div strong{font-size:14px}.account-menu>div :is(span,small){font-size:12px;color:var(--muted);line-height:1.5}

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 // All data and authenticated requests come from portfolio.spec.mjs's synthetic
 // workspace. These journeys must never read or write a production workspace.
-const tabs = ['Visão geral', 'Cooperativas e PAs', 'Por período', 'Comparar anos', 'Simulação'];
+const tabs = ['Central', 'Cooperativas', 'PAs', 'Período', 'Comparar anos', 'Simulação'];
 const tablist = page => page.getByRole('tablist', { name: 'Análises comerciais', exact: true });
 const tab = (page, name) => tablist(page).getByRole('tab', { name, exact: true });
 const context = page => page.getByRole('region', { name: 'Contexto da análise', exact: true });
@@ -71,10 +71,10 @@ async function downloadReportHtml(page, report, info, filename) {
 }
 
 export function registerAnalysisJourneyTests({ test, expect, setup }) {
-  test('analysis journey: overview has one decision sequence and five distinct accessible tabs', async ({ page }, info) => {
+  test('analysis journey: overview has one decision sequence and six distinct accessible tabs', async ({ page }, info) => {
     const { errors, writes, relationshipWrites } = await setup(page, value => value, { compactPortal: true });
     await expect(tablist(page).getByRole('tab')).toHaveText(tabs);
-    await expect(tab(page, 'Visão geral')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Central')).toHaveAttribute('aria-selected', 'true');
     await expect(tablist(page).getByRole('tab', { selected: true })).toHaveCount(1);
     const summary = page.getByRole('region', { name: 'Resumo das unidades', exact: true });
     await expect(results(page).getByRole('article')).toHaveCount(4);
@@ -85,12 +85,12 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     expect(positions.every(Boolean)).toBe(true);
     expect(positions.map(box => box.y)).toEqual(positions.map(box => box.y).sort((a, b) => a - b));
     await page.setViewportSize({ width: 1440, height: 1100 });
-    const screenIds = ['overview', 'units', 'periods', 'comparison', 'simulation'];
+    const screenIds = ['overview', 'units', 'pas', 'periods', 'comparison', 'simulation'];
     for (const [index, name] of tabs.entries()) {
       await tab(page, name).click();
       await page.screenshot({ path: info.outputPath(`analysis-screen-${screenIds[index]}.png`), fullPage: true });
     }
-    await tab(page, 'Visão geral').click();
+    await tab(page, 'Central').click();
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
       for (const name of ['Ano do cadastro', 'Carteira', 'Central', 'Período']) await expect(select(page, name)).toBeVisible();
@@ -130,7 +130,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await expect(kpis).toContainText('89,2%');
     await expect(kpis).toContainText(money(62228.33));
     await expect(page.getByText(/^Déficits das unidades:/i)).toHaveCount(0);
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     await expect(units(page).locator('tr.unit-result-row')).toHaveCount(2);
     const table = units(page).getByRole('table', { name: 'Resultados das unidades filtradas', exact: true });
     await expect(table.getByRole('columnheader')).toHaveText(['Cooperativa', 'Meta', 'Realizado', 'Atingimento', 'GAP / Superação', 'Projeção', 'Ações']);
@@ -144,7 +144,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
   test('analysis journey: cooperative to PA history and return preserves the active unit, ordering and selection', async ({ page }, info) => {
     const { errors } = await setup(page, value => value, { compactPortal: true });
     await august(page);
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     await select(units(page), 'Ordenar análise').selectOption('production');
     await unitRow(page, 'Cooperativa Alfa').getByRole('checkbox', { name: 'Selecionar Cooperativa Alfa', exact: true }).check();
     await unitRow(page, 'Cooperativa Alfa').getByRole('button', { name: /^Analisar cooperativa/ }).click();
@@ -156,11 +156,11 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await history.scrollIntoViewIfNeeded();
     const scrollBefore = await page.evaluate(() => scrollY);
     await history.click();
-    await expect(tab(page, 'Por período')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Período')).toHaveAttribute('aria-selected', 'true');
     await expect(breadcrumb(page)).toContainText('PA Alfa zero');
     await expect(page.getByRole('region', { name: 'Resultados por período', exact: true })).toContainText('PA Alfa zero');
     await page.getByRole('button', { name: 'Voltar ao recorte anterior', exact: true }).click();
-    await expect(tab(page, 'Cooperativas e PAs')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Cooperativas')).toHaveAttribute('aria-selected', 'true');
     await expect(select(context(page), 'Central')).toHaveValue('1002');
     await expect(select(context(page), 'Mês de referência')).toHaveValue('7');
     await expect(select(units(page), 'Ordenar análise')).toHaveValue('production');
@@ -184,15 +184,15 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await august(page);
     await select(context(page), 'Mês de referência').selectOption('8');
     await select(context(page), 'Cooperativa').selectOption('1002:3017');
-    await tab(page, 'Cooperativas e PAs').click();
-    await expect(tab(page, 'Cooperativas e PAs')).toHaveAttribute('aria-selected', 'true');
+    await tab(page, 'Cooperativas').click();
+    await expect(tab(page, 'Cooperativas')).toHaveAttribute('aria-selected', 'true');
     await expect(units(page).locator('tr.unit-result-row')).toHaveCount(1);
     await expect(unitRow(page, 'Cooperativa Alfa')).toContainText('95%');
     await expect(select(context(page), 'Central')).toHaveValue('1002');
     await expect(select(context(page), 'Mês de referência')).toHaveValue('8');
     await unitRow(page, 'Cooperativa Alfa').getByRole('button', { name: /^Ver PAs/ }).click();
     await page.getByRole('region', { name: 'PAs da cooperativa', exact: true }).getByRole('button', { name: /^Abrir cadência/ }).click();
-    await expect(page.getByRole('heading', { name: 'Cadência dos PAs', level: 1, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Análises', level: 1, exact: true })).toBeVisible();
     await expect(select(page, 'Central')).toHaveValue('1002');
     await expect(select(await advancedFilters(page), 'Cooperativa')).toHaveValue('1002:3017');
     await expect(select(page, 'Mês de referência')).toHaveValue('8');
@@ -205,7 +205,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
       actuals: [0, null, ...Array(6).fill(50), null, null, null, null], cutoff: '2026-08-31',
     }), { compactPortal: true });
     await august(page, '1002:3017');
-    await tab(page, 'Por período').click();
+    await tab(page, 'Período').click();
     const periods = page.getByRole('region', { name: 'Resultados por período', exact: true });
     const monthly = periods.locator('tbody tr[data-period="month"]');
     await expect(monthly).toHaveCount(12);
@@ -259,14 +259,14 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await expect(simulated).not.toHaveText(await baseline.innerText());
     await expect(simulation.getByText('Realizado até o corte', { exact: true }).locator('..').locator('dd')).toHaveText(actualBefore);
     await page.screenshot({ path: info.outputPath('analysis-simulation-25-percent.png'), fullPage: true });
-    await tab(page, 'Visão geral').click();
+    await tab(page, 'Central').click();
     await expect(results(page).getByRole('article', { name: /Realizado/ }).locator('.kpi-value')).toHaveText(actualBefore);
     await tab(page, 'Simulação').click();
     await expect(uplift).toHaveValue('25');
     await simulation.getByRole('button', { name: /Restaurar/ }).click();
     await expect(uplift).toHaveValue('0');
     await expect(simulated).toHaveText(await baseline.innerText());
-    await tab(page, 'Visão geral').click();
+    await tab(page, 'Central').click();
     await expect(results(page).getByRole('article', { name: /Realizado/ }).locator('.kpi-value')).toHaveText(actualBefore);
     expect(writes).toEqual([]); expect(workspaceWrites).toEqual([]); expect(errors).toEqual([]);
   });
@@ -279,7 +279,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     expect((await skip.boundingBox()).y).toBeGreaterThanOrEqual(0);
     await skip.press('Enter');
     await expect(page.locator('#conteudo')).toBeFocused();
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     const table = units(page).getByRole('table', { name: 'Resultados das unidades filtradas', exact: true });
     await expect(table.locator('tbody > tr.unit-result-row')).toHaveCount(3);
     await skip.focus();
@@ -345,6 +345,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     await chooser.getByRole('button', { name: 'Abrir prévia da simulação', exact: true }).click();
     const report = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
     await expect(report.getByRole('heading', { name: 'Simulação de ritmo +25%', exact: true })).toBeVisible();
+    await report.getByText('Consultar tabela completa',{exact:true}).click();
     const preview = report.getByRole('region', { name: 'Prévia completa do cenário', exact: true });
     await expect(preview.locator('tbody > tr')).toHaveCount(14);
     for (const row of expectedRows) {
@@ -359,7 +360,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
     const html = await downloadReportHtml(page, report, info, 'dual-portfolio-simulation-25.html');
     for (const value of ['Simulação de ritmo +25%', 'Central Bahia teste', 'Cooperativa Alfa', '31/08/2026', '10/09/2026', ...expectedRows.flatMap(row => [row.label, row.amount])]) expect(html).toContain(value);
     await report.getByRole('button', { name: 'Fechar compartilhamento do cenário', exact: true }).click();
-    await tab(page, 'Visão geral').click();
+    await tab(page, 'Central').click();
     for (const item of before) await expect(page.locator(`[data-portfolio="${item.metric}"]`).locator('dd [data-field="actual"]')).toContainText(money(item.actual));
     expect(writes).toEqual([]); expect(workspaceWrites).toEqual([]); expect(relationshipWrites).toEqual([]); expect(errors).toEqual([]);
   });
@@ -387,7 +388,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
       const body = (request.headers().accept || '').includes('vnd.pgrst.object') ? selected[0] || null : selected;
       return route.fulfill({ status: 200, headers, contentType: 'application/json', body: JSON.stringify(body) });
     });
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     const filters = await advancedFilters(page);
     await filters.locator('summary').filter({ hasText: 'Gerenciar anos' }).click();
     await filters.getByRole('button', { name: 'Recarregar cadastro salvo', exact: true }).click();
@@ -414,6 +415,7 @@ export function registerAnalysisJourneyTests({ test, expect, setup }) {
       const report = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
       await expect(report.getByRole('heading', { name: 'Comparativo entre anos', exact: true })).toBeVisible();
       for (const value of [item.label, 'Cooperativa Alfa', 'Recorte efetivamente comparado: JAN–JUL', '2026 × 2025', item.cutoff, '31/07/2025']) await expect(report).toContainText(value);
+      await report.getByText('Consultar tabela completa',{exact:true}).click();
       const preview = report.getByRole('region', { name: 'Prévia completa do cenário', exact: true });
       await expect(preview.locator('tbody > tr')).toHaveCount(1);
       await expect(preview.locator('tbody > tr > td')).toHaveText([money(item.current), money(item.previous), money(item.delta), '100%']);

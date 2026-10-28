@@ -1,0 +1,1 @@
+export function sortActionPriority<T extends {key:string; name?:string; complete:boolean; annualConflict?:boolean; target:number|null; gap:number|null}>(rows:T[],actions?:Record<string,{due?:string;status?:string}>,today?:string):T[];

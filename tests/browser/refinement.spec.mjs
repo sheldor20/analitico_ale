@@ -1,3 +1,4 @@
+import { operationalFixture } from './operational-fixture.mjs';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
@@ -19,6 +20,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   const contactImports = [];
   const workspaceWrites = [];
   const workspaceRows = relationshipSeed.workspaceMissing ? [] : [{ id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset }];
+  const operational=operationalFixture(owner);
   const profileRows = structuredClone(relationshipSeed.profiles || []);
   const appointmentRows = structuredClone(relationshipSeed.appointments || []);
   const goalStateRows = structuredClone(relationshipSeed.goalStates || []).map(row=>({period:'month',...row}));
@@ -34,6 +36,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await page.route('http://127.0.0.1:4600/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if(await operational.handle(route))return;
     if (url.pathname.startsWith('/auth/') || url.pathname === '/rest/v1/rpc/commercial_session_allowed') return route.continue();
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
@@ -56,7 +59,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
           if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Workspace: incorrect update owner');
           const row=workspaceRows.find(item=>`eq.${item.year}`===url.searchParams.get('year')&&`eq.${item.revision}`===url.searchParams.get('revision'));
           if (!row) return answer(null);
-          Object.assign(row,payload,{updated_at:created});
+          operational.archive(row,payload.change_reason);Object.assign(row,payload,{updated_at:created});
         }
       }
       const selected=relationshipSeed.workspaceMissing ? workspaceRows.filter(row=>!url.searchParams.has('year')||`eq.${row.year}`===url.searchParams.get('year')) : workspaceRows;
@@ -159,11 +162,11 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   // Existing scenario tests start with controls exposed; dedicated UX tests
   // exercise the compact initial state before making this explicit choice.
   if (!relationshipSeed.workspaceMissing && !relationshipSeed.compactPortal) {
-    await page.getByRole('tab', {name:'Cooperativas e PAs',exact:true}).click();
-    await page.locator('.filter-toggle[aria-expanded="false"]').click();
+    await page.getByRole('tab', {name:'Cooperativas',exact:true}).click();
+    const toggle=page.locator('.filter-toggle[aria-expanded="false"]');if(await toggle.count())await toggle.click();
   }
 
-  return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
+  return { operational, errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
 }
 
 for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
@@ -174,7 +177,7 @@ for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
   for(const name of ['Central','Cooperativas','PAs','Período','Comparar anos','Simulação']){
    await page.getByRole('tab',{name,exact:true}).click();
    await expect(page.getByRole('tab',{name,exact:true})).toHaveAttribute('aria-selected','true');
-   await expect(page.getByLabel('Cooperativa',{exact:true}).first()).toBeVisible();
+   await expect(page.getByRole('combobox',{name:'Cooperativa',exact:true}).first()).toBeVisible();
    if(name==='PAs') await expect(page.getByLabel('Indicadores dos PAs',{exact:true})).toBeVisible();
    await page.screenshot({path:info.outputPath(`${name}.png`),fullPage:true});
   }
@@ -186,7 +189,7 @@ for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
   await selection.locator('summary').press('Escape');
   await expect(selection).not.toHaveAttribute('open','');
   const navigation=page.getByRole('navigation',{name:'Navegação principal',exact:true});
-  for(const name of ['Agenda','Metas atingidas','Cadastro e metas','Importações','Conferência da base','Plano de ação','Ações CNV 2026']){
+  for(const name of ['Agenda','Metas atingidas','Cadastro e metas','Importações','Conferência da base','Plano de ação','Ações CNV']){
    await navigation.getByRole('button',{name,exact:true}).click();
    await expect(page.getByRole('heading',{level:1,name,exact:true})).toBeVisible();
    await page.screenshot({path:info.outputPath(`${name.replaceAll(' ','-')}.png`),fullPage:true});
@@ -405,8 +408,8 @@ for(const width of [1440,390]) test(`base production paste with two portfolios $
  }
  const dialog=await prepare();
  expect(state.workspaceWrites).toHaveLength(0);
- await expect(dialog.getByText('Venda Nova',{exact:true}).last()).toBeVisible();
- await expect(dialog.getByText('Arrecadação',{exact:true}).last()).toBeVisible();
+ await expect(dialog.getByText(/^Venda Nova ·/).last()).toBeVisible();
+ await expect(dialog.getByText(/^Arrecadação ·/).last()).toBeVisible();
  await page.screenshot({path:info.outputPath(`base-paste-preview-${width}.png`),fullPage:true});
  expect(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth+2)).toBe(false);
  // Changing the layout must invalidate the reviewed data.
@@ -429,7 +432,7 @@ for(const width of [1440,390]) test(`base production paste with two portfolios $
  expect(saved.rows.some(row=>row.source==='base'&&!row.cooperative)).toBe(false);
  await page.reload();await expect(page.getByRole('region',{name:'Resultado do período',exact:true})).toBeVisible();
  await page.getByRole('tab',{name:'Central',exact:true}).click();
- await page.getByLabel('Central',{exact:true}).first().selectOption('1002');
+ await page.getByRole('combobox',{name:'Central',exact:true}).first().selectOption('1002');
  await page.getByLabel('Período',{exact:true}).first().selectOption('month');
  await page.getByLabel('Mês de referência',{exact:true}).first().selectOption('0');
  await expect(page.getByRole('article',{name:'Realizado até o corte',exact:true})).toContainText('1.384,56');
@@ -501,4 +504,98 @@ for(const width of [1440,390]) test(`goal periods, cascading PA filters and isol
  await alerts.getByRole('button',{name:'Limpar filtros',exact:true}).click();await expect(central).toHaveValue('all');await expect(coop).toBeDisabled();await expect(pa).toBeDisabled();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
  expect(state.goalStateRows.every(row=>row.owner_id===owner)).toBe(true);expect(state.errors).toEqual([]);
+});
+
+for(const width of [1440,390])test(`audit fixes: unified PA pages, scope reset and account context ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ const state=await setup(page,d=>{const source=d.rows.find(row=>row.source==='cadence');d.rows=[...d.rows.filter(row=>row.source!=='cadence'),...Array.from({length:103},(_,i)=>({...source,key:`cadence:${source.central}:${source.cooperative}:${100+i}:VN`,pa:String(100+i),name:`PA de teste ${i}`}))];return d;},{compactPortal:true});
+ const nav=page.getByRole('navigation',{name:'Navegação principal',exact:true});
+ await nav.getByRole('button',{name:'Cadência dos PAs',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'PAs',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.locator('.unit-results-table tbody>tr')).toHaveCount(50);
+ const pages=page.getByRole('navigation',{name:'Paginação dos PAs',exact:true});
+ await pages.getByRole('button',{name:'Próxima',exact:true}).click();await expect(page.locator('.unit-results-table tbody>tr')).toHaveCount(50);
+ await pages.getByRole('button',{name:'Próxima',exact:true}).click();await expect(page.locator('.unit-results-table tbody>tr')).toHaveCount(5);
+ const filters=page.getByRole('region',{name:'Filtros da análise',exact:true});
+ await filters.getByRole('button',{name:/Mais filtros/}).click();
+ await filters.getByLabel('Grupo do PA').selectOption('P1');
+ await nav.getByRole('button',{name:'Análises',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'Central',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('region',{name:'Resultado do período',exact:true})).toBeVisible();
+ await page.getByLabel('Conta ativa',{exact:true}).click();await expect(page.locator('.account-menu')).toContainText('browser-test@example.com');
+ await page.screenshot({path:info.outputPath(`audit-context-${width}.png`),fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);expect(state.errors).toEqual([]);
+});
+
+test('audit fixes: operational action survives reload and rejects concurrent overwrite',async({page})=>{
+ const state=await setup(page,d=>d,{compactPortal:true});
+ await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Plano de ação',exact:true}).click();
+ await expect(page.getByLabel('Ordenar análise',{exact:true})).toHaveValue('priority');
+ await page.locator('.action-card').first().click();
+ let dialog=page.getByRole('dialog');await dialog.getByLabel('Responsável',{exact:true}).fill('Responsável persistente');
+ await dialog.getByLabel('Prazo',{exact:true}).fill('2026-10-30');await dialog.getByRole('button',{name:'Salvar ação',exact:true}).click();
+ await expect(page.locator('.message.success')).toContainText('Ação salva no cadastro anual');expect(state.operational.actionWrites).toHaveLength(1);
+ await dialog.getByRole('button',{name:'Fechar',exact:true}).click();await page.reload();
+ await expect(page.getByRole('heading',{level:1,name:'Plano de ação',exact:true})).toBeVisible();await expect(page.locator('.action-list')).toContainText('Responsável persistente');
+ await page.locator('.action-card').filter({hasText:'Responsável persistente'}).click();dialog=page.getByRole('dialog');
+ await expect(dialog.getByLabel('Prazo',{exact:true})).toHaveValue('2026-10-30');
+ state.operational.actions[0].updated_at='2026-10-28T20:00:00.000Z';
+ await dialog.getByLabel('Responsável',{exact:true}).fill('Edição concorrente');await dialog.getByRole('button',{name:'Salvar ação',exact:true}).click();
+ await expect(page.locator('.message.error[role=alert]')).toContainText('outra sessão');expect(state.operational.actions[0].owner_name).toBe('Responsável persistente');
+});
+
+test('audit fixes: unavailable saved action blocks edits until retry succeeds',async({page})=>{
+ const state=await setup(page,d=>d,{compactPortal:true});
+ let release;const held=new Promise(resolve=>{release=resolve;});let unavailable=true;
+ await page.route('**/rest/v1/commercial_workspace_actions*',async route=>{
+  if(route.request().method()!=='GET')return route.fallback();
+  if(unavailable){await held;return route.fulfill({status:503,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({message:'Indisponível no teste'})});}
+  return route.fallback();
+ });
+ try{
+  await page.reload();await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Plano de ação',exact:true}).click();
+  await page.locator('.action-card').first().click();const editor=page.locator('.action-editor');
+  await expect(editor.getByLabel('Responsável',{exact:true})).toBeDisabled();await expect(editor.getByRole('button',{name:'Salvar ação',exact:true})).toBeDisabled();
+  release();await expect(editor.getByRole('button',{name:'Tentar carregar plano',exact:true})).toBeVisible();
+  unavailable=false;await editor.getByRole('button',{name:'Tentar carregar plano',exact:true}).click();
+  await expect(editor.getByLabel('Responsável',{exact:true})).toBeEnabled();await expect(editor.getByRole('button',{name:'Salvar ação',exact:true})).toBeEnabled();expect(state.operational.actionWrites).toHaveLength(0);
+ }finally{release();}
+});
+
+test('audit fixes: validated calendar saves without changing targets or production',async({page},info)=>{
+ const state=await setup(page,d=>d,{compactPortal:true,trackWorkspaceWrites:true});const before=structuredClone(state.workspaceRows[0].dataset);
+ await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Cadastro e metas',exact:true}).click();
+ const calendar=page.locator('.calendar-settings');await calendar.locator('summary').click();await calendar.getByLabel('Datas sem expediente',{exact:true}).fill('2027-01-01');
+ await calendar.getByRole('button',{name:'Salvar calendário',exact:true}).click();await expect(calendar.getByRole('alert')).toContainText('2026');expect(state.workspaceWrites).toHaveLength(0);
+ await calendar.getByLabel('Datas sem expediente',{exact:true}).fill('2026-12-25');page.once('dialog',dialog=>dialog.accept());await calendar.getByRole('button',{name:'Salvar calendário',exact:true}).click();
+ await expect(calendar).toContainText('1 data');expect(state.workspaceWrites).toHaveLength(1);expect(state.workspaceRows[0].dataset.config.calendarHolidays).toEqual(['2026-12-25']);
+ expect(state.workspaceRows[0].dataset.rows).toEqual(before.rows);await page.screenshot({path:info.outputPath('calendar-settings.png'),fullPage:true});expect(state.errors).toEqual([]);
+});
+
+test('audit fixes: clipboard differences and version restore preserve targets, units and history',async({page},info)=>{
+ const state=await setup(page,d=>d,{compactPortal:true,trackWorkspaceWrites:true});const original=structuredClone(state.workspaceRows[0].dataset);
+ await page.getByRole('button',{name:'Importar base',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Importar base',exact:true});
+ await dialog.getByRole('textbox',{name:'Dados da Cadência PA',exact:true}).fill(pastedProduction);
+ await dialog.getByLabel('Data de corte da produção colada',{exact:true}).fill('2026-09-10');await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+ const review=dialog.getByRole('region',{name:'Diferenças da produção',exact:true});await expect(review).toContainText('Anterior');await expect(review).toContainText('Novo');await expect(review).toContainText('1.111,11');
+ const csvEvent=page.waitForEvent('download');await review.getByRole('button',{name:'Baixar todas as diferenças',exact:true}).click();expect((await csvEvent).suggestedFilename()).toMatch(/conferencia-producao/);
+ await dialog.getByRole('button',{name:'Atualizar produção',exact:true}).click();await expect(dialog).toBeHidden();
+ await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Importações',exact:true}).click();const versions=page.getByRole('region',{name:'Histórico de atualizações',exact:true});
+ await expect(versions).toContainText('Revisão 1');const membership=structuredClone(state.workspaceRows[0].dataset.registry.entities);
+ page.once('dialog',dialog=>dialog.accept());await versions.getByRole('button',{name:'Restaurar produção',exact:true}).first().click();
+ await expect.poll(()=>state.workspaceWrites.length).toBe(2);
+ const restored=state.workspaceRows[0].dataset;const key='cadence:1002:3017:0:VN';expect(restored.rows.find(r=>r.key===key).actuals).toEqual(original.rows.find(r=>r.key===key).actuals);
+ expect(restored.rows.find(r=>r.key===key).targets).toEqual(original.rows.find(r=>r.key===key).targets);expect(restored.registry.entities).toEqual(membership);
+ await expect(versions).toContainText('Revisão 2');expect(state.operational.versions).toHaveLength(2);expect(state.errors).toEqual([]);
+ await page.screenshot({path:info.outputPath('audit-version-history.png'),fullPage:true});
+});
+
+test('audit fixes: URL restores recorte and calendar month remains selectable in accumulated period',async({page})=>{
+ const state=await setup(page,d=>d,{compactPortal:true});
+ await page.getByRole('tab',{name:'Cooperativas',exact:true}).click();await page.getByRole('combobox',{name:'Central',exact:true}).selectOption('1002');await page.getByRole('combobox',{name:'Cooperativa',exact:true}).selectOption('1002:3017');
+ await page.getByLabel('Mês limite do acumulado',{exact:true}).selectOption('7');
+ await page.reload();await expect(page.getByRole('tab',{name:'Cooperativas',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('combobox',{name:'Central',exact:true})).toHaveValue('1002');await expect(page.getByRole('combobox',{name:'Cooperativa',exact:true})).toHaveValue('1002:3017');await expect(page.getByLabel('Mês limite do acumulado',{exact:true})).toHaveValue('7');
+ await page.getByRole('tab',{name:'PAs',exact:true}).click();await page.goBack();await expect(page.getByRole('tab',{name:'Cooperativas',exact:true})).toHaveAttribute('aria-selected','true');
+ expect(state.errors).toEqual([]);
 });

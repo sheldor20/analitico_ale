@@ -4,7 +4,7 @@ import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashbo
 export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda' | 'cnv';
 export const VIEW_TITLES: Record<PortalView, string> = {
   overview: 'Análises', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
-  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda', cnv: 'Ações CNV 2026',
+  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda', cnv: 'Ações CNV',
 };
 export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   overview: 'Metas e produção da carteira.',
@@ -13,7 +13,7 @@ export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   audit: 'Pendências de dados e critérios de cálculo.',
   imports: 'Atualize a produção ou consulte análises salvas.',
   registry: 'Unidades, contatos, carteira e metas anuais.',
-  alerts: 'Reconheça os resultados do mês.',
+  alerts: 'Reconheça os resultados por período.',
   agenda: 'Programação das centrais, cooperativas e PAs.',
   cnv: 'Regulamentos, produtos, metas e comunicação das ações.',
 };

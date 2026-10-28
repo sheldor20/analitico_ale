@@ -1,5 +1,5 @@
 'use client';
-import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
+import { useDialogLifecycle } from '@/lib/use-dialog-lifecycle';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, ImageIcon, LayoutDashboard, Mail, X } from 'lucide-react';
@@ -52,23 +52,10 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
   const invalidateClipboard = useCallback(() => setClipboardVersion((value) => value + 1), []);
   const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds, initialShowProjection, unitIdsByMetric]);
 
-  useLayoutEffect(() => {
-    const releaseScroll = lockBodyScroll();
-    const opener = document.activeElement as HTMLElement | null;
-
-    closeButton.current?.focus();
-    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
-  }, []);
+  const dialogKeyDown = useDialogLifecycle(onClose, closeButton);
 
   return <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section data-share-dialog role="dialog" aria-modal="true" aria-labelledby={titleId} className={styles.dialog} onKeyDown={(event) => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
-      if (event.key !== 'Tab') return;
-      const nodes = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe,[tabindex="0"]')]
-        .filter((node) => node.getClientRects().length > 0 && !node.closest('[hidden]'));
-      if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1)?.focus(); }
-      else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
-    }}>
+    <section data-share-dialog role="dialog" aria-modal="true" aria-labelledby={titleId} className={styles.dialog} onKeyDown={dialogKeyDown}>
       <header className={styles.heading}>
         <div><h2 id={titleId}>{UNITS[unitKind].title}</h2><span className={styles.helper}>Revise e escolha como compartilhar</span></div>
         <button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento" onClick={onClose}><X size={22} aria-hidden="true" /></button>

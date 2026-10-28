@@ -15,10 +15,11 @@ import { ChevronDown, MessageSquareText, CalendarDays, Building2, Target, ChartN
 export type ScenarioFilters = { central: string; coop: string; pa?: string; unitIds?: string[]; source: string; metric: string; group: string; level: string; period: string; month: number; uplift: number; sortBy: string; search: string; status: string };
 export function PaSummary({rows}: {rows: {complete: boolean; annualConflict?: boolean; target: number | null; actual: number | null; attainment: number | null}[]}) {
   const achieved = rows.filter(row => row.complete && !row.annualConflict && (row.target ?? 0) > 0 && (row.attainment ?? 0) >= 1).length;
-  const zero = rows.filter(row => row.actual === 0).length;
+  const zero = rows.filter(row => row.complete && !row.annualConflict && row.actual === 0).length;
+  const unknown = rows.filter(row => !row.complete || row.annualConflict || row.target == null || row.target <= 0).length;
   return (
       <div className={styles.paSummary} aria-label="Indicadores dos PAs">
-        <div data-tone="total"><Building2 size={20} aria-hidden="true"/><strong>{rows.length}</strong><span>Total de PAs</span></div>
+        <div data-tone="total"><Building2 size={20} aria-hidden="true"/><strong>{rows.length}</strong><span>Total de PAs</span>{unknown > 0 && <small>{unknown} sem avaliação</small>}</div>
         <div data-tone="achieved"><Target size={20} aria-hidden="true"/><strong>{achieved}</strong><span>Com meta entregue</span></div>
         <div data-tone="zero"><ChartNoAxesColumnIncreasing size={20} aria-hidden="true"/><strong>{zero}</strong><span>Com produção zerada</span></div>
         <div data-tone="rate"><UsersRound size={20} aria-hidden="true"/><strong>{rows.length ? percent(achieved / rows.length) : '0%'}</strong><span>PAs com meta entregue</span></div>

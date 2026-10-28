@@ -30,8 +30,8 @@ async function openGenerator(page, content, format = 'E-mail') {
   await page.getByRole('button', { name: 'Compartilhar cenário', exact: true }).click();
   const chooser = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
   await select(chooser, 'Cenário do compartilhamento').selectOption(content.startsWith('PAs') ? 'pa' : 'cooperative');
-  await chooser.getByRole('radio', { name: format, exact: true }).check();
-  await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await chooser.getByRole('radio', { name: format==='Imagem para WhatsApp'?'WhatsApp':format, exact: true }).check();
+  await chooser.getByRole('button', { name: 'Ver prévia', exact: true }).click();
 }
 
 async function august(page) {
@@ -85,7 +85,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await select(page, 'Filtrar situação').selectOption('attention');
     await page.getByRole('button', { name: 'Ver PAs de Cooperativa Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Abrir cadência de Cooperativa Alfa', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Cadência dos PAs', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Análises', exact: true })).toBeVisible();
     await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
     await expect(select(page, 'Trimestre')).toHaveValue('2');
     await expect(select(page, 'Filtrar situação')).toHaveValue('all');
@@ -135,7 +135,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await select(page, 'Ordenar análise').selectOption('production');
     await openGenerator(page, 'PAs da seleção', 'Imagem para WhatsApp');
     await expect(select(share(page), 'Ordem das unidades')).toHaveCount(0);
-    await expect(share(page).getByRole('radio', { name: 'WhatsApp e imagem', exact: true })).toBeChecked();
+    await expect(share(page).getByRole('radio', { name: 'WhatsApp', exact: true })).toBeChecked();
     await expect(share(page).getByRole('img', { name: 'Cenário dos PAs — parte 1 de 1', exact: true })).toBeVisible();
     await share(page).getByRole('radio', { name: 'E-mail', exact: true }).check();
     await expect(paRows(page)).toHaveCount(4);
@@ -154,6 +154,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     const { errors, writes, relationshipWrites } = await setup(page, workflowFixture);
     await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
     await august(page);
+    await list(page).locator('summary').filter({hasText:'Selecionar para exportar'}).click();
     const selectAll = await list(page).getByRole('checkbox', { name: 'Selecionar todas as unidades filtradas', exact: true }).boundingBox();
     expect(selectAll.width).toBeLessThanOrEqual(24);
     expect(selectAll.height).toBeLessThanOrEqual(24);
@@ -253,7 +254,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await openGenerator(page, 'PAs da seleção', 'Painel resumido');
     await expect(summary.locator('tbody tr')).toHaveCount(3);
     await expect(summary.locator('tbody tr').first()).toContainText('PA Próximo da meta');
-    await dialog.locator('summary').filter({ hasText: 'Editar mensagem' }).click();
+    await dialog.locator('summary').filter({ hasText: 'Personalizar mensagem' }).click();
     const subject = 'Plano <Equipe> & ação de agosto';
     const intro = 'Olá <b>equipe</b> & gestores. Vamos avaliar os resultados.';
     const cta = 'Agendar visita e retornar até sexta-feira.';
@@ -285,7 +286,7 @@ export function registerWorkflowTests({ test, expect, setup }) {
     await dialog.getByRole('radio', { name: 'Painel resumido', exact: true }).check();
     await expect(dialog.getByRole('region', { name: 'Prévia do painel resumido', exact: true }).locator('tbody tr')).toHaveCount(3);
     await expect(dialog.getByRole('textbox', { name: 'Assunto da mensagem', exact: true })).toHaveValue(subject);
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await expect(select(dialog, 'Texto do WhatsApp')).toHaveValue('caption');
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__workflowCopies.text.length)).toBe(1);

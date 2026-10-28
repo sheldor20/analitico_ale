@@ -68,7 +68,7 @@ async function captureCopies(page) {
 
 export function registerManagementPeriodTests({ test, expect, setup }) {
   const granularity = (page, value) => select(periods(page), 'Granularidade dos períodos').selectOption(value);
-  const openPeriods = page => page.getByRole('tab', { name: 'Por período', exact: true }).click();
+  const openPeriods = page => page.getByRole('tab', { name: 'Período', exact: true }).click();
 
   test('management periods: all 19 periods reconcile to the current portfolio and compound unit without inventing future production', async ({ page }, info) => {
     const { errors, writes, relationshipWrites } = await setup(page, managementFixture);
@@ -79,7 +79,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await select(page, 'Mês de referência').selectOption('7');
     await openPeriods(page);
     const panel = periods(page);
-    await expect(page.getByRole('tab', { name: 'Por período', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Período', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(panel.getByRole('table', { name: 'Resultados mensais', exact: true }).getByRole('columnheader')).toHaveText(['Mês', 'Meta', 'Realizado', 'Atingimento', 'GAP / Superação', 'Projeção do período']);
     let totalPeriods = 0;
     for (const [kind, count] of [['month', 12], ['quarter', 4], ['semester', 2], ['annual', 1]]) {
@@ -181,7 +181,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await panel.getByRole('button', { name: 'Gráfico', exact: true }).click();
     await expect(panel.getByRole('img', { name: 'Atingimento por período. Escala em percentual. Valores ausentes não são representados como zero.', exact: true })).toBeVisible();
     await expect(panel.locator('svg[role="img"] circle')).toHaveCount(8);
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();await openPeriods(page);
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();await openPeriods(page);
     await expect(order).toHaveValue('attainment');await expect(select(panel, 'Indicador dos períodos')).toHaveValue('attainment');
     await expect(panel.getByRole('button', { name: 'Gráfico', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await panel.getByRole('button', { name: 'Tabela', exact: true }).click();
@@ -251,7 +251,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
       expect(verifiedAmounts).toBeGreaterThan(40);
       if ([1440, 390, 320].includes(width)) await panel.screenshot({ path: info.outputPath(`reference-periods-large-${width}.png`), style: '.sidebar, .skip-link { visibility: hidden !important; }' });
     }
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();await openPeriods(page);
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();await openPeriods(page);
     await expect(select(panel, 'Granularidade dos períodos')).toHaveValue('annual');await expect(financial(page, 'annual', 11, 'actual')).toContainText(money(198390387.82));
     await expect(select(page, 'Cooperativa')).toHaveValue('1002:3017');
     expect(writes).toEqual([]);expect(relationshipWrites).toEqual([]);expect(errors).toEqual([]);
@@ -274,7 +274,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await expect(chooser.getByRole('radio', { name: 'Cooperativas da seleção', exact: true })).toHaveCount(0);
     await select(chooser, 'Cenário do compartilhamento').selectOption('cooperative');
     await chooser.getByRole('radio', { name: 'E-mail', exact: true }).check();
-    await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await chooser.getByRole('button', { name: 'Ver prévia', exact: true }).click();
     const dialog = share(page);
     await expect(projection(dialog)).not.toBeChecked();
     await expect(select(dialog, 'Ordem das unidades')).toHaveCount(0);
@@ -285,7 +285,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await expect(frame(page).getByRole('columnheader', { name: 'Projeção de produção', exact: true })).toHaveCount(0);
     for (const name of ['Cooperativa Alfa', 'Outra central', 'PA Alfa zero']) await expect(frame(page).locator('body')).not.toContainText(name);
     await projection(dialog).check();
-    await expect(frame(page).getByRole('columnheader', { name: 'Projeção de produção', exact: true })).toBeVisible();
+    await expect(frame(page).locator('thead th').filter({hasText:'Projeção de produção'})).toHaveCount(1);
     for (const [id, actual, projected] of [['cooperative:1002:3030', 400, 812.90], ['cooperative:1002:3025', 200, 406.45]]) {
       const row = exportedRow(page, id);
       await expect(row.locator('td').nth(1)).toContainText(money(3000));
@@ -300,7 +300,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await expect(summary.getByRole('columnheader', { name: 'Projeção de produção', exact: true })).toBeVisible();
     await expect(summary.locator('tbody tr').first()).toContainText('Cooperativa Delta');
     await expect(summary.locator('tbody tr').first()).toContainText(money(812.90));
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     const preview = dialog.getByRole('img', { name: 'Cenário das cooperativas — parte 1 de 1', exact: true });
     await expect.poll(() => preview.evaluate(image => image.naturalWidth)).toBe(1440);
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
@@ -328,7 +328,7 @@ export function registerManagementPeriodTests({ test, expect, setup }) {
     await select(chooser, 'Cenário do compartilhamento').selectOption('cooperative');
     await projection(chooser).check();
     await chooser.getByRole('radio', { name: 'Painel resumido', exact: true }).check();
-    await chooser.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await chooser.getByRole('button', { name: 'Ver prévia', exact: true }).click();
     await expect(projection(dialog)).toBeChecked();
     await expect(summary.locator('tbody tr')).toHaveCount(2);
     const beta = summary.locator('tbody tr').filter({ hasText: 'Cooperativa Beta' });

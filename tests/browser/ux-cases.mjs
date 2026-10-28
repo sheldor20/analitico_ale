@@ -115,7 +115,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
     await expect(panel.getByRole('button',{name:`Expandir ${label}`,exact:true})).toHaveAttribute('aria-expanded','false');
     await expect(content).toBeHidden();
   }
-  await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+  await page.getByRole('tab',{name:'Central',exact:true}).click();
   await expect(page.getByRole('region',{name:'Prioridades da carteira',exact:true})).toHaveCount(0);
   await expect(list).toBeHidden();
   await page.screenshot({path:testInfo.outputPath('compact-overview-desktop.png'),fullPage:true});
@@ -123,7 +123,7 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('compact-overview-320.png'),fullPage:true,style:'.sidebar, .skip-link { visibility: hidden !important; }'});
   await metrics.getByRole('button',{name:'Expandir indicadores do período',exact:true}).focus();await page.keyboard.press('Space');
-  await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
+  await page.getByRole('tab',{name:'Cooperativas',exact:true}).click();
   await list.getByRole('button',{name:'Expandir lista de unidades',exact:true}).click();
   await page.getByRole('combobox',{name:'Ordenar análise',exact:true}).selectOption('production');
   await expect(selected).toBeChecked();
@@ -151,14 +151,14 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await page.getByRole('combobox',{name:'Período',exact:true}).selectOption('month');
   await page.getByRole('combobox',{name:'Mês de referência',exact:true}).selectOption('7');
   await expect(page.getByRole('heading',{level:1,name:'Análises',exact:true})).toBeVisible();
-  await page.getByRole('tab',{name:'Visão geral',exact:true}).click();
+  await page.getByRole('tab',{name:'Central',exact:true}).click();
   const result=page.getByRole('region',{name:'Resultado do período',exact:true});
   const summary=page.getByRole('region',{name:'Resumo das unidades',exact:true});
   const resultBox=await result.boundingBox(),summaryBox=await summary.boundingBox();
   expect(summaryBox.y).toBeGreaterThanOrEqual(resultBox.y+resultBox.height);
   await expect(page.getByRole('region',{name:'Lista de unidades',exact:true})).toBeHidden();
   await expect(page.getByRole('region',{name:'Comparativo entre anos',exact:true})).toHaveCount(0);
-  await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).focus();await page.keyboard.press('Enter');
+  await page.getByRole('tab',{name:'Cooperativas',exact:true}).focus();await page.keyboard.press('Enter');
   const list=page.getByRole('region',{name:'Lista de unidades',exact:true});
   await expect(list.getByRole('columnheader',{name:'GAP / Superação',exact:true})).toBeVisible();
   await expect(list.getByRole('columnheader',{name:'Projeção',exact:true})).toBeVisible();
@@ -173,11 +173,11 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await pas.getByRole('button',{name:'Fechar PAs',exact:true}).focus();await page.keyboard.press('Space');await expect(pas).toHaveCount(0);
   await alfa.click();
   await pas.getByRole('button',{name:'Ver histórico do PA 0 · PA Alfa zero',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Por período',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByRole('tab',{name:'Período',exact:true})).toHaveAttribute('aria-selected','true');
   await expect(page.getByRole('navigation',{name:'Trilha da análise',exact:true})).toContainText('PA 0');
   await expect(page.getByRole('table',{name:'Resultados mensais',exact:true}).locator('tbody tr')).toHaveCount(12);
   await page.getByRole('button',{name:'Voltar ao recorte anterior',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Cooperativas e PAs',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByRole('tab',{name:'Cooperativas',exact:true})).toHaveAttribute('aria-selected','true');
   await expect(alfa).toHaveAttribute('aria-expanded','true');await expect(pas).toContainText('PA Alfa zero');
   await pas.getByRole('button',{name:'Fechar PAs',exact:true}).click();
   await list.getByRole('button',{name:'Ver PAs de Cooperativa Beta',exact:true}).click();
@@ -200,8 +200,8 @@ export function registerUxTests({test,expect,setup,owner,created}) {
   await page.keyboard.press('Home');
   for(let step=0;step<5;step++)await page.keyboard.press('ArrowRight');
   await expect(page.getByLabel('Aumento do ritmo futuro')).toHaveValue('25');
-  await expect(page.getByText('Simulação de ritmo +25% ativa · somente projeções',{exact:true})).toBeVisible();
-  await page.getByRole('tab',{name:'Cooperativas e PAs',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Simulação comercial',exact:true})).toContainText('Estimativa');
+  await page.getByRole('tab',{name:'Cooperativas',exact:true}).click();
   await expect(page.getByText('Simulação de ritmo +25% ativa · somente projeções',{exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Simulação',exact:true}).click();
   await expect(page.getByLabel('Aumento do ritmo futuro')).toHaveValue('25');

@@ -85,7 +85,7 @@ test('projection is absent by default and optional outputs retain exact engine f
   const imageText = periodPerformanceImageLayout(on.parts[0], measure).commands.filter(command => command.type === 'text').map(command => command.value).join(' ');
   assert.match(imageText, /Simulação de ritmo \+20%/);
   assert.equal((on.html.match(/data-label="Projeção de produção"/g) || []).length, 19);
-  assert.match(on.notes.join(' '), /dias úteis.*sem descontar feriados.*períodos fechados.*\+20%/);
+  assert.match(on.notes.join(' '), /dias úteis.*calendário cadastrado.*períodos fechados.*\+20%/);
   assert.deepEqual(on.rows, off.rows);
   const august = source.groups[0].rows[7];
   assert.ok(august.projected > august.actual);

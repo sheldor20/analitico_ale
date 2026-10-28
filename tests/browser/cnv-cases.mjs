@@ -115,13 +115,13 @@ async function mockCnv(page, { owner, created, errors, rows = [fixtureRow(foreig
 }
 
 export function registerCnvTests({ test, expect, setup, owner, created }) {
-  const panel = page => page.getByRole('region', { name: 'Ações CNV 2026', exact: true });
+  const panel = page => page.getByRole('region', { name: 'Ações CNV', exact: true });
   const review = page => page.getByRole('dialog', { name: 'Revisar regulamento importado', exact: true });
   const detail = page => page.getByRole('region', { name: 'Painel da ação CNV', exact: true });
   const importInput = page => panel(page).getByLabel('Importar PDF de uma ação CNV', { exact: true });
   const confirmReviewed = dialog => dialog.getByRole('checkbox', { name: /^Conferi o período, os produtos e os critérios/ });
   async function enterCnv(page) {
-    await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Ações CNV 2026', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Ações CNV', exact: true }).click();
     await expect(panel(page).getByRole('button', { name: 'Importar regulamento PDF', exact: true })).toBeEnabled();
   }
   async function fillDraft(dialog, title = 'Ação CNV sintética revisada') {
@@ -253,7 +253,7 @@ export function registerCnvTests({ test, expect, setup, owner, created }) {
     const { errors, workspaceWrites } = await setup(page, value => value, { workspaceMissing: true });
     const mock = await mockCnv(page, { owner, created, errors });
     await enterCnv(page);
-    await expect(page.getByRole('heading', { name: 'Ações CNV 2026', level: 1, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ações CNV', level: 1, exact: true })).toBeVisible();
     const pdf = regulationPdf();
     await importInput(page).setInputFiles({ name: 'regulamento-cnv-independente.pdf', mimeType: 'application/pdf', buffer: pdf });
     const editor = review(page); await expect(editor).toBeVisible();

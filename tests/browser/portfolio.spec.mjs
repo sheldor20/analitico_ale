@@ -1,3 +1,4 @@
+import { operationalFixture } from './operational-fixture.mjs';
 import { registerCnvTests } from './cnv-cases.mjs';
 import { registerAnalysisJourneyTests } from './analysis-journey-cases.mjs';
 import { registerAnalysisPeriodTests } from './analysis-period-cases.mjs';
@@ -42,6 +43,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   const contactImports = [];
   const workspaceWrites = [];
   const workspaceRows = relationshipSeed.workspaceMissing ? [] : [{ id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset }];
+  const operational=operationalFixture(owner);
   const profileRows = structuredClone(relationshipSeed.profiles || []);
   const appointmentRows = structuredClone(relationshipSeed.appointments || []);
   const goalStateRows = structuredClone(relationshipSeed.goalStates || []);
@@ -57,6 +59,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   await page.route('http://127.0.0.1:4600/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if(await operational.handle(route))return;
     if (url.pathname.startsWith('/auth/') || url.pathname === '/rest/v1/rpc/commercial_session_allowed') return route.continue();
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
@@ -79,7 +82,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
           if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Workspace: incorrect update owner');
           const row=workspaceRows.find(item=>`eq.${item.year}`===url.searchParams.get('year')&&`eq.${item.revision}`===url.searchParams.get('revision'));
           if (!row) return answer(null);
-          Object.assign(row,payload,{updated_at:created});
+          operational.archive(row,payload.change_reason);Object.assign(row,payload,{updated_at:created});
         }
       }
       const selected=relationshipSeed.workspaceMissing ? workspaceRows.filter(row=>!url.searchParams.has('year')||`eq.${row.year}`===url.searchParams.get('year')) : workspaceRows;
@@ -182,11 +185,11 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   // Existing scenario tests start with controls exposed; dedicated UX tests
   // exercise the compact initial state before making this explicit choice.
   if (!relationshipSeed.workspaceMissing && !relationshipSeed.compactPortal) {
-    await page.getByRole('tab', {name:'Cooperativas e PAs',exact:true}).click();
-    await page.locator('.filter-toggle[aria-expanded="false"]').click();
+    await page.getByRole('tab', {name:'Cooperativas',exact:true}).click();
+    const toggle=page.locator('.filter-toggle[aria-expanded="false"]');if(await toggle.count())await toggle.click();
   }
 
-  return { errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
+  return { operational, errors, writes, workspaceWrites, workspaceRows, relationshipWrites, relationshipReads, profileRows, appointmentRows, goalStateRows, contactRows: contacts, contactReads, contactImports };
 }
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
 async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
@@ -248,7 +251,7 @@ test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved d
 
 test('central and PA use their own responsible contacts and original level', async ({ page }, testInfo) => {
   const { errors } = await setup(page);
-  await page.getByLabel('Agrupar por').selectOption('central');
+  await page.getByRole('tab',{name:'Central',exact:true}).click();
   await page.getByRole('button', { name: 'Compartilhar cenário de Central Bahia teste', exact: true }).click();
   const dialog = composer(page);
   await selectAugust(dialog);

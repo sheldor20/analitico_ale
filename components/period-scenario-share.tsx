@@ -1,5 +1,5 @@
 'use client';
-import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
+import { useDialogLifecycle } from '@/lib/use-dialog-lifecycle';
 import ShareFlow from './ui/share-flow';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -63,11 +63,7 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
     return () => { active = false; };
   }, [ownerId, model.year, unitId]);
 
-  useLayoutEffect(() => {
-    const releaseScroll = lockBodyScroll(), opener = document.activeElement as HTMLElement | null;
-     close.current?.focus();
-    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
-  }, []);
+  const dialogKeyDown = useDialogLifecycle(onClose, close);
   useEffect(() => {
     alive.current = true;
     const resetClipboard = () => { generation.current++; setCopied(''); setManual(''); setClipboardVersion(value => value + 1); };
@@ -127,13 +123,7 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
   }
 
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section data-share-dialog className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={event => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
-      if (event.key !== 'Tab') return;
-      const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe')].filter(node => node.getClientRects().length > 0);
-      if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1)?.focus(); }
-      else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0]?.focus(); }
-    }}>
+    <section data-share-dialog className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={dialogKeyDown}>
       <header className={styles.heading}><h2 id={titleId}>Compartilhar cenário por período</h2><button ref={close} type="button" className="icon-button" aria-label="Fechar compartilhamento de períodos" onClick={onClose}><X size={22} aria-hidden="true" /></button></header>
       <div className={styles.content}>
         <ShareFlow/>

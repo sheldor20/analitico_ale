@@ -3,7 +3,7 @@ import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 import { money } from '../../lib/analytics.mjs';
 
 const pngMagic = [137, 80, 78, 71, 13, 10, 26, 10];
-const alertRegion = page => page.getByRole('region', { name: 'Metas atingidas no mês', exact: true });
+const alertRegion = page => page.getByRole('region', { name: 'Metas atingidas por período', exact: true });
 const achievement = (page, name) => alertRegion(page).getByRole('article').filter({ has: page.getByRole('heading', { name, exact: true }) });
 const emailRegion = (page, name) => page.getByRole('region', { name: `E-mail de ${name}`, exact: true });
 
@@ -57,8 +57,8 @@ export function registerGoalExportTests({ test, expect, setup, owner, created })
     const order = alerts.getByRole('combobox', { name: 'Ordem das metas atingidas', exact: true });
     await expect(order).toHaveValue('attainment-desc');
     await expect(alerts.getByText('7 metas atingidas', { exact: true })).toBeVisible();
-    await expect(cooperative.locator('option[value="cooperative:1002:3017"]')).toHaveCount(1);
-    await expect(cooperative.locator('option[value="cooperative:2007:3017"]')).toHaveCount(1);
+    await expect(cooperative).toBeDisabled();
+    await expect(cooperative.locator('option')).toHaveCount(1);
     await kind.selectOption('cooperative');
     const names = ['Cooperativa Alfa', 'Cooperativa Beta', 'Outra central'];
     let images = 0;
@@ -148,7 +148,7 @@ export function registerGoalExportTests({ test, expect, setup, owner, created })
     await expect(achievement(page, 'Cooperativa Alfa').getByText('Lida', { exact: true })).toBeVisible();
     await alerts.getByRole('checkbox', { name: 'Somente não lidas', exact: true }).check();
     await expect(alerts.getByText('2 metas atingidas', { exact: true })).toBeVisible();
-    await expect(alerts.getByText(/^1 para reconhecer/)).toBeVisible();
+    await expect(alerts.getByText(/1 para reconhecer$/)).toBeVisible();
     await expect(alerts.getByRole('article')).toHaveCount(1);
     await expect(achievement(page, 'PA Alfa zero')).toBeVisible();
     await page.evaluate(() => { window.__goalExports.texts = []; });

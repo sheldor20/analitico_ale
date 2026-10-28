@@ -29,7 +29,7 @@ async function august(page, { cooperative = false, metric = 'VN' } = {}) {
   await select(context(page), 'Período').selectOption('month');
   await select(context(page), 'Mês de referência').selectOption('7');
   if (cooperative) await select(await advancedFilters(page), 'Cooperativa').selectOption('1002:3017');
-  await tab(page, 'Cooperativas e PAs').click();
+  await tab(page, 'Cooperativas').click();
 }
 
 export function registerAnalysisDesignTests({ test, expect, setup }) {
@@ -117,10 +117,10 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
     await matrixMode(page).check();
     await expect(rows(matrixTable(page))).toHaveCount(1);
     await expect(row(matrixTable(page), 'Cooperativa Alfa')).toBeVisible();
-    await tab(page, 'Por período').click();
+    await tab(page, 'Período').click();
     await expect(select(context(page), 'Central')).toHaveValue('1002');
     await expect(select(context(page), 'Mês de referência')).toHaveValue('7');
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     await expect(matrixMode(page)).toBeChecked();
     await expect(rows(matrixTable(page))).toHaveCount(1);
     await expect(select(page, 'Ordenar análise')).toHaveValue('production');
@@ -165,7 +165,7 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
       }
       return dataset;
     }, { compactPortal: true });
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     await matrixMode(page).check();
     const table = matrixTable(page);
     await expect(rows(table)).toHaveCount(25);
@@ -208,6 +208,7 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
     await chooser.getByRole('button', { name: 'Abrir prévia da matriz', exact: true }).click();
     const report = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
     await expect(report.getByRole('heading', { name: 'Mês · trimestre · ano', exact: true })).toBeVisible();
+    await report.getByText('Consultar tabela completa',{exact:true}).click();
     const preview = report.getByRole('region', { name: 'Prévia completa do cenário', exact: true }).getByRole('table');
     await expect(preview.locator('tbody > tr')).toHaveCount(snapshot.length);
     for (const [index, unit] of snapshot.entries()) {
@@ -239,6 +240,7 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
     const selected = snapshot.at(-1);
     await row(source, selected.name).getByRole('button', { name: `Compartilhar cenário de ${selected.name}`, exact: true }).click();
     const individual = page.getByRole('dialog', { name: 'Compartilhar cenário', exact: true });
+    await individual.getByText('Consultar tabela completa',{exact:true}).click();
     const individualPreview = individual.getByRole('region', { name: 'Prévia completa do cenário', exact: true }).getByRole('table');
     await expect(individualPreview.locator('tbody > tr')).toHaveCount(1);
     await expect(individualPreview.getByRole('rowheader')).toContainText(selected.name);
@@ -266,11 +268,11 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
     await history.scrollIntoViewIfNeeded();
     const beforeScroll = await page.evaluate(() => scrollY);
     await history.click();
-    await expect(tab(page, 'Por período')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Período')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('navigation', { name: 'Trilha da análise', exact: true })).toContainText('PA Alfa zero');
     await expect(page.getByRole('region', { name: 'Resultados por período', exact: true })).toContainText('PA Alfa zero');
     await page.getByRole('button', { name: 'Voltar ao recorte anterior', exact: true }).click();
-    await expect(tab(page, 'Cooperativas e PAs')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Cooperativas')).toHaveAttribute('aria-selected', 'true');
     await expect(matrixMode(page)).toBeChecked();
     await expect(select(page, 'Ordenar análise')).toHaveValue('production');
     await expect(select(context(page), 'Central')).toHaveValue('1002');
@@ -298,7 +300,7 @@ export function registerAnalysisDesignTests({ test, expect, setup }) {
     }, { compactPortal: true });
     await select(context(page), 'Período').selectOption('month');
     await select(context(page), 'Mês de referência').selectOption('7');
-    await tab(page, 'Cooperativas e PAs').click();
+    await tab(page, 'Cooperativas').click();
     await matrixMode(page).check();
     const table = matrixTable(page);
     await expect(rows(table)).toHaveCount(25);

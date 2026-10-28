@@ -198,7 +198,7 @@ export function registerConsolidatedAgendaTests({ test, expect, setup, owner, cr
     await expect(appointmentCard(page, 'Visita Alfa reagendada')).toHaveCount(0);
     expect(appointmentRows.some(item => item.id === row.id)).toBe(false);
     const countBeforeRefresh = relationshipReads.filter(read => read.table === 'commercial_entity_appointments' && !read.filters.entity_id).length;
-    await agenda.getByRole('button', { name: 'Atualizar agenda', exact: true }).click();
+    await agenda.getByRole('button', { name: 'Atualizar', exact: true }).click();
     await expect.poll(() => relationshipReads.filter(read => read.table === 'commercial_entity_appointments' && !read.filters.entity_id).length).toBeGreaterThan(countBeforeRefresh);
     await expect(appointmentCard(page, 'Visita já concluída')).toBeVisible();
     await expect(appointmentCard(page, 'Visita Alfa reagendada')).toHaveCount(0);

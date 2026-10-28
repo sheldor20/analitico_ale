@@ -45,12 +45,12 @@ function text(value: unknown, label: string, max: number, required = false) {
   return value.trim();
 }
 export function validateCnvDraft(input: CnvDraft): CnvDraft {
-  if (!input || input.year !== 2026) throw new Error('Esta aba reúne as ações CNV de 2026.');
+  if (!input || !Number.isInteger(input.year) || input.year<2020 || input.year>2100) throw new Error('Informe um ano de campanha entre 2020 e 2100.');
   if (input.needsReview !== false) throw new Error('Revise o resumo e confirme a conferência com o regulamento antes de salvar.');
   const startDate = date(input.startDate), endDate = date(input.endDate);
   if (startDate && endDate && endDate < startDate) throw new Error('O fim da ação deve ser igual ou posterior ao início.');
   const clean: CnvDraft = {
-    title: text(input.title, 'nome da ação', 200, true), year: 2026,
+    title: text(input.title, 'nome da ação', 200, true), year: input.year,
     summary: text(input.summary, 'resumo', 6000, true),
     periodLabel: text(input.periodLabel, 'período', 600), startDate, endDate,
     products: [], goals: [], eligibility: [], rewards: [], importantRules: [], needsReview: false,
@@ -95,7 +95,7 @@ export async function listCnvActions(expectedOwner: string): Promise<CnvAction[]
   const owner = await ownerId(expectedOwner), items: CnvAction[] = [];
   let cursor = '';
   for (;;) {
-    let query = db().from('commercial_cnv_actions').select(COLUMNS).eq('owner_id', owner).eq('year', 2026).order('id').limit(200);
+    let query = db().from('commercial_cnv_actions').select(COLUMNS).eq('owner_id', owner).order('id').limit(200);
     if (cursor) query = query.gt('id', cursor);
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -129,7 +129,7 @@ export async function createCnvAction(expectedOwner: string, draft: CnvDraft, fi
     await ownerId(expectedOwner);
     const filename = file.name.replace(/[\x00-\x1f\x7f/\\]/g, '_').slice(0, 220);
     insertStarted = true;
-    const { data, error } = await db().from('commercial_cnv_actions').insert({ id, owner_id: owner, year: 2026, title: details.title, details, filename,
+    const { data, error } = await db().from('commercial_cnv_actions').insert({ id, owner_id: owner, year: details.year, title: details.title, details, filename,
       storage_path: path, file_sha256: hash, page_count: pageCount }).select(COLUMNS).single();
     if (error) {
       // A PostgreSQL rejection aborts the write. A lost HTTP response does not

@@ -8,7 +8,13 @@ const shared = page => page.getByRole('dialog', { name: 'Compartilhar cenário d
 const frame = page => page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
 const rows = page => frame(page).locator('table[data-cooperative-scenario] tr[data-cooperative-id]');
 const row = (page, id) => frame(page).locator(`tr[data-cooperative-id="${id}"]`);
-const open = page => page.getByRole('region', { name: 'Lista de unidades', exact: true }).getByRole('button', { name: 'Compartilhar cooperativas', exact: true }).click();
+async function open(page){
+ await page.locator('.page-heading-actions').getByRole('button',{name:'Compartilhar cenário',exact:true}).click();
+ const chooser=page.getByRole('dialog',{name:'Compartilhar cenário',exact:true});
+ await chooser.getByRole('combobox',{name:'Cenário do compartilhamento',exact:true}).selectOption('cooperative');
+ await chooser.getByRole('radio',{name:'WhatsApp',exact:true}).check();
+ await chooser.getByRole('button',{name:'Ver prévia',exact:true}).click();
+}
 const email = page => shared(page).getByRole('radio', { name: 'E-mail', exact: true }).check();
 const close = page => shared(page).getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
 
@@ -160,7 +166,7 @@ export function registerCooperativeScenarioTests({ test, expect, setup }) {
     expect(outlook.searchParams.get('to').split(';').sort()).toEqual(['apoio@example.com', 'gestor@example.com']);
     const copied = await page.evaluate(() => window.__cooperativeExports.html.at(-1));
     expect((copied.match(/data-cooperative-id=/g) || [])).toHaveLength(2);
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await page.evaluate(() => { window.__cooperativeExports.denied = true; });
     const pngDownload = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();

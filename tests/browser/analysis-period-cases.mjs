@@ -19,7 +19,7 @@ export function registerAnalysisPeriodTests({ test, expect, setup, owner, create
     await select(page, 'Central').selectOption('1002');
     await select(await advancedFilters(page), 'Cooperativa').selectOption('1002:3017');
     await select(page, 'Carteira').selectOption('AR');
-    await page.getByRole('tab', { name: 'Por período', exact: true }).click();
+    await page.getByRole('tab', { name: 'Período', exact: true }).click();
     const panel = periods(page);
     await expect(panel.getByRole('button', { name: /Expandir resultados por período/i })).toHaveCount(0);
     await expect(panel.locator('tbody tr')).toHaveCount(12);
@@ -69,7 +69,7 @@ export function registerAnalysisPeriodTests({ test, expect, setup, owner, create
       const selected = year ? workspaces.filter(row => `eq.${row.year}` === year) : workspaces;
       await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify((route.request().headers().accept || '').includes('vnd.pgrst.object') ? selected[0] || null : selected) });
     });
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();
     await advancedFilters(page);
     await page.locator('summary').filter({ hasText: 'Gerenciar anos' }).click();
     await page.getByRole('button', { name: 'Recarregar cadastro salvo', exact: true }).click();

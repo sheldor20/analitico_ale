@@ -9,7 +9,7 @@ export default function FilterPanel({ children, primary, description, onReset, a
   return <section className={`filter-panel panel${compact ? " filter-panel-compact" : ""}`} aria-label="Filtros da análise">
     {primary && <section className="analysis-context" aria-label="Contexto da análise">{primary}</section>}
     {(!compact || refinements) && <><div className="filter-summary">
-    {!compact && <p className="filter-description" aria-live="polite">{description}</p>}
+    {(!compact||!expanded&&active) && <p className="filter-description" aria-live="polite">{description}</p>}
     <div className="filter-panel-heading">
       <button className="filter-toggle" type="button" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(!expanded)}>
         <SlidersHorizontal size={17} aria-hidden="true" /><strong>{compact ? 'Mais filtros' : 'Filtros'}</strong>

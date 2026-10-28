@@ -1,5 +1,5 @@
 "use client";
-import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
+import { useDialogLifecycle } from '@/lib/use-dialog-lifecycle';
 import SecondaryInfo from './ui/secondary-info';
 import ShareFlow from './ui/share-flow';
 import dynamic from 'next/dynamic';
@@ -85,6 +85,15 @@ import PortalNavigation, { VIEW_TITLES, type PortalView as View } from './ui/por
 import Kpi from './ui/metric-card';
 import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
+import { listWorkspaceActions, persistWorkspaceAction } from '@/lib/workspace-actions';
+import { sortActionPriority } from '@/lib/action-priority.mjs';
+import { issueCategory, actionableIssueCount, groupIssues } from '@/lib/issue-presentation.mjs';
+import { calendarToday as todayInBrazil } from '@/lib/calendar-clock.mjs';
+import { readNavigation, type NavigationState } from '@/lib/navigation-state.mjs';
+import { useRecorteLocation } from '@/lib/use-recorte-location';
+import CalendarSettings from './calendar-settings';
+import {calendarDescription} from '@/lib/calendar-policy.mjs';
+import WorkspaceVersions from './workspace-versions';
 import { clearLocalAuth } from '@/lib/session-cleanup';
 const ProductionPaste = dynamic(() => import('./production-paste'), { loading: () => <p role="status">Carregando atualização por colagem…</p> });
 const CnvActions = dynamic(() => import('./cnv-actions'), { loading: () => <p role="status">Carregando ações CNV…</p> });
@@ -132,18 +141,26 @@ export default function Dashboard() {
     [coop, setCoop] = useState("all"),
     [pa, setPa] = useState("all"),
     [group, setGroup] = useState("all");
-  const { period, month, setPeriod, setMonth } = usePeriodSelection();
-  const [level, setLevel] = useState("cooperative"),
+  const { period, month, setPeriod, setMonth, followCurrentMonth } = usePeriodSelection();
+  const [level, setLevel] = useState("central"),
     [search, setSearch] = useState("");
   const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
   const [workspaces, setWorkspaces] = useState<{id:string;year:number;revision:number;updatedAt:string}[]>([]);
   const [historical, setHistorical] = useState(false);
   const [registryDirty, setRegistryDirty] = useState(false);
+  const [calendarDirty,setCalendarDirty]=useState(false);
   const [registrySaving, setRegistrySaving] = useState(false);
   const [agendaRequest, setAgendaRequest] = useState<{ owner: string; year: number; entityId: string; date: string; request: number } | null>(null);
   const [importMode, setImportMode] = useState("production");
   const [importMethod, setImportMethod] = useState<"paste" | "file">("paste");
   const [sortBy, setSortBy] = useState("attainment-desc");
+  const [actionOrder,setActionOrder]=useState("priority");
+  const [dirtyActions,setDirtyActions]=useState<Set<string>>(()=>new Set());
+  const actionDirty=dirtyActions.size>0;
+  const setActionDirty=(dirty:boolean)=>setDirtyActions(previous=>dirty&&selected?new Set(previous).add(selected.key):new Set());
+  const [actionRefresh,setActionRefresh]=useState(0);
+  const [actionsLoadedScope,setActionsLoadedScope]=useState('');
+  const [actionLoadFailed,setActionLoadFailed]=useState(false);
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedPaKey, setExpandedPaKey] = useState("");
@@ -203,6 +220,7 @@ export default function Dashboard() {
       cadenceCutoff: "",
     });
   const [communicationInitialKey, setCommunicationInitialKey] = useState("");
+  const actionsUnavailable=!historical&&actionsLoadedScope!==`${user?.id}:${dataset?.year}`;
   const [sharing, setSharing] = useState<{ related?:boolean; kind: "central" | "pa" | "cooperative"; central?: string; coop?: string; metric?: "VN" | "AR"; unitIdsByMetric?: Partial<Record<"VN" | "AR", string[]>>; format?: "email" | "image" | "summary"; showProjection?: boolean } | null>(null);
   const uplift = view === "overview" && analysisTab === "simulation" ? simulationUplift : 0;
   const effectiveSource = view === "cadence" || view === "overview" && analysisTab === "pas" ? "cadence" : view === "overview" && ["overview", "units"].includes(analysisTab) ? "base" : source;
@@ -218,7 +236,7 @@ export default function Dashboard() {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       const nextId = session?.user.id ?? null;
       if (event === "SIGNED_OUT" || (activeOwner.current && activeOwner.current !== nextId)) {
-        setDataset(null); setDatasetId(null); setSelected(null); setActions({});
+        setDataset(null); setDatasetId(null); setSelected(null); setActions({}); setActionDirty(false); setCalendarDirty(false);
         setFiles({base:null,cadence:null}); setWorkspaceRevision(null); setWorkspaces([]);
         setHistorical(false); sessionYears.current.clear(); setExpandedPaKey("");
         setSharing(null);
@@ -275,7 +293,8 @@ export default function Dashboard() {
       if (cancelled) return;
       setWorkspaces(items);
       if (!items.length || dataset) return;
-      const saved = await loadWorkspace(user.id, items[0].year);
+      const preferred=readNavigation(window.location.search).year;
+      const saved = await loadWorkspace(user.id, items.some(item=>item.year===preferred)?preferred!:items[0].year);
       if (saved && !cancelled) {
         setDataset(initializeRegistry(saved.dataset));
         setWorkspaceRevision(saved.revision);
@@ -287,6 +306,33 @@ export default function Dashboard() {
       .finally(() => { if (!cancelled) setBusy(""); });
     return () => { cancelled = true; };
   }, [user?.id]);
+  useEffect(() => {
+    if(!user || !dataset || historical) return;
+    let active=true;const scopeOwner=user.id,scope=`${scopeOwner}:${dataset.year}`;
+    setActionsLoadedScope('');setActionLoadFailed(false);
+    listWorkspaceActions(scopeOwner,dataset.year).then(rows=>{if(active&&activeOwner.current===scopeOwner){setActions(rows);setActionDirty(false);setActionsLoadedScope(scope);}}).catch(reason=>{if(active){setActionLoadFailed(true);setError(`Não foi possível carregar o plano: ${reason.message}`);}});
+    return()=>{active=false;};
+  },[user?.id,dataset?.year,historical,actionRefresh]);
+  useEffect(()=>{
+    if(!actionDirty)return;
+    const prevent=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};
+    window.addEventListener('beforeunload',prevent);return()=>window.removeEventListener('beforeunload',prevent);
+  },[actionDirty]);
+  function restoreNavigation(next:NavigationState){
+    if(!dataset||!canLeaveRegistry())return false;
+    const entities=dataset.registry?.entities||[];
+    const c=entities.some(e=>e.kind==='central'&&e.central===next.central)?next.central!:'all';
+    const co=entities.some(e=>e.kind==='cooperative'&&`${e.central}:${e.cooperative}`===next.coop&&e.central===c)?next.coop!:'all';
+    const point=entities.some(e=>e.kind==='pa'&&`${e.central}:${e.cooperative}:${e.pa}`===next.pa&&`${e.central}:${e.cooperative}`===co)?next.pa!:'all';
+    const tab=(next.tab||'overview') as AnalysisTab;
+    setView((next.area||'overview') as View);setAnalysisTab(tab);setVisitedTabs(items=>[...new Set([...items,tab])]);
+    setCentral(c);setCoop(co);setPa(point);setGroup(tab==='pas'||next.source==='cadence'?next.group||'all':'all');
+    setSource(tab==='pas'?'cadence':tab==='overview'||tab==='units'?'base':next.source==='cadence'?'cadence':'base');
+    setMetric(next.metric||'VN');setLevel(tab==='overview'?'central':tab==='units'?'cooperative':next.level||'cooperative');
+    if(next.period)setPeriod(next.period);if(next.month!=null)setMonth(next.month);setSearch('');setStatusFilter('all');
+    return true;
+  }
+  useRecorteLocation({owner:user?.id||null,ready:!!dataset&&!busy&&!historical,state:{area:view==='cadence'?'overview':view,tab:analysisTab,source,metric,year:dataset?.year,month:period==='ytd'&&followCurrentMonth?undefined:month,period,level,central,coop,pa,group},restore:restoreNavigation,openYear:openWorkspace,years:workspaces.map(item=>item.year)});
   const centralOptions = useMemo(() => {
     const names = new Map<string,string>();
     dataset?.registry?.entities.filter((e) => e.kind === "central").forEach((e) => names.set(e.central,e.name));
@@ -334,7 +380,7 @@ export default function Dashboard() {
       ? "pa"
       : view === "actions"
         ? "cooperative"
-        : view === "overview" && analysisTab === "units" ? "cooperative" : level === "pa" ? "cooperative" : level;
+        : level === "pa" ? "cooperative" : level;
   const analyses = useMemo(
     () =>
       aggregate(filtered, actualLevel)
@@ -363,7 +409,7 @@ export default function Dashboard() {
   const paPageContext = `${filterContext}:${sortBy}`;
   const paPageCount = Math.max(1,Math.ceil(displayed.length/50));
   const paPage = paPagination.context===paPageContext ? Math.min(paPagination.page,paPageCount-1) : 0;
-  const tableRows = analysisTab==='pas' ? displayed.slice(paPage*50,(paPage+1)*50) : displayed;
+  const tableRows = actualLevel==='pa' ? displayed.slice(paPage*50,(paPage+1)*50) : displayed;
 
   useEffect(()=>{
     if(selectionCarry.current===null)return;
@@ -406,13 +452,13 @@ export default function Dashboard() {
     if (view !== "audit" && pa !== "all") labels.push(paOptions.find(([key]) => key === pa)?.[1] ?? `PA ${pa.split(':').at(-1)}`);
     return labels.length ? labels.join(" · ") : "Todas as centrais da seleção";
   }, [central, coop, group, pa, paOptions, cooperatives, centralOptions, view]);
-  const [auditKind, setAuditKind] = useState("data");
+  const [auditKind, setAuditKind] = useState("attention");
   const audits = (dataset?.issues ?? []).filter(
     (i) =>
       (central === "all" || !i.central || i.central === central) &&
       (coop === "all" || !i.cooperative || `${i.central}:${i.cooperative}` === coop),
   );
-  const visibleAudits = audits.filter(i => auditKind === "all" || (auditKind === "method" ? i.kind === "method" : i.kind !== "method"));
+  const visibleAudits = groupIssues(audits.filter(i => auditKind === "all" || issueCategory(i) === auditKind));
   const activeAgendaRequest = agendaRequest && agendaRequest.owner === user?.id && agendaRequest?.year === dataset?.year ? agendaRequest : undefined;
   useEffect(() => {
     if (view === "registry" && activeAgendaRequest) return;
@@ -421,8 +467,9 @@ export default function Dashboard() {
   }, [view, activeAgendaRequest]);
   function canLeaveRegistry() {
     if (registrySaving) return false;
-    if (registryDirty && !window.confirm(view === "cnv" ? "Há uma ação não salva. Deseja sair sem salvar?" : view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
-    setRegistryDirty(false); return true;
+    if(actionDirty && !window.confirm("Há uma ação com alterações não salvas. Deseja sair sem salvar?"))return false;
+    if ((registryDirty||calendarDirty) && !window.confirm(view === "cnv" ? "Há uma ação não salva. Deseja sair sem salvar?" : view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
+    setRegistryDirty(false); setCalendarDirty(false); setActionDirty(false); return true;
   }
   function navigate(next: View) {
     if (next !== view && !canLeaveRegistry()) return false;
@@ -430,17 +477,19 @@ export default function Dashboard() {
     setSharing(null);
     if(next!=='overview'&&next!=='cadence'&&next!=='actions'){setDrillHistory([]);setPriorityFocus(null);setExpandedCoops([]);}
     setAgendaRequest(null);
-    if (next === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
+    if ((next==='cadence'?'overview':next) === view) { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     if ((next === "registry" || next === "agenda") && !dataset) setDataset(createEmptyDataset(config.year));
-    setView(next);
+    setView(next==='cadence'?'overview':next);
+    if(next==='cadence'){setAnalysisTab('pas');setVisitedTabs(items=>[...new Set([...items,'pas' as AnalysisTab])]);}
+    if(next==='overview'&&analysisTab==='pas'){setAnalysisTab('overview');setSource('base');setLevel('central');setGroup('all');setPa('all');setSearch('');setStatusFilter('all');}
     setExpandedPaKey("");
     if (next === "cadence") {
       setSource("cadence");
       setMetric("VN");
-      setGroup("all");
+      setGroup("all"); setSearch(""); setStatusFilter("all"); setPa("all");
     }
     if (next === "overview") {
-      if(view === "cadence"){setSource("base");setPa("all");setLevel('cooperative');}
+      if(view === "cadence"){setSource("base");setPa("all");setGroup("all");setSearch("");setStatusFilter("all");setLevel(analysisTab==='overview'?'central':'cooperative');}
     }
     return true;
   }
@@ -465,10 +514,10 @@ export default function Dashboard() {
     rememberFilters();setMetric(row.metric); changeAnalysisTab('units',false); setCentral(row.central); setCoop('all'); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setLevel('cooperative'); setPriorityFocus(null);
   }
   function openCooperative(row: Analysis, cadence = false) {
-    rememberFilters(); changeAnalysisTab('units',false);
+    rememberFilters(); changeAnalysisTab(cadence?'pas':'units',false);
     setUnitsExpanded(true);
     setCentral(row.central); setCoop(`${row.central}:${row.cooperative}`); setPa('all'); setGroup('all'); setSearch(''); setStatusFilter('all'); setPriorityFocus(null);
-    if (cadence) { setView('cadence'); setSource('cadence'); setMetric('VN'); }
+    if (cadence) { setView('overview'); setSource('cadence'); setMetric('VN'); }
     else { setLevel('cooperative'); setExpandedCoops([row.key]); setExpandedPaKey(`${dataset?.year}:${row.central}:${row.cooperative}`); }
   }
   function goBack() {
@@ -479,13 +528,15 @@ export default function Dashboard() {
   }
   function changeAnalysisTab(next:AnalysisTab,restore=true) {
     document.querySelectorAll<HTMLDetailsElement>('.year-management[open]').forEach(element=>{element.open=false;});
+    if(next==='overview'&&analysisTab!=='overview'){setSearch('');setStatusFilter('all');}
     if(next==='pas')setSource('cadence');
-    if(next==='overview'||next==='units')setSource('base');
+    if(next==='overview'||next==='units'){setSource('base');setLevel(next==='overview'?'central':'cooperative');setGroup('all');}
     if(next==='pas'||analysisTab==='pas'){setPa('all');setGroup('all');setSearch('');setStatusFilter('all');setPriorityFocus(null);}
     tabPositions.current[analysisTab]=window.scrollY;
     setAnalysisTab(next);setVisitedTabs(items=>items.includes(next)?items:[...items,next]);
     if(restore)requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:tabPositions.current[next]??0,behavior:'instant'})));
   }
+  function openUnitCommunication(row:Analysis){communicationFromStart.current=false;setCommunicationFormat('email');setCommunicationProjection(false);setCommunicationInitialKey(entityFromAnalysis(row).id);setShowCommunication(true);}
   function openUnitAnalysis(row:Analysis) {
     if(row.source==='cadence'){openUnitHistory(row);return;}
     if(!row.cooperative){openCentral(row);return;}
@@ -534,7 +585,7 @@ export default function Dashboard() {
       rows.push(...[['Meta',money(base.target),periodDescription],['Realizado',money(base.actual),'Registrado até o corte'],['Projeção atual',money(base.projected),'Estimativa sem aumento'],['Cenário simulado',money(simulation.projected),`+${simulationUplift}% no ritmo futuro`],['Impacto',money(simulation.projected!=null&&base.projected!=null?simulation.projected-base.projected:null),'Diferença entre projeções'],['GAP projetado',money(gap),'Mesma meta e horizonte'],['Esforço por dia útil',money(temporal.daily),temporal.remainingDays==null?'Cortes ou prazos distintos':`${temporal.remainingDays} dias úteis restantes`]].map(row=>[`${item.label} · ${row[0]}`,row[1],row[2]]));
     }
     setShowCommunicationStart(false);changeAnalysisTab('simulation');
-    setReportShare({title:`Simulação de ritmo +${simulationUplift}%`,context:[scopeLabel,model?.label??metricName(selectedMetric),periodDescription,...simulations.map(item=>`${item.label} · cortes: ${item.cutoffs.map(shortDate).join(' a ')||'Não informado'}`)],columns:['Carteira / indicador','Valor','Referência'],rows,notes:['Simulação: altera somente a produção futura estimada. Metas e realizado permanecem iguais.','Estimativa baseada no ritmo observado e nas metas restantes; não é probabilidade.','Dias úteis: segunda a sexta, sem descontar feriados.',search?`Busca: ${search}`:'',focus?.label??''].filter(Boolean)});
+    setReportShare({title:`Simulação de ritmo +${simulationUplift}%`,context:[scopeLabel,model?.label??metricName(selectedMetric),periodDescription,...simulations.map(item=>`${item.label} · cortes: ${item.cutoffs.map(shortDate).join(' a ')||'Não informado'}`)],columns:['Carteira / indicador','Valor','Referência'],rows,notes:['Simulação: altera somente a produção futura estimada. Metas e realizado permanecem iguais.','Estimativa baseada no ritmo observado e nas metas restantes; não é probabilidade.',calendarDescription(dataset?.config.calendarHolidays),search?`Busca: ${search}`:'',focus?.label??''].filter(Boolean)});
   }
   function startCommunication(choice: CommunicationChoice, fromStart = true, portfolio?: 'VN' | 'AR') {
     setShowCommunicationStart(false); communicationFromStart.current = fromStart;
@@ -555,7 +606,7 @@ export default function Dashboard() {
     void listWorkspaces(owner).then((items) => { if (activeOwner.current === owner) setWorkspaces(items); }).catch(() => {});
   }
   async function openWorkspace(year: number) {
-    if (!canLeaveRegistry()) return;
+    if (!canLeaveRegistry()) return false;
     setAgendaRequest(null);
     if (!Number.isInteger(year) || year < 2020 || year > 2100) { setError("Informe um ano entre 2020 e 2100."); return; }
     setBusy("Abrindo cadastro anual…"); setError("");
@@ -568,17 +619,18 @@ export default function Dashboard() {
       sessionYears.current.set(next.year, next);
       setDataset(next); setWorkspaceRevision(saved?.revision ?? null); setConfig(next.config);
       if (owner) refreshWorkspaces(owner);
-      setHistorical(false); setDatasetId(null); setSelected(null); setActions({}); resetFilters();
+      setHistorical(false); setDatasetId(null); setSelected(null); setActions({}); setActionRefresh(value=>value+1); resetFilters();
       setNotice(saved ? "Cadastro anual recuperado." : "Novo cadastro anual. Inclua as unidades ou importe a base fixa.");
-    } catch(e) { setError(e instanceof Error ? e.message : "Não foi possível abrir o cadastro."); }
+      return true;
+    } catch(e) { setError(e instanceof Error ? e.message : "Não foi possível abrir o cadastro."); return false; }
     finally { setBusy(""); }
   }
-  async function changeRegistry(next: Dataset) {
+  async function changeRegistry(next: Dataset, reason = "Edição do cadastro e metas") {
     if (historical) throw new Error("Retome o cadastro atual antes de editar uma análise histórica.");
     setBusy("Salvando cadastro e recalculando indicadores…"); setError("");
     try {
       if (user) {
-        const saved = await saveWorkspace(user.id, next, workspaceRevision);
+        const saved = await saveWorkspace(user.id, next, workspaceRevision, reason);
         if (activeOwner.current !== user.id) return;
         setWorkspaceRevision(saved.revision);
       }
@@ -640,7 +692,7 @@ export default function Dashboard() {
       if (mode === "fixed") incoming = { ...incoming, rows: incoming.rows.map((r) => ({ ...r, actuals: Array(12).fill(null) })) };
       const data = mergeProduction(current, incoming, { goalsOnly: mode === "fixed" });
       if (user) {
-        const saved = await saveWorkspace(user.id, data, revision);
+        const saved = await saveWorkspace(user.id, data, revision, pasted ? `Produção por colagem · ${pasted.source==='cadence'?'PAs':'Cooperativas'}` : mode==='fixed'?'Importação de unidades e metas':'Produção por arquivo');
         if (activeOwner.current !== user.id) return;
         setWorkspaceRevision(saved.revision);
       } else setWorkspaceRevision(null);
@@ -654,7 +706,7 @@ export default function Dashboard() {
       resetFilters();
       const hasBase = data.rows.some((r) => r.source === "base");
       setSource(hasBase ? "base" : "cadence");
-      setView(hasBase ? "overview" : "cadence");
+      setView("overview");if(!hasBase)changeAnalysisTab('pas',false);
       setMonth(
         Math.max(...data.rows.map((r) => new Date(r.cutoff).getUTCMonth())),
       );
@@ -674,7 +726,9 @@ export default function Dashboard() {
     }
   }
   async function logout() {
+    if(actionDirty&&!window.confirm("Há uma ação não salva. Deseja sair sem salvar?"))return;
     if (view === "agenda" && registryDirty && !window.confirm("Há um compromisso não salvo na agenda. Deseja sair sem salvar?")) return;
+    setActionDirty(false); setCalendarDirty(false);
     setLeaving(true);
     setSharing(null);
     activeOwner.current = null;
@@ -690,6 +744,7 @@ export default function Dashboard() {
     }
   }
   async function saveDataset() {
+    if(actionDirty){setError("Salve as alterações da ação antes de guardar uma análise histórica.");return;}
     if (!dataset || !supabase || !user) {
       window.location.replace("/login");
       return;
@@ -763,8 +818,7 @@ export default function Dashboard() {
         .eq("import_id", savedId);
       if (taskError) throw taskError;
       if (activeOwner.current !== user?.id) return;
-      setActions(
-        Object.fromEntries(
+      setActions(previous=>({ ...previous, ...Object.fromEntries(
           (tasks ?? []).map((t) => [
             t.entity_key,
             {
@@ -772,10 +826,10 @@ export default function Dashboard() {
               due: t.due_date ?? "",
               status: t.status,
               notes: t.notes ?? "",
+              updatedAt:previous[t.entity_key]?.updatedAt,
             },
           ]),
-        ),
-      );
+        )}));
       setDatasetId(savedId);
       setNotice(
         existing
@@ -842,7 +896,19 @@ export default function Dashboard() {
       setBusy("");
     }
   }
-  async function saveAction(row: Analysis) {
+  async function saveAction(row:Analysis) {
+    if(historical){await saveHistoricalAction(row);return;}
+    if(actionsUnavailable)return;
+    if(!user||!dataset){setError('Entre na conta e salve o cadastro anual antes de criar uma ação.');return;}
+    const scopeOwner=user.id;const action=actions[row.key]??EMPTY_ACTION;
+    setBusy('Salvando ação no cadastro anual…');setError('');
+    try{
+      const updatedAt=await persistWorkspaceAction(scopeOwner,dataset.year,row.key,entityFromAnalysis(row).id,action);
+      if(activeOwner.current===scopeOwner){setActions(previous=>({...previous,[row.key]:{...action,updatedAt}}));setDirtyActions(previous=>{const next=new Set(previous);next.delete(row.key);return next;});setNotice('Ação salva no cadastro anual.');}
+    }catch(reason){if(activeOwner.current===scopeOwner)setError(reason instanceof Error?reason.message:'Não foi possível salvar a ação.');}
+    finally{if(activeOwner.current===scopeOwner)setBusy('');}
+  }
+  async function saveHistoricalAction(row: Analysis) {
     if (!supabase || !user || !datasetId) {
       setNotice(
         "As alterações estão nesta sessão. Salve a análise e entre na conta para guardar o plano.",
@@ -868,7 +934,7 @@ export default function Dashboard() {
       );
     setBusy("");
     if (error) setError("Não foi possível salvar a ação.");
-    else setNotice("Ação salva.");
+    else {setDirtyActions(previous=>{const next=new Set(previous);next.delete(row.key);return next;});setNotice("Ação salva.");}
   }
   const analysisRefinements = <>
                             <label className="control-field"><span>Situação</span><select aria-label="Filtrar situação" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -899,8 +965,9 @@ export default function Dashboard() {
                               />
                             </label>
   </>;
+  const actionRows = actionOrder==='priority' ? sortActionPriority(displayed,actions,todayInBrazil()) : sortAnalysis(displayed,actionOrder);
   const listControls = <>
-                            <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={sortBy} onChange={event => setSortBy(event.target.value)}>{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                            <label className="control-field"><span>Ordenar por</span><select aria-label="Ordenar análise" value={view==='actions'?actionOrder:sortBy} onChange={event => view==='actions'?setActionOrder(event.target.value):setSortBy(event.target.value)}>{view==='actions'&&<option value="priority">Prioridade operacional</option>}{Object.entries(SORT_OPTIONS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
   </>;
   const resultContextPanels = <>
     {summary.gap!=null&&leafSummary.individualGap!=null&&leafSummary.individualGap>summary.gap+0.01&&<aside className="gap-reconciliation"><Info size={16}/><span><strong>Déficits das unidades: {money(leafSummary.individualGap)}.</strong> Superações compensam parte desse valor no consolidado.</span><button className="button quiet" onClick={()=>{rememberFilters();setView('actions');}}>Abrir plano de ação</button></aside>}
@@ -908,9 +975,7 @@ export default function Dashboard() {
   const importPanel = (
     <>
       <h2>{importMode === "production" ? "Atualizar produção" : "Importar planilhas"}</h2>
-      <p className="muted">
-        Cole os dados da planilha ou envie um arquivo.
-      </p>
+      <p className="muted">Cole os dados da planilha ou envie um arquivo.</p><p className="import-account">Conta: <strong>{user?.email}</strong> · Cadastro <strong>{dataset?.year ?? config.year}</strong></p>
       <label className="import-mode">Objetivo deste envio
         <select value={importMode} onChange={(e) => { setImportMode(e.target.value); if (e.target.value === "history") { const year = (dataset?.year ?? new Date().getFullYear()) - 1; setConfig({ ...config, year, vnCutoff: `${year}-12-31`, arCutoff: `${year}-12-31`, cadenceCutoff: `${year}-12-31`, paTargetMode: "source" }); } }}>
           <option value="production">Atualizar produção</option>
@@ -921,7 +986,7 @@ export default function Dashboard() {
       {importMode === "production" && <div className="import-methods" role="group" aria-label="Forma de atualização"><button type="button" className={importMethod === "paste" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "paste"} onClick={() => {setImportMethod("paste");setError("");}}>Colar dados</button><button type="button" className={importMethod === "file" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "file"} onClick={() => {setImportMethod("file");setError("");}}>Enviar arquivo</button></div>}
       {importMode === "production" && importMethod === "paste" ? <ProductionPaste config={dataset?.config ?? config} existingRows={dataset?.rows ?? []} allowedCentrals={dataset?.registry?.entities.filter(entity => entity.kind === "central").map(entity => entity.central) ?? []} disabled={!!busy || registrySaving} onApply={async (text, pasteConfig, pasteSource) => {await importFiles({text, config: pasteConfig, source: pasteSource});}} /> : <>
       {importMode === "history" && <p className="helper">As metas, a produção e as unidades serão guardadas somente no ano informado. Confirme os cortes; não use 31/12 se a base ainda for parcial. Novas cooperativas e PAs não serão incluídos retroativamente em outros anos.</p>}
-      <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
+      <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year !== 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha</option><option value="group">Aplicar regra P1–P5 de 2026</option></select></label>
       <div className="source-upload-grid">
         <FileSlot
           id="base-file"
@@ -1029,7 +1094,7 @@ export default function Dashboard() {
           <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
         <button type="button" className="sidebar-toggle" aria-label={menuCollapsed ? "Expandir menu" : "Recolher menu"} aria-expanded={!menuCollapsed} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}</button>
-        <PortalNavigation collapsed={menuCollapsed} view={view} disabled={!!busy || registrySaving} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
+        <PortalNavigation collapsed={menuCollapsed} view={view==='overview'&&analysisTab==='pas'?'cadence':view} disabled={!!busy || registrySaving} issueCount={actionableIssueCount(dataset?.issues ?? [])} onNavigate={navigate} />
         <div className="sidebar-foot">
           <button type="button" className="sidebar-collapse" aria-label={menuCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={17}/> : <><ChevronLeft size={17}/><span>Recolher menu</span></>}</button>
           <div className="session-state">
@@ -1038,7 +1103,7 @@ export default function Dashboard() {
             </span>
             <span>
               Conta conectada
-              <small>Acesso restrito</small>
+              <small>{user?.email ?? "Acesso restrito"}</small>
             </span>
           </div>
         </div>
@@ -1049,7 +1114,7 @@ export default function Dashboard() {
             <img className="mobile-brand" src="/brand/sicoob-logo.svg" alt="Sicoob" width="108" height="25" />
             Gestão comercial
           </div>
-          <div className="top-actions">
+          <div className="top-actions"><details className="account-menu"><summary aria-label="Conta ativa" title={user?.email}>{user?.email?.slice(0,2).toUpperCase()||"Conta"}</summary><div><strong>{user?.email}</strong><span>Cadastro {dataset?.year??config.year}</span><small>As atualizações ficam vinculadas a esta conta.</small></div></details>
             {dataset && view !== "cnv" && (
               <button
                 className="button quiet"
@@ -1155,7 +1220,7 @@ export default function Dashboard() {
           ) : view === "agenda" && dataset && user ? (
             historical ? <section className="panel empty"><p>A agenda pertence ao cadastro atual.</p><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></section> : <ConsolidatedAgenda key={`${user.id}:${dataset.year}`} entities={dataset.registry?.entities ?? []} year={dataset.year} userId={user.id} refreshKey={0} onOpenEntity={openAgendaEntity} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} disabled={!!busy} />
           ) : view === "registry" && dataset ? (
-            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} workspaceRevision={workspaceRevision} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/>
+            historical ? <section className="panel empty"><p>Retome o cadastro atual para incluir, editar ou excluir unidades.</p></section> : <><CalendarSettings key={`calendar:${dataset.year}:${workspaceRevision}`} dataset={dataset} disabled={!!busy||registrySaving} onDirtyChange={setCalendarDirty} onSave={next=>changeRegistry(next,"Calendário de dias úteis")}/><RegistryManager key={`${user?.id ?? 'session'}:${dataset.year}`} userId={user?.id ?? ''} dataset={dataset} workspaceRevision={workspaceRevision} onChange={changeRegistry} busy={!!busy} initialAgenda={activeAgendaRequest} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving}/></>
           ) : !dataset && view !== "imports" ? (
             <div className="welcome-grid">
               <section className="panel import-panel">{importPanel}</section>
@@ -1168,7 +1233,7 @@ export default function Dashboard() {
             </div>
           ) : view === "imports" ? (
             <div className="imports-grid">
-              <section className="panel import-panel">{importPanel}</section>
+              <div><section className="panel import-panel">{importPanel}</section>{dataset&&user&&!historical&&<WorkspaceVersions owner={user.id} dataset={dataset} revision={workspaceRevision} disabled={!!busy||registrySaving} onRestore={changeRegistry}/>}</div>
               <section className="panel">
                 <div className="panel-heading">
                   <h2>Histórico de análises</h2>
@@ -1207,17 +1272,17 @@ export default function Dashboard() {
                 ...(coop!=='all'?[{label:cooperatives.find(([id])=>id===coop)?.[1]??`Cooperativa ${coop.split(':')[1]}`,onClick:()=>returnToAncestor('cooperative')}]:[]),
                 ...(pa!=='all'?[{label:paOptions.find(([id])=>id===pa)?.[1]??`PA ${pa.split(':').at(-1)}`}]:[]),
               ]}/><AnalysisTabs active={analysisTab} onChange={changeAnalysisTab}/></>}
-              <FilterPanel refinements={view==='actions'} compact={view==='actions'||view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
+              <FilterPanel refinements={view!=='audit'} compact={view==='actions'||view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
                 {dataset&&<label>Ano<select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy||registrySaving} onChange={event=>openWorkspace(Number(event.target.value))}>{[...new Set([dataset.year,...workspaces.map(item=>item.year),...sessionYears.current.keys()])].sort((a,b)=>b-a).map(year=><option key={year} value={year}>{year}</option>)}</select></label>}
                 <label>Carteira<select aria-label="Carteira" value={selectedMetric} disabled={effectiveSource==='cadence'} onChange={event=>setMetric(event.target.value)}><option value="VN">Venda Nova</option><option value="AR">Arrecadação</option>{view==='overview'&&<option value="both">Venda Nova + Arrecadação</option>}</select></label>
                 <label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option value={id} key={id}>{id} · {name.replace('Sicoob Central ','')}</option>)}</select></label>
                 {(view==='actions'||view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab))&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
-                <PeriodSelector showCoverage={!(view==='actions'||view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
+                <PeriodSelector followCurrentMonth={followCurrentMonth} showCoverage={!(view==='actions'||view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
               </>:undefined} description={view==='audit'?scopeLabel:[metricName(selectedMetric),scopeLabel,periodDescription,cutoff?`Corte ${shortDate(cutoff)}`:'Sem corte',...new Set(displayed.map(row=>row.phase)),statusFilter!=='all'?({attention:'Precisam de atenção',track:'Em rota / meta atingida',missing:'Dados ou metas pendentes'} as Record<string,string>)[statusFilter]:'',search?`Busca: ${search}`:''].filter(Boolean).join(' · ')} onReset={resetFilters} active={pa!=='all'||central!=='all'||coop!=='all'||group!=='all'||Boolean(search)||statusFilter!=='all'||uplift>0}>
-                {view!=='audit'&&<label>Fonte<select value={effectiveSource} onChange={event=>{setSource(event.target.value as 'base'|'cadence');setPa('all');setGroup('all');if(view==='cadence')setView('overview');}}><option value="base">Cooperativas</option><option value="cadence">Cadência PA</option></select></label>}
+                {(view==='actions'||view==='overview')&&<label>Fonte<select value={effectiveSource} onChange={event=>{setSource(event.target.value as 'base'|'cadence');setPa('all');setGroup('all');setSearch('');setStatusFilter('all');if(view==='overview'&&['overview','units','pas'].includes(analysisTab))changeAnalysisTab(event.target.value==='cadence'?'pas':'units');}}><option value="base">Cooperativas</option><option value="cadence">Cadência PA</option></select></label>}
                 {view==='audit'&&<label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}
-                {view!=='actions'&&<label>Cooperativa<select value={coop} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);if(event.target.value!=='all')setCentral(event.target.value.split(':')[0]);}}><option value="all">Todas as cooperativas</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
-                {view!=='audit'&&effectiveSource==='cadence'&&<><label>Grupo do PA<select value={group} onChange={event=>{setGroup(event.target.value);setPa('all');}}><option value="all">Todos os grupos</option>{groups.map(item=><option key={item} value={item}>{item}</option>)}</select></label><label>PA<select aria-label="PA" value={pa} onChange={event=>{setPa(event.target.value);if(event.target.value!=='all'){const [parentCentral,parentCoop]=event.target.value.split(':');setCentral(parentCentral);setCoop(`${parentCentral}:${parentCoop}`);}}}><option value="all">Todos os PAs</option>{paOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label></>}
+                {view!=='actions'&&view!=='overview'&&<label>Cooperativa<select value={coop} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);if(event.target.value!=='all')setCentral(event.target.value.split(':')[0]);}}><option value="all">Todas as cooperativas</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
+                {view!=='audit'&&effectiveSource==='cadence'&&<><label>Grupo do PA<select aria-label="Grupo do PA" value={group} onChange={event=>{setGroup(event.target.value);setPa('all');}}><option value="all">Todos os grupos</option>{groups.map(item=><option key={item} value={item}>{item}</option>)}</select></label><label>PA<select aria-label="PA" value={pa} onChange={event=>{setPa(event.target.value);if(event.target.value!=='all'){const [parentCentral,parentCoop]=event.target.value.split(':');setCentral(parentCentral);setCoop(`${parentCentral}:${parentCoop}`);}}}><option value="all">Todos os PAs</option>{paOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label></>}
                 {view!=='audit'&&analysisRefinements}
                 {view==='overview'&&dataset&&<details className="year-management"><summary>Gerenciar anos</summary><div><button className="button secondary" disabled={!!busy||registrySaving} onClick={()=>openWorkspace(dataset.year+1)}>Novo ano</button><label>Abrir outro ano<input aria-label="Ano para abrir" type="number" min="2020" max="2100" value={requestedYear} onChange={event=>setRequestedYear(Number(event.target.value))}/></label><button className="button secondary" onClick={()=>openWorkspace(requestedYear)}>Abrir ano</button>{user&&<button className="button secondary" onClick={()=>openWorkspace(dataset.year)}>Recarregar cadastro salvo</button>}</div></details>}
               </FilterPanel>
@@ -1241,12 +1306,12 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="audit-list">
-                      <label className="audit-kind">Tipo de aviso<select value={auditKind} onChange={e => setAuditKind(e.target.value)}><option value="all">Todos os avisos</option><option value="data">Dados e importação</option><option value="method">Critérios de cálculo</option></select></label>
+                      <label className="audit-kind">Tipo de aviso<select value={auditKind} onChange={e => setAuditKind(e.target.value)}><option value="all">Todos os avisos</option><option value="attention">Pendências atuais</option><option value="information">Informações de origem</option><option value="method">Critérios de cálculo</option></select></label>
                       {!visibleAudits.length && <p className="empty">Nenhum aviso nesta seleção.</p>}
                       {visibleAudits.map((i, n) => (
                         <div key={n}>
                           <Info size={18} />
-                          <p>{i.message}</p>
+                          <div><strong>{i.category==='attention'?'Conferir':i.category==='method'?'Critério de cálculo':'Informação de origem'}</strong><p>{i.message}</p>{i.count>1&&<details><summary>{i.count} ocorrências de origem</summary><ul>{i.occurrences.map((issue,index)=><li key={index}>{issue.message}</li>)}</ul></details>}</div>
                         </div>
                       ))}
                     </div>
@@ -1333,11 +1398,11 @@ export default function Dashboard() {
                       sub={summary.target === 0 ? 'Meta zero · sem avaliação percentual' : variance.kind === 'growth' ? (variance.ratio == null ? 'Meta zero · sem base percentual' : `${percent(variance.ratio)} acima da meta`) : variance.kind === 'unknown' ? (hasGoalConflict ? 'Metas divergentes · confira a base' : 'Dados insuficientes para avaliar a meta') : effort.sameDeadline&&effort.remainingDays!=null&&effort.remainingDays>0?`${money(effort.daily)}/dia útil · ${effort.remainingDays} dias restantes`:'GAP do período · esforço por unidade nos detalhes'}
                       icon={variance.kind === 'growth' ? <TrendingUp size={20} /> : <Flag size={20} />} growth={variance.kind === 'growth'} />
                     <Kpi title={`Projeção ${period==='month'?'do mês':period==='annual'?'anual':'do período'}`} value={displayed.length ? money(summary.projected) : '—'}
-                      sub={displayed.length ? `${percent(summary.projectedAttainment)} da mesma meta · GAP projetado ${money(effort.projectedGap)}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
+                      sub={displayed.length && !summary.comparable ? 'Cortes diferentes · consulte as unidades' : displayed.length ? `${percent(summary.projectedAttainment)} da mesma meta · GAP projetado ${money(effort.projectedGap)}` : 'Nenhuma unidade na seleção'} icon={<TrendingUp size={20} />} />
                     </div>
                   </section>
                   {view === 'actions' && resultContextPanels}
-                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview"><OverviewUnits rows={displayed} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')}/></div>}
+                  {view==='overview'&&<div hidden={analysisTab!=='overview'} id="analysis-panel-overview" role="tabpanel" aria-labelledby="analysis-tab-overview"><OverviewUnits rows={displayed} onShare={openUnitCommunication} onAnalyze={openUnitAnalysis} onAll={()=>changeAnalysisTab('units')}/></div>}
                   {view === "actions" ? (
                     <section className="panel action-panel" aria-label="Lista de ações">
                       <div className="panel-heading">
@@ -1354,7 +1419,7 @@ export default function Dashboard() {
                       <div className="table-controls action-controls">{listControls}</div>
                       {!displayed.length && <p className="empty">Nenhuma ação corresponde aos filtros.</p>}
                       <div className="action-list">
-                        {displayed
+                        {actionRows
                           .map((r, i) => {
                             const a = actionFor(r);
                             return (
@@ -1412,7 +1477,6 @@ export default function Dashboard() {
                             {view==='overview'&&analysisTab!=='pas'&&<UnitLayoutSwitch value={unitLayout} onChange={setUnitLayout}/>}
                             <div className="table-controls overview-unit-controls">
                               {listControls}
-                              {analysisTab==='pas'&&<label className="control-field"><span>Grupo do PA</span><select aria-label="Grupo do PA" value={group} onChange={event=>{setGroup(event.target.value);setPa('all');}}><option value="all">Todos os grupos</option>{groups.map(item=><option key={item} value={item}>{item}</option>)}</select></label>}
                               {(unitLayout==='period'||view!=='overview'||analysisTab==='pas')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
                             </div>
 
@@ -1502,7 +1566,7 @@ export default function Dashboard() {
 
                                       </>}
                                       <button type="button" className="icon-button" aria-label={`Compartilhar cenário de ${r.name}`} title="Compartilhar cenário"
-                                        onClick={() => { communicationFromStart.current = false; setCommunicationFormat('email'); setCommunicationProjection(false); setCommunicationInitialKey(entityFromAnalysis(r).id); setShowCommunication(true); }}><Mail size={18} /></button>
+                                        onClick={() => openUnitCommunication(r)}><Mail size={18} /></button>
                                       <button type="button" className="icon-button" aria-label={`Ver histórico de ${r.name}`} title="Ver histórico" onClick={()=>openUnitHistory(r)}><History size={17}/></button>
                                       <button
                                         className="icon-button"
@@ -1531,7 +1595,7 @@ export default function Dashboard() {
                             </tbody>
                           </table>
                         </div>}
-                        {analysisTab==='pas'&&<nav className="selection-toolbar" aria-label="Paginação dos PAs"><span>{displayed.length ? paPage*50+1 : 0} a {Math.min((paPage+1)*50,displayed.length)} de {displayed.length} PAs</span><button type="button" className="button secondary" disabled={paPage===0} onClick={()=>setPaPagination({context:paPageContext,page:paPage-1})}>Anterior</button><span>Página {paPage+1} de {paPageCount}</span><button type="button" className="button secondary" disabled={paPage>=paPageCount-1} onClick={()=>setPaPagination({context:paPageContext,page:paPage+1})}>Próxima</button></nav>}
+                        {actualLevel==='pa'&&<nav className="selection-toolbar" aria-label="Paginação dos PAs"><span>{displayed.length ? paPage*50+1 : 0} a {Math.min((paPage+1)*50,displayed.length)} de {displayed.length} PAs</span><button type="button" className="button secondary" disabled={paPage===0} onClick={()=>setPaPagination({context:paPageContext,page:paPage-1})}>Anterior</button><span>Página {paPage+1} de {paPageCount}</span><button type="button" className="button secondary" disabled={paPage>=paPageCount-1} onClick={()=>setPaPagination({context:paPageContext,page:paPage+1})}>Próxima</button></nav>}
                         <SecondaryInfo title="Faixas de atingimento"><AttainmentLegend /></SecondaryInfo>
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
@@ -1552,7 +1616,7 @@ export default function Dashboard() {
                 <Info size={16} />
                 <span>
                   Projeções estimadas a partir do corte de cada fonte. Dias
-                  úteis: segunda a sexta, sem feriados. Valores faltantes não
+                  úteis conforme o calendário cadastrado. Valores faltantes não
                   são zero.{" "}
                   <button onClick={() => setView("audit")}>
                     Ver critérios e conferência
@@ -1679,14 +1743,16 @@ export default function Dashboard() {
             </div>
             <div className="action-editor">
               <h3>Acompanhar esta ação</h3>
+              {actionsUnavailable&&<p role="status">{actionLoadFailed?'O plano não foi carregado. Tente novamente antes de editar.':'Carregando o plano salvo…'} {actionLoadFailed&&<button className="button secondary" onClick={()=>setActionRefresh(value=>value+1)}>Tentar carregar plano</button>}</p>}
               <div className="form-grid">
                 <label>
                   Responsável
                   <input
                     value={actions[selected.key]?.owner ?? ""}
+                    disabled={actionsUnavailable||!!busy}
                     maxLength={120}
                     placeholder="Nome do responsável"
-                    onChange={(e) =>
+                    onChange={(e) => {setActionDirty(true);
                       setActions({
                         ...actions,
                         [selected.key]: {
@@ -1694,7 +1760,7 @@ export default function Dashboard() {
                           ...actions[selected.key],
                           owner: e.target.value,
                         },
-                      })
+                      });}
                     }
                   />
                 </label>
@@ -1702,8 +1768,9 @@ export default function Dashboard() {
                   Prazo
                   <input
                     type="date"
+                    disabled={actionsUnavailable||!!busy}
                     value={actions[selected.key]?.due ?? ""}
-                    onChange={(e) =>
+                    onChange={(e) => {setActionDirty(true);
                       setActions({
                         ...actions,
                         [selected.key]: {
@@ -1711,15 +1778,16 @@ export default function Dashboard() {
                           ...actions[selected.key],
                           due: e.target.value,
                         },
-                      })
+                      });}
                     }
                   />
                 </label>
                 <label>
                   Situação
                   <select
+                    disabled={actionsUnavailable||!!busy}
                     value={actions[selected.key]?.status ?? "Aberta"}
-                    onChange={(e) =>
+                    onChange={(e) => {setActionDirty(true);
                       setActions({
                         ...actions,
                         [selected.key]: {
@@ -1727,7 +1795,7 @@ export default function Dashboard() {
                           ...actions[selected.key],
                           status: e.target.value as ActionState["status"],
                         },
-                      })
+                      });}
                     }
                   >
                     <option>Aberta</option>
@@ -1740,10 +1808,11 @@ export default function Dashboard() {
                 Observações
                 <textarea
                   rows={3}
+                  disabled={actionsUnavailable||!!busy}
                   maxLength={4000}
                   value={actions[selected.key]?.notes ?? ""}
                   placeholder="Próximo passo e acompanhamento combinado"
-                  onChange={(e) =>
+                  onChange={(e) => {setActionDirty(true);
                     setActions({
                       ...actions,
                       [selected.key]: {
@@ -1751,14 +1820,14 @@ export default function Dashboard() {
                         ...actions[selected.key],
                         notes: e.target.value,
                       },
-                    })
+                    });}
                   }
                 />
               </label>
               <button
                 className="button primary"
                 onClick={() => saveAction(selected)}
-                disabled={!!busy}
+                disabled={!!busy||actionsUnavailable}
               >
                 <Check size={18} />
                 Salvar ação
@@ -1848,17 +1917,8 @@ function Modal({
   wide?: boolean;
   className?: string;
 }) {
-  useEffect(() => {
-    const active = document.activeElement as HTMLElement;
-    const releaseScroll = lockBodyScroll();
-
-    const close = document.querySelector<HTMLElement>(".modal-close");
-    close?.focus();
-    return () => {
-      releaseScroll();
-      active?.focus();
-    };
-  }, []);
+  const closeRef=useRef<HTMLButtonElement>(null);
+  const dialogKeyDown=useDialogLifecycle(onClose,closeRef);
   return (
     <div
       className="modal-backdrop"
@@ -1871,26 +1931,10 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onKeyDown={(e) => {
-          if (e.key !== "Tab") return;
-          const nodes = Array.from(
-            e.currentTarget.querySelectorAll<HTMLElement>(
-              "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]",
-            ),
-          ).filter((n) => n.offsetParent !== null);
-          const first = nodes[0],
-            last = nodes[nodes.length - 1];
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last?.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first?.focus();
-          }
-        }}
+        onKeyDown={dialogKeyDown}
       >
         <button
-          className="modal-close icon-button"
+          ref={closeRef} className="modal-close icon-button"
           aria-label="Fechar"
           onClick={onClose}
         >

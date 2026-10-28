@@ -24,11 +24,11 @@ export function registerPriorityTests({ test, expect, setup }) {
     await page.getByRole('combobox', { name: 'Mês de referência', exact: true }).selectOption('8');
     const list = page.getByRole('region', { name: 'Lista de unidades', exact: true });
     await expect(list.locator('tbody tr')).toHaveCount(3);
-    await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
+    await page.getByRole('tab', { name: 'Central', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Prioridades da carteira', exact: true })).toHaveCount(0);
     await page.getByRole('combobox', { name: 'Cooperativa', exact: true }).selectOption('1002:3017');
     await page.setViewportSize({ width: 320, height: 844 });
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();
     await expect(list.locator('tbody tr')).toHaveCount(1);
     const selected = list.locator('tbody tr').first();
     await expect(selected).toContainText('Cooperativa Alfa');
@@ -55,9 +55,9 @@ export function registerPriorityTests({ test, expect, setup }) {
     await expect(list.locator('tbody tr')).toHaveCount(3);
     await expect(page.getByRole('combobox', { name: 'Central', exact: true })).toHaveValue('1002');
     await expect(page.getByRole('combobox', { name: 'Mês de referência', exact: true })).toHaveValue('8');
-    await page.getByRole('tab', { name: 'Visão geral', exact: true }).click();
+    await page.getByRole('tab', { name: 'Central', exact: true }).click();
     await page.getByRole('combobox', { name: 'Cooperativa', exact: true }).selectOption('1002:4001');
-    await page.getByRole('tab', { name: 'Cooperativas e PAs', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cooperativas', exact: true }).click();
     await expect(list.locator('tbody tr')).toHaveCount(1);
     const missing = list.locator('tbody tr').first();
     await expect(missing).toContainText('Cooperativa Sem realizado');

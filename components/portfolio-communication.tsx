@@ -1,5 +1,5 @@
 "use client";
-import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
+import { useDialogLifecycle } from '@/lib/use-dialog-lifecycle';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Mail, MessageSquareText, Save, Trash2, X } from "lucide-react";
@@ -28,18 +28,12 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
   const entities = useMemo(() => [...new Map(candidates.map((candidate) => [candidate.id, dataset.registry?.entities.find((entry) => entry.id === candidate.id) ?? candidate])).values()], [candidates, dataset.registry]);
   const [entityId, setEntityId] = useState(initialKey || entities[0]?.id || "");
   const [owner, setOwner] = useState<string | null>(null);
-  const { period: selectedPeriod, month: selectedMonth, setPeriod: setSelectedPeriod, setMonth: setSelectedMonth } = usePeriodSelection(period, month);
+  const { period: selectedPeriod, month: selectedMonth, setPeriod: setSelectedPeriod, setMonth: setSelectedMonth, followCurrentMonth } = usePeriodSelection(period, month);
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const selected = entities.find((entry) => entry.id === entityId) ?? entities[0];
   // Capture the opener before descendant passive effects move focus into a step.
-  useLayoutEffect(() => {
-    const releaseScroll = lockBodyScroll();
-    const active = document.activeElement as HTMLElement | null;
-
-    closeButton.current?.focus();
-    return () => { releaseScroll(); if (active?.isConnected) active.focus(); };
-  }, []);
+  const dialogKeyDown = useDialogLifecycle(onClose, closeButton);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -49,17 +43,11 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
     return () => { cancelled = true; data.subscription.unsubscribe(); };
   }, []);
   return <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section ref={dialog} data-share-dialog role="dialog" aria-modal="true" aria-labelledby="portfolio-title" className={styles.dialog} onKeyDown={(event) => {
-      if (event.key === "Escape") { event.stopPropagation(); onClose(); }
-      if (event.key !== "Tab") return;
-      const nodes = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe')].filter((node) => node.offsetParent !== null);
-      if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1)?.focus(); }
-      else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
-    }}>
+    <section ref={dialog} data-share-dialog role="dialog" aria-modal="true" aria-labelledby="portfolio-title" className={styles.dialog} onKeyDown={dialogKeyDown}>
       <div className={styles.heading}><div><h2 id="portfolio-title">Comunicar resultado</h2></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
       <div className={styles.filters}>
         <label>Unidade selecionada<select value={selected?.id ?? ""} onChange={(event) => setEntityId(event.target.value)}>{entities.map((entry) => <option key={entry.id} value={entry.id}>{KIND_LABELS[entry.kind]} {entry.kind === "pa" ? `${entry.cooperative} / ${entry.pa}` : entry.kind === "cooperative" ? entry.cooperative : entry.central} · {entry.name}</option>)}</select></label>
-        <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
+        <PeriodSelector followCurrentMonth={followCurrentMonth} label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
           onPeriodChange={setSelectedPeriod} onMonthChange={setSelectedMonth} />
       </div>
       {selected ? <Composer key={`${owner ?? "session"}:${dataset.year}:${selected.id}`} dataset={dataset} entity={selected} owner={owner} metric={metric} period={selectedPeriod} month={selectedMonth} uplift={uplift} initialFormat={initialFormat} initialShowProjection={initialShowProjection} scopedUnitIds={scopedUnitIds} /> : <p role="alert">Não há unidades neste filtro.</p>}

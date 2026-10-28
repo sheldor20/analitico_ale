@@ -49,7 +49,7 @@ async function chooseCohort(page) {
   await select(page, 'Mês de referência').selectOption('7');
   await page.getByLabel('Buscar cooperativa ou PA').fill('Alfa');
   await select(page, 'Filtrar situação').selectOption('track');
-  await page.getByRole('tab',{name:'Por período',exact:true}).click();
+  await page.getByRole('tab',{name:'Período',exact:true}).click();
   await select(panel(page), 'Ordenar períodos').selectOption('attainment-desc');
 }
 
@@ -131,13 +131,12 @@ export function registerPeriodShareTests({ test, expect, setup }) {
     await projection(dialog).check();
     await expect(dialog.getByRole('button', { name: 'Abrir Outlook e colar painel', exact: true })).toBeDisabled();
     await projection(dialog).uncheck();
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await expect(select(dialog, 'Responsável para o WhatsApp')).toHaveValue('');
     await select(dialog, 'Responsável para o WhatsApp').selectOption({ label: 'Ana Teste · (71) 99999-9999' });
     const wa = new URL(await dialog.getByRole('link', { name: 'Abrir WhatsApp', exact: true }).getAttribute('href'));
     expect(wa.pathname).toBe('/5571999999999');expect(wa.searchParams.get('text')).toContain('19 períodos');
     await select(dialog, 'Texto do WhatsApp').selectOption('report');
-    await dialog.locator('summary').filter({ hasText: 'Ver texto do WhatsApp' }).click();
     await expect(dialog.locator('pre[aria-label="Texto do WhatsApp"]')).toContainText('Ano completo');
     await expect(dialog.locator('pre[aria-label="Texto do WhatsApp"]')).toContainText(money(6090));
     await dialog.getByRole('button', { name: 'Copiar texto do WhatsApp', exact: true }).click();
@@ -216,7 +215,7 @@ export function registerPeriodShareTests({ test, expect, setup }) {
       for (const amount of amounts) { expect(amount.lines).toBe(1);expect(amount.right).toBeLessThanOrEqual(amount.limit + 1); }
     }
     await captureScenarioDocument(page, frame(page), info.outputPath('period-share-quarter-email-320.png'));
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     const image = dialog.getByRole('img', { name: 'Cenário por período — parte 1 de 1', exact: true });
     await expect.poll(() => image.evaluate(node => node.naturalWidth)).toBe(1440);
     const pngDownload = page.waitForEvent('download');

@@ -1,5 +1,6 @@
 export type Metric = "VN" | "AR";
 export type DataRow = {
+  calendarHolidays?: string[];
   key: string;
   source: "base" | "cadence";
   central: string;
@@ -29,6 +30,7 @@ export type ImportConfig = {
   arCutoff: string;
   cadenceCutoff: string;
   allowedCentrals?: string[];
+  calendarHolidays?: string[];
   paTargetMode?: "source" | "group";
 };
 export type RegistryEntity = {
@@ -71,6 +73,7 @@ export type Dataset = {
   sources: { filename: string; type: string; rows: number; skipped: number }[];
 };
 export type ActionState = {
+  updatedAt?: string;
   owner: string;
   due: string;
   status: "Aberta" | "Em andamento" | "Concluída";

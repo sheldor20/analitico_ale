@@ -66,7 +66,13 @@ const shared = page => page.getByRole('dialog', { name: 'Compartilhar cenário d
 const emailFrame = page => page.frameLocator('iframe[title="Painel do e-mail da carteira"]');
 const reportRows = page => emailFrame(page).locator('table[data-pa-scenario] tr[data-pa-id]');
 const reportRow = (page, id) => emailFrame(page).locator(`tr[data-pa-id="${id}"]`);
-const openShare = page => page.getByRole('region', { name: 'Lista de unidades', exact: true }).getByRole('button', { name: 'Compartilhar PAs', exact: true }).click();
+async function openShare(page){
+ await page.locator('.page-heading-actions').getByRole('button',{name:'Compartilhar cenário',exact:true}).click();
+ const chooser=page.getByRole('dialog',{name:'Compartilhar cenário',exact:true});
+ await chooser.getByRole('combobox',{name:'Cenário do compartilhamento',exact:true}).selectOption('pa');
+ await chooser.getByRole('radio',{name:'WhatsApp',exact:true}).check();
+ await chooser.getByRole('button',{name:'Ver prévia',exact:true}).click();
+}
 async function selectScope(page, cooperative = 'all') {
   await page.getByRole('navigation', { name: 'Navegação principal', exact: true }).getByRole('button', { name: 'Cadência dos PAs', exact: true }).click();
   await page.getByRole('combobox', { name: 'Período', exact: true }).selectOption('month');
@@ -119,7 +125,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     expect(await reportRows(page).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-pa-id')))).toEqual(expectedIds);
     expect(grouped.split('Cooperativa 3017')).toHaveLength(3);
     await expect(reportRow(page, 'pa:1002:3017:0')).not.toContainText('Central 1002');
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await expect(dialog.getByRole('img', { name: 'Cenário dos PAs — parte 1 de 1', exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(1);
@@ -152,13 +158,8 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     await page.getByRole('combobox', { name: 'Cooperativa', exact: true }).selectOption('1002:3025');
     await page.getByLabel('Grupo do PA').selectOption('P2');
     await expect(page.getByRole('region', { name: 'Lista de unidades', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Compartilhar PAs', exact: true }).click();
-    await expect(dialog).toContainText('Nenhum PA neste recorte. Ajuste os filtros na Visão geral.');
-    await expect(dialog.getByRole('radio', { name: 'E-mail', exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('radio', { name: 'Todos os PAs da seleção', exact: true })).toHaveCount(0);
-    await dialog.getByRole('button', { name: 'Fechar compartilhamento', exact: true }).click();
+    await expect(page.locator('.page-heading-actions').getByRole('button',{name:'Compartilhar cenário',exact:true})).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
     await expect(page.getByLabel('Grupo do PA')).toHaveValue('P2');
     await page.getByLabel('Grupo do PA').selectOption('all');
     await openShare(page);
@@ -243,7 +244,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     const outlook = new URL(await ready.getAttribute('href'));
     expect(outlook.hostname).toBe('outlook.live.com'); expect(outlook.searchParams.get('body') || '').toBe('');
     expect(outlook.searchParams.get('to').split(';').sort()).toEqual(['apoio@example.com', 'gestor@example.com']);
-    await dialog.getByRole('radio', { name: 'WhatsApp e imagem', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'WhatsApp', exact: true }).check();
     await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(2);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
@@ -254,11 +255,11 @@ export function registerPaScenarioTests({ test, expect, setup }) {
 
   test('PA sharing: dozens of units remain complete in email, WhatsApp and every numbered PNG part', async ({ page }, info) => {
     await recordExports(page);
-    const { errors } = await setup(page, dataset => scenarioFixture(dataset, 40));
+    const { errors } = await setup(page, dataset => scenarioFixture(dataset, 50));
     await selectScope(page);
     await openShare(page);
     const dialog = shared(page);
-    const names = ['PA Alfa zero', 'PA Beta zero', 'PA Crescimento exato', 'PA Ajuste negativo', 'PA Produção zero', 'PA Sem realizado', 'PA Sem meta', ...Array.from({ length: 40 }, (_, index) => `PA Completo ${String(index + 1).padStart(2, '0')}`)];
+    const names = ['PA Alfa zero', 'PA Beta zero', 'PA Crescimento exato', 'PA Ajuste negativo', 'PA Produção zero', 'PA Sem realizado', 'PA Sem meta', ...Array.from({ length: 50 }, (_, index) => `PA Completo ${String(index + 1).padStart(2, '0')}`)];
     await dialog.getByRole('combobox', { name: 'Texto do WhatsApp', exact: true }).selectOption({ label: 'Relatório completo' });
     await expect(dialog.getByText('Mensagem longa: copie o texto, abra a conversa e cole.', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Abrir WhatsApp e colar texto', exact: true })).toBeDisabled();
@@ -273,7 +274,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     expect(text).not.toContain('PA Nordeste zero');
     for (let part = 1; part <= 2; part++) {
       await expect(dialog.getByRole('img', { name: `Cenário dos PAs — parte ${part} de 2`, exact: true })).toBeVisible();
-      await expect(dialog.getByText(`Parte ${part} de 2 · PAs ${(part - 1) * 24 + 1} a ${Math.min(part * 24, 47)}`, { exact: true })).toBeVisible();
+      await expect(dialog.getByText(`Parte ${part} de 2 · PAs ${(part - 1) * 50 + 1} a ${Math.min(part * 50, 57)}`, { exact: true })).toBeVisible();
       await dialog.getByRole('button', { name: 'Copiar imagem desta parte', exact: true }).click();
       await expect.poll(() => page.evaluate(() => window.__paExports.png.length)).toBe(part);
       await expect(whatsappReady).toHaveCount(0);
@@ -281,7 +282,7 @@ export function registerPaScenarioTests({ test, expect, setup }) {
       if (part < 2) await dialog.getByRole('button', { name: 'Próxima parte', exact: true }).click();
     }
     const exported = await page.evaluate(() => window.__paExports);
-    for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(3000); expect(png.size).toBeGreaterThan(1000); }
+    for (const png of exported.png) { expect(png.bytes).toEqual(pngMagic); expect(png.width).toBe(1200); expect(png.height).toBeLessThan(6000); expect(png.size).toBeGreaterThan(1000); }
     const drawn = exported.texts.join(' ');
     for (const name of names) expect(drawn).toContain(name);
     expect(drawn).not.toContain('PA Nordeste zero');
@@ -296,14 +297,14 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     expect(new URL(await manualWhatsapp.getAttribute('href')).searchParams.get('text') || '').toBe('');
     expect(page.context().pages()).toHaveLength(1);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
-    await expect(reportRows(page)).toHaveCount(47);
-    await expect(reportRow(page, 'pa:1002:3017:140')).toContainText('PA Completo 40');
+    await expect(reportRows(page)).toHaveCount(57);
+    await expect(reportRow(page, 'pa:1002:3017:150')).toContainText('PA Completo 50');
     await dialog.getByRole('textbox', { name: 'Destinatários do e-mail', exact: true }).fill('gestor@example.com');
     const emlEvent = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Baixar e-mail (.eml)', exact: true }).click();
     const eml = await readFile(await (await emlEvent).path(), 'utf8');
     const html = htmlFromEml(eml);
-    expect((html.match(/data-pa-id=/g) || [])).toHaveLength(47);
+    expect((html.match(/data-pa-id=/g) || [])).toHaveLength(57);
     for (const name of names) expect(html).toContain(name);
     expect(html).not.toContain('PA Nordeste zero');
     expect(errors).toEqual([]);
@@ -331,7 +332,6 @@ export function registerPaScenarioTests({ test, expect, setup }) {
     const whatsapp = new URL(await dialog.getByRole('link', { name: 'Abrir WhatsApp', exact: true }).getAttribute('href'));
     expect(whatsapp.hostname).toBe('wa.me'); expect(whatsapp.pathname).toBe('/5571999999999');
     expect(whatsapp.searchParams.get('text')).toContain('186.000.000,00');
-    await dialog.locator('summary').filter({ hasText: 'Ver texto do WhatsApp' }).click();
     await expect(dialog.locator('pre[aria-label="Texto do WhatsApp"]')).toContainText('186.000.000,00');
     expect(context.pages()).toHaveLength(1);
     await dialog.getByRole('radio', { name: 'E-mail', exact: true }).check();
