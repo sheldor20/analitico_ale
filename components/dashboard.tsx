@@ -1,4 +1,5 @@
 "use client";
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 import SecondaryInfo from './ui/secondary-info';
 import ShareFlow from './ui/share-flow';
 import dynamic from 'next/dynamic';
@@ -1837,12 +1838,12 @@ function Modal({
 }) {
   useEffect(() => {
     const active = document.activeElement as HTMLElement;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScroll = lockBodyScroll();
+
     const close = document.querySelector<HTMLElement>(".modal-close");
     close?.focus();
     return () => {
-      document.body.style.overflow = previous;
+      releaseScroll();
       active?.focus();
     };
   }, []);

@@ -1,4 +1,5 @@
 "use client";
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Mail, MessageSquareText, Save, Trash2, X } from "lucide-react";
@@ -33,11 +34,11 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
   const selected = entities.find((entry) => entry.id === entityId) ?? entities[0];
   // Capture the opener before descendant passive effects move focus into a step.
   useLayoutEffect(() => {
-    const previous = document.body.style.overflow;
+    const releaseScroll = lockBodyScroll();
     const active = document.activeElement as HTMLElement | null;
-    document.body.style.overflow = "hidden";
+
     closeButton.current?.focus();
-    return () => { document.body.style.overflow = previous; if (active?.isConnected) active.focus(); };
+    return () => { releaseScroll(); if (active?.isConnected) active.focus(); };
   }, []);
   useEffect(() => {
     if (!supabase) return;

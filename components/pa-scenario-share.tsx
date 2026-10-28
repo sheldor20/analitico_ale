@@ -1,4 +1,5 @@
 'use client';
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, ImageIcon, LayoutDashboard, Mail, X } from 'lucide-react';
@@ -52,11 +53,11 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
   const contextKey = JSON.stringify([userId, dataset.year, filters, unitKind, initialFormat, initialMode, initialSelectedIds, initialShowProjection, unitIdsByMetric]);
 
   useLayoutEffect(() => {
-    const previousOverflow = document.body.style.overflow;
+    const releaseScroll = lockBodyScroll();
     const opener = document.activeElement as HTMLElement | null;
-    document.body.style.overflow = 'hidden';
+
     closeButton.current?.focus();
-    return () => { document.body.style.overflow = previousOverflow; if (opener?.isConnected) opener.focus(); };
+    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
   }, []);
 
   return <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>

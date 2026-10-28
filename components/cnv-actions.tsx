@@ -1,4 +1,5 @@
 'use client';
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownToLine, ArrowRight, CalendarDays, Check, CheckCircle2, ClipboardList, Copy, FileText, LoaderCircle, Mail, MessageSquareText, Pencil, Search, Share2, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
@@ -240,8 +241,8 @@ function SourcePages({ draft }: { draft: CnvDraft }) {
 function Modal({ children, title, onClose, wide = false }: { children: ReactNode; title: string; onClose: () => void; wide?: boolean }) {
   const titleId = useId(), element = useRef<HTMLDivElement>(null), close = useRef(onClose); close.current = onClose;
   useEffect(() => {
-    const active = document.activeElement as HTMLElement | null, overflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; element.current?.focus();
-    return () => { document.body.style.overflow = overflow; active?.focus(); };
+    const active = document.activeElement as HTMLElement | null, releaseScroll = lockBodyScroll(); element.current?.focus();
+    return () => { releaseScroll(); active?.focus(); };
   }, []);
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) close.current(); }}><div ref={element} tabIndex={-1} className={`${styles.modal} ${wide ? styles.wideModal : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={event => {
     if (event.key === 'Escape') { event.stopPropagation(); close.current(); }

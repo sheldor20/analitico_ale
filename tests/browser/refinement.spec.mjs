@@ -270,7 +270,27 @@ for(const width of [1440,390]) test(`global sharing entry ${width}`,async({page}
  await expect(preview.getByRole('heading',{name:'Mensagem e envio',exact:true})).toBeVisible();
  await expect(preview.getByLabel('Incluir projeção de produção',{exact:true})).toBeChecked();
  await preview.getByRole('button',{name:'Fechar',exact:true}).click();
+ await expect(page.locator('body')).not.toHaveCSS('overflow','hidden');
+ await page.evaluate(()=>window.scrollTo(0,0));
+ await page.setViewportSize({width,height:650});
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-window.innerHeight)).toBeGreaterThan(0);
+ await page.mouse.move(width-25,500);
+ await page.mouse.wheel(0,500);
+ await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(0);
+ await page.setViewportSize({width,height:1000});
+ await page.evaluate(()=>window.scrollTo(0,0));
  await page.getByRole('button',{name:'Compartilhar cenário',exact:true}).first().click();
  await start.getByRole('button',{name:'Cancelar',exact:true}).click();
  await expect(start).toBeHidden();
+ await expect(page.locator('body')).not.toHaveCSS('overflow','hidden');
+ for(const channel of ['E-mail','Painel resumido','WhatsApp']){
+  await page.getByRole('button',{name:'Compartilhar cenário',exact:true}).first().click();
+  await start.getByRole('radio',{name:channel,exact:true}).check();
+  await start.getByRole('button',{name:'Ver prévia',exact:true}).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('overflow','hidden');
+  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('body')).not.toHaveCSS('overflow','hidden');
+ }
 });

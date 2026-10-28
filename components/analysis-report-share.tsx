@@ -1,4 +1,5 @@
 'use client';
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 import ShareFlow from './ui/share-flow';
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -123,9 +124,9 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
   const text = useMemo(() => reportText(report), [report]), html = useMemo(() => reportHtml(report), [report]);
   const filename = `${title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90) || 'cenario'}`;
   useLayoutEffect(() => {
-    const opener = document.activeElement as HTMLElement | null, overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden'; closeButton.current?.focus();
-    return () => { document.body.style.overflow = overflow; if (opener?.isConnected) opener.focus(); };
+    const opener = document.activeElement as HTMLElement | null, releaseScroll = lockBodyScroll();
+     closeButton.current?.focus();
+    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
   }, []);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {

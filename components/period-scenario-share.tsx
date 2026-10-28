@@ -1,4 +1,5 @@
 'use client';
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 import ShareFlow from './ui/share-flow';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -63,9 +64,9 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
   }, [ownerId, model.year, unitId]);
 
   useLayoutEffect(() => {
-    const overflow = document.body.style.overflow, opener = document.activeElement as HTMLElement | null;
-    document.body.style.overflow = 'hidden'; close.current?.focus();
-    return () => { document.body.style.overflow = overflow; if (opener?.isConnected) opener.focus(); };
+    const releaseScroll = lockBodyScroll(), opener = document.activeElement as HTMLElement | null;
+     close.current?.focus();
+    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
   }, []);
   useEffect(() => {
     alive.current = true;

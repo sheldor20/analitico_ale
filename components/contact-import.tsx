@@ -1,4 +1,5 @@
 'use client';
+import { lockBodyScroll } from '@/lib/body-scroll-lock.mjs';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle, Upload, X } from 'lucide-react';
@@ -44,9 +45,9 @@ export default function ContactImport({ entities, year, userId, workspaceRevisio
   const valid = (snapshot: string, task: number) => alive.current && currentContext.current === snapshot && generation.current === task;
 
   useLayoutEffect(() => {
-    const opener = document.activeElement as HTMLElement | null, previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden'; closeButton.current?.focus();
-    return () => { document.body.style.overflow = previous; if (opener?.isConnected) opener.focus(); };
+    const opener = document.activeElement as HTMLElement | null, releaseScroll = lockBodyScroll();
+     closeButton.current?.focus();
+    return () => { releaseScroll(); if (opener?.isConnected) opener.focus(); };
   }, []);
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current++; }; }, []);
   useEffect(() => {
