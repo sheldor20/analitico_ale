@@ -224,3 +224,33 @@ for (const width of [1440,390]) {
   expect(errors).toEqual([]);
  });
 }
+
+test('sidebar search, collapsed navigation and mobile fallback',async({page},info)=>{
+ await page.setViewportSize({width:1440,height:1000});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await setup(page,v=>v,{compactPortal:true});
+ const nav=page.getByRole('navigation',{name:'Navegação principal',exact:true});
+ const search=nav.getByRole('searchbox',{name:'Buscar no menu',exact:true});
+ await search.fill('conferencia');
+ await expect(nav.getByRole('button',{name:'Conferência da base',exact:true})).toBeVisible();
+ await expect(nav.getByRole('button')).toHaveCount(2);
+ await search.fill('nenhum-destino');
+ await expect(nav.getByRole('status')).toHaveText('Nenhum item encontrado.');
+ await search.press('Escape');
+ await expect(nav.locator('.nav-item')).toHaveCount(9);
+ const expandedLeft=await page.locator('.main-shell').evaluate(el=>el.getBoundingClientRect().left);
+ await page.getByRole('button',{name:'Recolher menu',exact:true}).click();
+ await expect(page.locator('.portal')).toHaveClass(/menu-collapsed/);
+ await expect(nav.getByRole('button',{name:'Cadastro e metas',exact:true})).toBeVisible();
+ expect(await page.locator('.main-shell').evaluate(el=>el.getBoundingClientRect().left)).toBeLessThan(expandedLeft);
+ await nav.getByRole('button',{name:'Agenda',exact:true}).click();
+ await expect(page.getByRole('heading',{level:1,name:'Agenda',exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath('menu-collapsed.png'),fullPage:true});
+ await page.getByRole('button',{name:'Expandir menu',exact:true}).click();
+ await search.fill('metas');
+ await page.setViewportSize({width:390,height:844});
+ await expect(nav.locator('.nav-item')).toHaveCount(9);
+ await expect(page.getByRole('button',{name:'Recolher menu',exact:true})).toBeHidden();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
+ expect(errors).toEqual([]);
+});

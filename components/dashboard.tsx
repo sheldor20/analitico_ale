@@ -114,6 +114,7 @@ function Pill({ children }: { children: string }) {
 export default function Dashboard() {
   const [dataset, setDataset] = useState<Dataset | null>(null),
     [datasetId, setDatasetId] = useState<string | null>(null);
+  const [menuCollapsed,setMenuCollapsed] = useState(false);
   const [view, setView] = useState<View>("overview"),
     [source, setSource] = useState<"base" | "cadence">("base");
   const [analysisTab,setAnalysisTab] = useState<AnalysisTab>('overview');
@@ -1006,15 +1007,17 @@ export default function Dashboard() {
   );
   if (leaving) return <main className="auth-check" role="status">Encerrando sessão…</main>;
   return (
-    <div className="app-shell portal">
+    <div className={`app-shell portal${menuCollapsed ? ' menu-collapsed' : ''}`}>
       <a className="skip-link" href="#conteudo">Ir para o conteúdo</a>
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="Sicoob Gestão Comercial — início">
           <img className="brand-logo" src="/brand/sicoob-logo-light.svg" alt="Sicoob" width="152" height="36" />
           <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
-        <PortalNavigation view={view} disabled={!!busy || registrySaving} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
+        <button type="button" className="sidebar-toggle" aria-label={menuCollapsed ? "Expandir menu" : "Recolher menu"} aria-expanded={!menuCollapsed} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}</button>
+        <PortalNavigation collapsed={menuCollapsed} view={view} disabled={!!busy || registrySaving} issueCount={dataset?.issues.filter(i => i.kind !== 'method').length ?? 0} onNavigate={navigate} />
         <div className="sidebar-foot">
+          <button type="button" className="sidebar-collapse" aria-label={menuCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={17}/> : <><ChevronLeft size={17}/><span>Recolher menu</span></>}</button>
           <div className="session-state">
             <span className="avatar">
               {user?.email?.slice(0, 2).toUpperCase() ?? "AC"}

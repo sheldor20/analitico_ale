@@ -3220,3 +3220,42 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 [data-share-dialog] .button{min-height:36px;padding:7px 12px;font-size:13px;border-radius:7px}
 .share-close-footer{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px}
 @media(max-width:720px){.share-flow{justify-content:flex-start;gap:10px;font-size:11px;flex-wrap:wrap}.share-flow li+li:before{display:none}.share-flow li>span{width:22px;height:22px}[data-share-dialog] .button{min-height:40px}}
+
+/* Compact sidebar with searchable navigation and an optional icon rail. */
+@media(min-width:721px){
+ .portal .sidebar{width:260px;padding:22px 12px 14px;background:#003641}
+ .portal .main-shell{margin-left:260px;width:calc(100% - 260px)}
+ .portal .brand{padding:0 12px;margin-bottom:18px;align-items:flex-start}
+ .portal .brand-logo{width:170px;height:auto;max-width:100%}
+ .portal .brand-caption{font-size:10px;letter-spacing:.12em;margin-top:8px}
+ .portal .sidebar nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 0 10px;scrollbar-width:thin;scrollbar-color:#3c6970 transparent}
+ .portal .nav-group{margin:0 0 14px}
+ .portal .nav-label{display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:.1em;margin:14px 10px 7px;color:#b3cfd2}
+ .portal .nav-label:after{content:"";height:1px;background:#325961;flex:1}
+ .portal .nav-item{position:relative;min-height:44px;padding:10px 12px;gap:10px;border-radius:7px;font-size:13px;font-weight:550;color:#d8e8ea;margin:3px 0;width:100%;white-space:nowrap}
+ .portal .nav-item>svg{width:19px;height:19px;flex:0 0 19px}
+ .portal .nav-item.active{background:#0b535d;color:#fff}
+ .portal .nav-item.active:before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:#00ae9d}
+ .portal .nav-item:hover:not(:disabled){background:#104c56;color:#fff}
+ .portal .nav-item:focus-visible,.portal .sidebar button:focus-visible,.portal .menu-search:focus-within{outline:2px solid #00ae9d;outline-offset:2px}
+ .portal .nav-item .nav-count{margin-left:auto;min-width:25px;padding:3px 5px;border:1px solid #b59138;border-radius:5px;background:transparent;color:#f4cf73;font-size:10px;line-height:1.2}
+ .portal .menu-search{display:flex;align-items:center;gap:8px;position:relative;border:1px solid #426b72;border-radius:7px;padding:7px 9px;margin:0 4px 16px;color:#b3cfd2}
+ .portal .menu-search input{min-width:0;flex:1;width:100%;padding:0;min-height:22px;height:22px;border:0;background:transparent;color:#fff;font-size:13px;box-shadow:none;outline:none}
+ .portal .menu-search input::placeholder{color:#b3cfd2}.portal .menu-search input::-webkit-search-cancel-button{display:none}
+ .portal .menu-search button{display:grid;place-items:center;padding:2px;border:0;background:transparent;color:#c1d9dc}
+ .portal .menu-empty{font-size:12px;color:#c1d9dc;padding:10px}
+ .portal .sidebar-toggle{position:absolute;top:24px;right:12px;display:grid;place-items:center;width:28px;height:28px;border:1px solid #426b72;border-radius:6px;background:transparent;color:#d8e8ea}
+ .portal .sidebar-foot{padding:12px 8px 0;border-top:1px solid #325961;margin-top:0}
+ .portal .sidebar-collapse{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:7px;border:0;background:transparent;color:#c1d9dc;font-size:12px;margin-bottom:8px}
+ .portal .session-state{font-size:11px;gap:8px}.portal .session-state small{font-size:10px}.portal .session-state .avatar{width:28px;height:28px;font-size:10px}
+ .portal.menu-collapsed .sidebar{width:76px;padding:20px 8px 12px}
+ .portal.menu-collapsed .main-shell{margin-left:76px;width:calc(100% - 76px)}
+ .portal.menu-collapsed .brand{padding:0;margin-bottom:52px}.portal.menu-collapsed .brand-logo{width:58px}
+ .portal.menu-collapsed .brand-caption,.portal.menu-collapsed .nav-label,.portal.menu-collapsed .nav-item>span,.portal.menu-collapsed .session-state{display:none}
+ .portal.menu-collapsed .sidebar-toggle{top:56px;right:24px}
+ .portal.menu-collapsed .nav-group{margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #325961}
+ .portal.menu-collapsed .nav-item{justify-content:center;padding:11px;min-height:44px}
+ .portal.menu-collapsed .sidebar-foot{padding:10px 0 0}
+}
+@media(max-width:720px){.sidebar-toggle,.sidebar-collapse,.menu-search,.menu-empty{display:none!important}}
+@media print{.portal.menu-collapsed .main-shell,.portal .main-shell{margin-left:0;width:100%}}
