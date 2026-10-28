@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCadencePaste } from '../lib/production-paste.mjs';
+import { parseCadencePaste, parseBasePaste, parseProductionPaste } from '../lib/production-paste.mjs';
 import { combineImports } from '../lib/importer.mjs';
+import { aggregate } from '../lib/analytics.mjs';
 import { initializeRegistry, mergeProduction, upsertEntity, upsertPlanRow, getPlanRow } from '../lib/registry.mjs';
 
 const config={year:2026,cadenceCutoff:'2026-10-28',vnCutoff:'2026-10-28',arCutoff:'2026-10-28'};
@@ -105,4 +106,108 @@ test('future months are reported and removed before either an initial or later m
  const initial=mergeProduction(null,combineImports([parsed],{...config,cadenceCutoff:'2026-09-30'}));
  assert.equal(initial.rows[0].actuals[9],null);
  assert.throws(()=>parse(table([[...row().slice(0,10),'10,00']],[...headers.slice(0,10),'OUT']),{cadenceCutoff:'2026-09-30'}),/Nenhum valor de produção até a data de corte/);
+});
+
+
+const monthNames=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const baseHeaders=['G .CENTRAL','Nº CENTRAL','SIGLA CENTRAL','G. COOP','Nº COOP','SIGLA COOPERATIVA','META'];
+for(let month=0;month<12;month++){
+ baseHeaders.push(`META_${monthNames[month]}`,`REAL_${monthNames[month]}`,`% ${monthNames[month]}`);
+ if(month%3===2)baseHeaders.push('META','REAL','%');
+}
+baseHeaders.push('META_ANUAL','REAL_ACUM','% ACUM','META_PER','REAL_PER','% PER','','');
+const baseRow=(metric='VENDA NOVA',{cooperative='9999',central='1002',name='Cooperativa exemplo',amounts={},target='100,00'}={})=>{
+ const cells=['C1',central,'Central exemplo','S1',cooperative,name,metric];
+ for(let month=0;month<12;month++){
+  cells.push(target,Object.hasOwn(amounts,month)?amounts[month]:month===1?'-':month===2?'':month===6?'(10,25)':month===9?'25,00':'10,00','99%');
+  if(month%3===2)cells.push('999.999,99','999.999,99','999%');
+ }
+ return [...cells,'1.200,00','999.999,99','999%','999.999,99','999.999,99','999%','',''];
+};
+const baseText=(rows=[baseRow(),baseRow('ARRECADAÇÃO')],head=baseHeaders)=>table(rows,head);
+const markdown=(rows,head=baseHeaders)=>[
+ '| Relatório copiado | | |',
+ '| --- | --- | --- |',
+ '| 1º TRIM | 2º TRIM | 3º TRIM |',
+ '| TOTAL | 999.999,99 | 999.999,99 |',
+ '| '+head.join(' | ')+' |',
+ ...rows.map(row=>'| '+row.map(value=>String(value).replaceAll('|','\\|')).join(' | ')+' |'),
+].join('\n');
+
+test('base clipboard reads both portfolios and monthly values without quarterly/annual double counting',()=>{
+ const parsed=parseBasePaste(baseText(),config);
+ assert.equal(parsed.source,'base');assert.equal(parsed.rows.length,2);assert.equal(parsed.inputRowCount,2);
+ assert.deepEqual(parsed.months,Array.from({length:12},(_,i)=>i));
+ assert.deepEqual(parsed.rows.map(row=>row.metric),['VN','AR']);
+ assert.equal(parsed.rows[0].centralName,'Central exemplo');
+ assert.deepEqual(parsed.rows[0].actuals,[10,0,null,10,10,10,-10.25,10,10,25,null,null]);
+ assert.deepEqual(parsed.rows[0].targets,Array(12).fill(100));assert.equal(parsed.rows[0].annualTarget,1200);
+ assert.equal(parsed.ignoredActualCount,4);
+ const source=initializeRegistry(combineImports([parsed],config));
+ const consolidated=aggregate(source.rows,'central');
+ assert.equal(consolidated.length,2);assert.equal(consolidated[0].actuals[0],10);
+});
+
+test('Markdown table decodes entities/NBSP, skips preheader summaries and supports escaped pipes',()=>{
+ const cells=baseRow('ARRECADAÇÃO',{name:'Cooperativa | Exemplo',amounts:{0:'\u00a0&#x20;1.234,56&#32;\u00a0'}});
+ const parsed=parseProductionPaste(markdown([cells]),config,'base');
+ assert.equal(parsed.rows.length,1);assert.equal(parsed.rows[0].actuals[0],1234.56);
+ assert.equal(parsed.rows[0].cooperativeName,'Cooperativa | Exemplo');assert.equal(parsed.rows[0].centralName,'Central exemplo');
+ const cadence=parseCadencePaste(markdown([row()],headers),config);
+ assert.deepEqual(cadence.rows[0].actuals,parse().rows[0].actuals);
+});
+
+test('each base portfolio applies its own valid cutoff and rejects missing or obsolete dates',()=>{
+ const parsed=parseBasePaste(baseText(),{...config,vnCutoff:'2026-09-30',arCutoff:'2026-10-28'});
+ assert.equal(parsed.rows[0].cutoff,'2026-09-30');assert.equal(parsed.rows[0].actuals[9],null);
+ assert.equal(parsed.rows[1].cutoff,'2026-10-28');assert.equal(parsed.rows[1].actuals[9],25);
+ assert.equal(parsed.ignoredActualCount,5);
+ assert.throws(()=>parseBasePaste(baseText(),{...config,arCutoff:''}),/data de corte/);
+ assert.throws(()=>parseBasePaste(baseText(),{...config,vnCutoff:'2025-10-28'}),/data de corte/);
+});
+
+test('base production merge preserves official targets/names, blank months, PAs and other portfolios',()=>{
+ const oldConfig={...config,vnCutoff:'2026-09-30',arCutoff:'2026-09-30'};
+ let saved=mergeProduction(null,combineImports([parseBasePaste(baseText(),oldConfig),parse()],oldConfig));
+ saved=upsertEntity(saved,{kind:'cooperative',central:'1002',cooperative:'9999',name:'Nome oficial',group:'S1'},'cooperative:1002:9999');
+ saved=upsertPlanRow(saved,{entityId:'cooperative:1002:9999',metric:'VN',annualTarget:2400});
+ const paBefore=structuredClone(saved.rows.find(row=>row.source==='cadence'));
+ const arBefore=structuredClone(saved.rows.find(row=>row.metric==='AR'));
+ const incoming=parseBasePaste(baseText([baseRow('VENDA NOVA',{amounts:{0:'42,00',1:'-',2:''},target:'999,00'})]),config);
+ const updated=mergeProduction(saved,combineImports([incoming],config));
+ const vn=updated.rows.find(row=>row.source==='base'&&row.metric==='VN');
+ assert.equal(vn.name,'Nome oficial');assert.equal(vn.annualTarget,2400);assert.deepEqual(vn.targets,Array(12).fill(200));
+ assert.equal(vn.actuals[0],42);assert.equal(vn.actuals[1],0);assert.equal(vn.actuals[2],null);
+ assert.deepEqual(updated.rows.find(row=>row.source==='cadence'),paBefore);
+ assert.deepEqual(updated.rows.find(row=>row.metric==='AR'),arBefore);
+});
+
+test('base duplicate/invalid rows and explicit central aggregates block instead of doubling totals',()=>{
+ assert.throws(()=>parseBasePaste(baseText([baseRow(),baseRow()]),config),/Registro duplicado/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow('NOVA MÉTRICA')]),config),/métrica não reconhecida/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow(),baseRow('VENDA NOVA',{cooperative:''})]),config),/cole as linhas das cooperativas/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow('VENDA NOVA',{cooperative:'TOTAL'})]),config),/cole as linhas das cooperativas/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow('VENDA NOVA',{amounts:{0:'(1.234,56'}})]),config),/valor de produção inválido/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow('VENDA NOVA',{amounts:{0:'(-1,00)'}})]),config),/valor de produção inválido/);
+ const duplicate=[...baseHeaders];duplicate[11]='REAL_JAN';
+ assert.throws(()=>parseBasePaste(baseText([baseRow()],duplicate),config),/mais de uma coluna de produção para JAN/);
+ assert.throws(()=>parseProductionPaste(baseText(),config,'outro'),/Selecione Cooperativas/);
+});
+
+test('representative base Markdown imports 44 rows/22 cooperatives without its preheader totals',()=>{
+ const rows=Array.from({length:22},(_,index)=>['VENDA NOVA','ARRECADAÇÃO'].map(metric=>baseRow(metric,{cooperative:String(3000+index),central:index<10?'1002':'2007'}))).flat();
+ const parsed=parseBasePaste(markdown(rows),config);
+ assert.equal(parsed.rows.length,44);assert.equal(new Set(parsed.rows.map(row=>`${row.central}:${row.cooperative}`)).size,22);
+ assert.equal(parsed.rows.filter(row=>row.metric==='VN').length,22);assert.equal(parsed.rows.filter(row=>row.metric==='AR').length,22);
+ const scoped=parseBasePaste(markdown(rows),{...config,allowedCentrals:['1002']});
+ assert.equal(scoped.rows.length,20);assert.equal(scoped.skipped,24);
+});
+
+
+test('missing central IDs on business rows fail while unkeyed summaries remain ignorable',()=>{
+ assert.throws(()=>parse(table([row({1:''})])),/código da central ausente/);
+ assert.throws(()=>parseBasePaste(baseText([baseRow('VENDA NOVA',{central:''})]),config),/código da central ausente/);
+ const footer=baseRow('VENDA NOVA',{central:'',cooperative:'',name:'TOTAL'});
+ const parsed=parseBasePaste(baseText([baseRow(),footer]),config);
+ assert.equal(parsed.rows.length,1);
 });

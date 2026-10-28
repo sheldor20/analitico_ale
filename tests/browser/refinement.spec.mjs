@@ -374,3 +374,67 @@ for(const width of [1440,390]) test(`pasted PA production preview and persisted 
  expect(state.errors).toEqual([]);
  expect(state.writes).toEqual([]);expect(state.relationshipWrites).toEqual([]);
 });
+
+const basePasteHeaders=['G. CENTRAL','Nº CENTRAL','SIGLA CENTRAL','G. COOP','Nº COOP','SIGLA COOPERATIVA','META','META_JAN','REAL_JAN','% JAN','META','REAL','%','REAL_AGO','REAL_SET','REAL_OUT','META_ANUAL','REAL_ACUM','META_PER','REAL_PER'];
+const basePasteRows=[
+ ['C1','1002','Central recebida','S1','3017','Cooperativa recebida','VENDA NOVA','999,00','1.234,56','999%','999999','999999','999%','','25,00','55,00','999999','999999','999999','999999'],
+ ['C1','1002','Central recebida','S1','3017','Cooperativa recebida','ARRECADAÇÃO','999,00','5.000,00','999%','999999','999999','999%','-','700,00','9.999,00','999999','999999','999999','999999'],
+];
+const basePasteMarkdown=[
+ '| Relatório de produção |',
+ '| '+basePasteHeaders.join(' | ')+' |',
+ '| '+basePasteHeaders.map(()=>'---').join(' | ')+' |',
+ ...basePasteRows.map(row=>'| '+row.map(value=>value.replaceAll(' ','&#x20;')).join(' | ')+' |'),
+].join('\n');
+for(const width of [1440,390]) test(`base production paste with two portfolios ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ const state=await setup(page,v=>v,{compactPortal:true,trackWorkspaceWrites:true});
+ const original=structuredClone(state.workspaceRows[0].dataset);
+ async function prepare(){
+  await page.getByRole('button',{name:'Importar base',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Importar base',exact:true});
+  await dialog.getByRole('combobox',{name:'Fonte dos dados',exact:true}).selectOption('base');
+  await dialog.getByRole('textbox',{name:'Dados das centrais e cooperativas',exact:true}).fill(basePasteMarkdown);
+  await dialog.getByLabel('Data de corte de Venda Nova',{exact:true}).fill('2026-10-05');
+  await dialog.getByLabel('Data de corte de Arrecadação',{exact:true}).fill('2026-09-10');
+  await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'Atualizar produção',exact:true})).toBeEnabled();
+  return dialog;
+ }
+ const dialog=await prepare();
+ expect(state.workspaceWrites).toHaveLength(0);
+ await expect(dialog.getByText('Venda Nova',{exact:true}).last()).toBeVisible();
+ await expect(dialog.getByText('Arrecadação',{exact:true}).last()).toBeVisible();
+ await page.screenshot({path:info.outputPath(`base-paste-preview-${width}.png`),fullPage:true});
+ expect(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth+2)).toBe(false);
+ // Changing the layout must invalidate the reviewed data.
+ await dialog.getByRole('combobox',{name:'Fonte dos dados',exact:true}).selectOption('cadence');
+ await expect(dialog.getByRole('button',{name:'Atualizar produção',exact:true})).toHaveCount(0);
+ await dialog.getByRole('combobox',{name:'Fonte dos dados',exact:true}).selectOption('base');
+ await dialog.getByRole('textbox',{name:'Dados das centrais e cooperativas',exact:true}).fill(basePasteMarkdown);
+ await dialog.getByLabel('Data de corte de Venda Nova',{exact:true}).fill('2026-10-05');
+ await dialog.getByLabel('Data de corte de Arrecadação',{exact:true}).fill('2026-09-10');
+ await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+ await dialog.getByRole('button',{name:'Atualizar produção',exact:true}).click();
+ await expect(dialog).toBeHidden();await expect.poll(()=>state.workspaceWrites.length).toBe(1);
+ const saved=structuredClone(state.workspaceRows[0].dataset);
+ const vn=saved.rows.find(r=>r.key==='base:1002:3017::VN'),ar=saved.rows.find(r=>r.key==='base:1002:3017::AR');
+ expect(vn.actuals[0]).toBe(1234.56);expect(vn.actuals[7]).toBe(50);expect(vn.actuals[9]).toBe(55);
+ expect(ar.actuals[0]).toBe(5000);expect(ar.actuals[7]).toBe(0);expect(ar.actuals[8]).toBe(700);expect(ar.actuals[9]).toBeNull();
+ for(const row of saved.rows){const before=original.rows.find(item=>item.key===row.key);expect(row.targets).toEqual(before.targets);expect(row.annualTarget).toBe(before.annualTarget);expect(row.name).toBe(before.name);}
+ for(const row of original.rows.filter(r=>!(r.source==='base'&&r.central==='1002'&&r.cooperative==='3017'))) expect(saved.rows.find(r=>r.key===row.key)).toEqual(row);
+ expect(saved.rows).toHaveLength(original.rows.length);
+ expect(saved.rows.some(row=>row.source==='base'&&!row.cooperative)).toBe(false);
+ await page.reload();await expect(page.getByRole('region',{name:'Resultado do período',exact:true})).toBeVisible();
+ await page.getByRole('tab',{name:'Central',exact:true}).click();
+ await page.getByLabel('Central',{exact:true}).first().selectOption('1002');
+ await page.getByLabel('Período',{exact:true}).first().selectOption('month');
+ await page.getByLabel('Mês de referência',{exact:true}).first().selectOption('0');
+ await expect(page.getByRole('article',{name:'Realizado até o corte',exact:true})).toContainText('1.384,56');
+ if(width===1440){
+  const repeat=await prepare();await repeat.getByRole('button',{name:'Atualizar produção',exact:true}).click();
+  await expect.poll(()=>state.workspaceWrites.length).toBe(2);
+  expect(state.workspaceRows[0].dataset.rows).toEqual(saved.rows);
+ }
+ expect(state.errors).toEqual([]);expect(state.writes).toEqual([]);expect(state.relationshipWrites).toEqual([]);
+});

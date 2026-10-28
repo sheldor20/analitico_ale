@@ -588,7 +588,7 @@ export default function Dashboard() {
       setNotice(user ? "Cadastro salvo. Metas, acumulados e indicadores recalculados." : "Cadastro atualizado nesta sessão. Entre e salve para retomar depois.");
     } finally { setBusy(""); }
   }
-  async function importFiles(pasted?: { text: string; config: ImportConfig }) {
+  async function importFiles(pasted?: { text: string; config: ImportConfig; source: "base" | "cadence" }) {
     if (registrySaving || busy) return;
     const importConfig = pasted?.config ?? config;
     const mode = pasted ? "production" : importMode;
@@ -618,8 +618,8 @@ export default function Dashboard() {
       const allowedCentrals = current?.registry?.entities.filter((entity) => entity.kind === "central").map((entity) => entity.central) ?? [];
       const parts = [];
       if (pasted) {
-        const { parseCadencePaste } = await import("@/lib/production-paste.mjs");
-        parts.push(parseCadencePaste(pasted.text, { ...importConfig, allowedCentrals }));
+        const { parseProductionPaste } = await import("@/lib/production-paste.mjs");
+        parts.push(parseProductionPaste(pasted.text, { ...importConfig, allowedCentrals }, pasted.source));
       }
       for (const [expectedSource, file] of pasted ? [] : selectedFiles) {
         const parsed = await parseWorkbook(
@@ -919,7 +919,7 @@ export default function Dashboard() {
         </select>
       </label>
       {importMode === "production" && <div className="import-methods" role="group" aria-label="Forma de atualização"><button type="button" className={importMethod === "paste" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "paste"} onClick={() => {setImportMethod("paste");setError("");}}>Colar dados</button><button type="button" className={importMethod === "file" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "file"} onClick={() => {setImportMethod("file");setError("");}}>Enviar arquivo</button></div>}
-      {importMode === "production" && importMethod === "paste" ? <ProductionPaste config={dataset?.config ?? config} existingRows={dataset?.rows ?? []} allowedCentrals={dataset?.registry?.entities.filter(entity => entity.kind === "central").map(entity => entity.central) ?? []} disabled={!!busy || registrySaving} onApply={async (text, pasteConfig) => {await importFiles({text, config: pasteConfig});}} /> : <>
+      {importMode === "production" && importMethod === "paste" ? <ProductionPaste config={dataset?.config ?? config} existingRows={dataset?.rows ?? []} allowedCentrals={dataset?.registry?.entities.filter(entity => entity.kind === "central").map(entity => entity.central) ?? []} disabled={!!busy || registrySaving} onApply={async (text, pasteConfig, pasteSource) => {await importFiles({text, config: pasteConfig, source: pasteSource});}} /> : <>
       {importMode === "history" && <p className="helper">As metas, a produção e as unidades serão guardadas somente no ano informado. Confirme os cortes; não use 31/12 se a base ainda for parcial. Novas cooperativas e PAs não serão incluídos retroativamente em outros anos.</p>}
       <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
       <div className="source-upload-grid">
