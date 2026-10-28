@@ -294,3 +294,35 @@ for(const width of [1440,390]) test(`global sharing entry ${width}`,async({page}
   await expect(page.locator('body')).not.toHaveCSS('overflow','hidden');
  }
 });
+
+for(const width of [1440,390]) test(`action plan compact filters ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ await setup(page,v=>v,{compactPortal:true});
+ await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Plano de ação',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Filtros da análise',exact:true});
+ await expect(panel).toHaveClass(/filter-panel-compact/);
+ await expect(panel.getByLabel('Cooperativa',{exact:true})).toHaveCount(1);
+ await expect(panel.getByLabel('Cooperativa',{exact:true})).toBeDisabled();
+ await panel.getByLabel('Central',{exact:true}).selectOption({index:1});
+ await expect(panel.getByLabel('Cooperativa',{exact:true})).toBeEnabled();
+ await panel.getByLabel('Cooperativa',{exact:true}).selectOption({index:1});
+ await panel.getByLabel('Período',{exact:true}).selectOption('month');
+ await panel.getByLabel('Mês de referência',{exact:true}).selectOption('7');
+ if(width>1100){
+  const period=await panel.getByLabel('Período',{exact:true}).boundingBox();
+  const month=await panel.getByLabel('Mês de referência',{exact:true}).boundingBox();
+  expect(Math.abs(period.y-month.y)).toBeLessThan(3);
+  expect(month.x).toBeGreaterThan(period.x);
+ }
+ await panel.getByRole('button',{name:/Mais filtros/}).click();
+ await panel.getByRole('combobox',{name:'Fonte',exact:true}).selectOption('cadence');
+ await expect(panel.getByRole('combobox',{name:'Grupo do PA',exact:true})).toBeVisible();
+ await expect(panel.getByLabel('PA',{exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath(`action-filters-${width}.png`),fullPage:true});
+ await panel.getByRole('button',{name:'Limpar filtros',exact:true}).click();
+ await expect(panel.getByLabel('Central',{exact:true})).toHaveValue('all');
+ await expect(panel.getByLabel('Cooperativa',{exact:true})).toHaveValue('all');
+ await panel.getByRole('button',{name:/Mais filtros/}).click();
+ await expect(panel.getByRole('combobox',{name:'Fonte',exact:true})).toBeHidden();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
+});
