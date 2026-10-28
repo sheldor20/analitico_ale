@@ -13,6 +13,7 @@ import type { ScenarioFilters } from './scenario-panels';
 import EmailPreview from './email-preview';
 import OutlookHandoff from './outlook-handoff';
 import styles from './pa-scenario-share.module.css';
+import ShareFlow from './ui/share-flow';
 
 type UnitKind = 'pa' | 'cooperative' | 'central';
 type Format = 'image' | 'email' | 'summary';
@@ -59,7 +60,7 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
   }, []);
 
   return <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-labelledby={titleId} className={styles.dialog} onKeyDown={(event) => {
+    <section data-share-dialog role="dialog" aria-modal="true" aria-labelledby={titleId} className={styles.dialog} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
       if (event.key !== 'Tab') return;
       const nodes = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe,[tabindex="0"]')]
@@ -68,15 +69,15 @@ export default function PaScenarioShare({ dataset, filters, userId, onClose, uni
       else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
     }}>
       <header className={styles.heading}>
-        <h2 id={titleId}>{UNITS[unitKind].title}</h2>
+        <div><h2 id={titleId}>{UNITS[unitKind].title}</h2><span className={styles.helper}>Revise e escolha como compartilhar</span></div>
         <button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento" onClick={onClose}><X size={22} aria-hidden="true" /></button>
       </header>
-      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} unitIdsByMetric={unitIdsByMetric} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} initialShowProjection={initialShowProjection} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
+      {userId ? <ShareContent key={contextKey} dataset={dataset} filters={filters} userId={userId} unitKind={unitKind} unitIdsByMetric={unitIdsByMetric} initialFormat={initialFormat} initialMode={initialMode} initialSelectedIds={initialSelectedIds} initialShowProjection={initialShowProjection} onClose={onClose} clipboardVersion={clipboardVersion} onClipboardChange={invalidateClipboard} /> : <p className={styles.error} role="alert">Entre na sua conta para compartilhar o cenário.</p>}
     </section>
   </div>;
 }
 
-function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', unitIdsByMetric, initialShowProjection = false, clipboardVersion, onClipboardChange }: Omit<PaScenarioShareProps, 'onClose'> & { clipboardVersion: number; onClipboardChange: () => void }) {
+function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat = 'image', unitIdsByMetric, initialShowProjection = false, onClose, clipboardVersion, onClipboardChange }: PaScenarioShareProps & { clipboardVersion: number; onClipboardChange: () => void }) {
   const unit = UNITS[unitKind];
   const countUnits = (count: number) => `${count} ${count === 1 ? unit.singular : unit.plural}`;
   const channelName = useId();
@@ -214,52 +215,62 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
     {notice?.text && <p role={notice.error ? 'alert' : 'status'} className={notice.error ? styles.error : styles.feedback}>{notice.text}</p>}
   </>;
 
-  return <div className={styles.content}>
-    <div className={styles.context}><strong>{report.scopeLabel}</strong><span>{report.metric === 'both' ? 'Venda Nova e Arrecadação' : report.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {report.periodLabel}</span></div>
-    <div className={styles.cutoffs} aria-label="Datas de corte do cenário">{report.reports.map(item => <span key={item.metric}><strong>{item.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}</strong><span>{item.parts[0] ? scenarioDisplay(item.parts[0]).cutoffLabel : 'Sem data de atualização'} · {item.phaseLabel || 'Sem realizado'}</span></span>)}</div>
-    <p className={styles.helper}>{countUnits(report.count)} no painel · Filtros e ordem da visão atual, incluindo unidades fora da área visível da tabela.</p>
-    <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, calculada pelo ritmo até o corte.</small></span></label>
-    <details className={styles.messageEditor}><summary>Editar mensagem</summary><div className={styles.editorFields}>
+  const scenarioSettings = (
+<div className={styles.shareSettings}>
+    <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa de fechamento</small></span></label>
+    <details className={styles.messageEditor}><summary>Personalizar mensagem</summary><div className={styles.editorFields}>
       <label className={styles.field}>Assunto da mensagem<input value={subject ?? report.subject} maxLength={300} onChange={(event) => setSubject(event.target.value)} /></label>
       <label className={styles.field}>Introdução da mensagem<textarea value={intro ?? report.intro} rows={2} maxLength={1000} onChange={(event) => setIntro(event.target.value)} /></label>
       <label className={styles.field}>Chamada para ação<textarea value={cta ?? report.cta} rows={2} maxLength={1000} onChange={(event) => setCta(event.target.value)} /></label>
       <div className={styles.selectionToolbar}><p className={styles.helper}>Os textos acompanham o e-mail e a mensagem curta. Os indicadores permanecem calculados pela base.</p><button type="button" className="button quiet" disabled={subject === null && intro === null && cta === null} onClick={() => { setSubject(null); setIntro(null); setCta(null); }}>Restaurar textos padrão</button></div>
     </div></details>
+      </div>
+  );
+
+  return <div className={styles.content}>
+    <ShareFlow/>
+    <div className={styles.context}><strong>{report.scopeLabel}</strong><span className={styles.scopeBadge}>{countUnits(report.count)}</span><span>{report.metric === 'both' ? 'Venda Nova e Arrecadação' : report.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {report.periodLabel}</span></div>
+    <div className={styles.cutoffs} aria-label="Datas de corte do cenário">{report.reports.map(item => <span key={item.metric}>{report.metric === 'both'&&<strong>{item.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}</strong>}<span>{item.parts[0] ? scenarioDisplay(item.parts[0]).cutoffLabel : 'Sem data de atualização'} · {item.phaseLabel || 'Sem realizado'}</span></span>)}</div>
     {!report.count ? <p role="status" className={styles.empty}>{unit.empty} Ajuste os filtros na Visão geral.</p> : <>
       <fieldset className={styles.channels}><legend>Canal de compartilhamento</legend>
-        <label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'image'} onChange={() => changeChannel('image')} /><ImageIcon size={18} aria-hidden="true" />WhatsApp e imagem</label>
+        <label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'image'} onChange={() => changeChannel('image')} /><ImageIcon size={18} aria-hidden="true" />WhatsApp</label>
         <label className={channel === 'email' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'email'} onChange={() => changeChannel('email')} /><Mail size={18} aria-hidden="true" />E-mail</label>
         <label className={channel === 'summary' ? styles.activeChannel : ''}><input type="radio" name={channelName} checked={channel === 'summary'} onChange={() => changeChannel('summary')} /><LayoutDashboard size={18} aria-hidden="true" />Painel resumido</label>
       </fieldset>
-      {channel === 'image' ? <section className={styles.channelPanel} aria-label="Compartilhar por WhatsApp e imagem">
+      {channel!=='image'&&scenarioSettings}
+      {channel === 'image' ? <section className={`${styles.channelPanel} ${styles.imageWorkspace}`} aria-label="Compartilhar por WhatsApp e imagem">
         <div className={styles.pageNavigation}>
-          <div><h3>Imagem do cenário</h3><p aria-live="polite">{report.metric === 'both' ? `${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · ` : ''}Parte {report.metric === 'both' ? part?.index : page + 1} de {report.metric === 'both' ? part?.total : report.parts.length}{part ? ` · ${unit.plural} ${part.from} a ${part.to}` : ''}</p></div>
+          <div><h3>Prévia do cenário</h3><p aria-live="polite">{report.metric === 'both' ? `${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · ` : ''}Parte {report.metric === 'both' ? part?.index : page + 1} de {report.metric === 'both' ? part?.total : report.parts.length}{part ? ` · ${unit.plural} ${part.from} a ${part.to}` : ''}</p></div>
           {report.parts.length > 1 && <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page >= report.parts.length - 1} onClick={() => setPartIndex(page + 1)} >Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>}
         </div>
+        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={part?.index ?? page + 1} total={part?.total ?? report.parts.length} title={report.metric === 'both' ? `${unit.preview} · ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}` : unit.preview} />
         <div className={styles.deliveryControls}>
         <div className={styles.imageActions}>
         <div className={styles.actions}>
-          <button type="button" className="button primary" aria-label="Copiar imagem desta parte" disabled={busy} onClick={() => void imageAction(true)}><Copy size={17} aria-hidden="true" />Copiar imagem</button>
+          <button type="button" className="button secondary" aria-label="Copiar imagem desta parte" disabled={busy} onClick={() => void imageAction(true)}><Copy size={17} aria-hidden="true" />Copiar imagem</button>
           <button type="button" className="button secondary" aria-label="Baixar imagem desta parte" disabled={busy} onClick={() => void imageAction(false)}><Download size={17} aria-hidden="true" />Baixar PNG</button>
         </div>
         <p className={styles.helper}>Cole a imagem ou anexe o arquivo.{report.parts.length > 1 ? ` Envie as ${report.parts.length} partes.` : ''}</p>
         </div>
         <div className={styles.destination}>
-          <label className={styles.field}>Texto do WhatsApp<select aria-label="Texto do WhatsApp" value={whatsappContent} onChange={(event) => { setWhatsappContent(event.target.value as 'caption' | 'report'); setWhatsappCopied(''); setManualWhatsapp(''); }}><option value="caption">Mensagem curta para acompanhar a imagem</option><option value="report">Relatório completo</option></select></label>
+          <h3>Mensagem e envio</h3>
+          {scenarioSettings}
+          <label className={styles.field}>Texto do WhatsApp<select aria-label="Texto do WhatsApp" value={whatsappContent} onChange={(event) => { setWhatsappContent(event.target.value as 'caption' | 'report'); setWhatsappCopied(''); setManualWhatsapp(''); }}><option value="caption">Mensagem curta</option><option value="report">Relatório completo</option></select></label>
           <label className={styles.field}>WhatsApp do destinatário (opcional)<input type="tel" autoComplete="off" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="DDD + número, ou +DDI" /></label>
-          <p className={styles.helper}>Sem número, escolha a conversa no WhatsApp.</p>
+
           {whatsapp.error && <p role="alert" className={styles.error}>{whatsapp.error}</p>}
           {whatsapp.value?.requiresPaste && <p className={styles.warning}>Mensagem longa: copie o texto, abra a conversa e cole.</p>}
           <div className={styles.actions}>
             <button type="button" className="button secondary" aria-label="Copiar texto do WhatsApp" disabled={busy} onClick={() => void copyText()}><Copy size={17} aria-hidden="true" />Copiar texto</button>
-            {whatsapp.value && (!whatsapp.value.requiresPaste || whatsappCopied === snapshot || manualWhatsapp === snapshot) ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} aria-hidden="true" />{whatsapp.value.requiresPaste ? manualWhatsapp === snapshot ? 'Abrir WhatsApp para colar manualmente' : 'Abrir WhatsApp e colar texto' : 'Abrir WhatsApp'}</a> : <button type="button" className="button primary" disabled><ExternalLink size={17} aria-hidden="true" />{whatsapp.value?.requiresPaste ? 'Abrir WhatsApp e colar texto' : 'Abrir WhatsApp'}</button>}
+
           </div>
-          <details className={styles.textPreview}><summary>Ver texto do WhatsApp</summary><pre aria-label="Texto do WhatsApp">{whatsappText}</pre></details>
+          <details className={styles.textPreview} open><summary>Mensagem</summary><pre aria-label="Texto do WhatsApp">{whatsappText}</pre></details>
         </div>
         </div>
+        <div className={styles.sendFooter}><button type="button" className="button secondary" onClick={onClose}>Fechar</button><span className={styles.helper}>Anexe a imagem ao abrir o WhatsApp.</span>{whatsapp.value && (!whatsapp.value.requiresPaste || whatsappCopied === snapshot || manualWhatsapp === snapshot) ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} aria-hidden="true" />{whatsapp.value.requiresPaste ? manualWhatsapp === snapshot ? 'Abrir WhatsApp para colar manualmente' : 'Abrir WhatsApp e colar texto' : 'Abrir WhatsApp'}</a> : <button type="button" className="button primary" disabled><ExternalLink size={17} aria-hidden="true" />{whatsapp.value?.requiresPaste ? 'Abrir WhatsApp e colar texto' : 'Abrir WhatsApp'}</button>}</div>
         {actionFeedback}
-        <ImagePreview key={`${unitKind}:${mode}:${page}:${report.html}`} getImage={getImage} index={part?.index ?? page + 1} total={part?.total ?? report.parts.length} title={report.metric === 'both' ? `${unit.preview} · ${part?.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'}` : unit.preview} />
-      </section> : channel === 'email' ? <section className={styles.channelPanel} aria-label="Compartilhar por e-mail">
+
+      </section> : channel === 'email' ? <section className={`${styles.channelPanel} ${styles.emailWorkspace}`} aria-label="Compartilhar por e-mail">
         <div className={styles.emailFields}>
           <label className={styles.field}>Destinatários do e-mail<textarea value={addresses} rows={2} onChange={(event) => setAddresses(event.target.value)} placeholder="nome@cooperativa.com.br; outro@cooperativa.com.br" /></label>
           <label className={styles.field}>Conta do Outlook<select value={personal ? 'personal' : 'work'} onChange={(event) => setPersonal(event.target.value === 'personal')}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label>
@@ -273,6 +284,7 @@ function ShareContent({ dataset, filters, userId, unitKind = 'pa', initialFormat
         <div className={styles.emailPreview}><h3>Prévia do e-mail · {countUnits(report.count)}</h3><EmailPreview html={report.html} /></div>
       </section> : <SummaryPreview report={report} unitKind={unitKind} onFormat={changeChannel} />}
     </>}
+    {channel!=='image'&&<div className={styles.sendFooter}><button type="button" className="button secondary" onClick={onClose}>Fechar</button></div>}
   </div>;
 }
 

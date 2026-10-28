@@ -3214,3 +3214,9 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
  .portal .workspace-content .registry-toolbar>.search-input{flex-basis:100%}
 }
 @media print{.portal .secondary-info{display:none!important}}
+
+.share-flow{display:flex;align-items:center;justify-content:center;gap:16px;list-style:none;padding:0;margin:0 0 4px;color:var(--muted);font-size:12px}
+.share-flow li{display:flex;align-items:center;gap:7px}.share-flow li+li:before{content:"";width:32px;height:1px;background:var(--line);margin-right:8px}.share-flow li>span{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#e3f5f2;color:#006b62;font-weight:700}.share-flow li:last-child{color:var(--ink);font-weight:650}.share-flow li:last-child>span{background:var(--sicoob-turquoise);color:#003641}
+[data-share-dialog] .button{min-height:36px;padding:7px 12px;font-size:13px;border-radius:7px}
+.share-close-footer{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px}
+@media(max-width:720px){.share-flow{justify-content:flex-start;gap:10px;font-size:11px;flex-wrap:wrap}.share-flow li+li:before{display:none}.share-flow li>span{width:22px;height:22px}[data-share-dialog] .button{min-height:40px}}

@@ -1,4 +1,5 @@
 'use client';
+import ShareFlow from './ui/share-flow';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, ImageIcon, Mail, X } from 'lucide-react';
@@ -125,7 +126,7 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
   }
 
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={event => {
+    <section data-share-dialog className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
       if (event.key !== 'Tab') return;
       const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe')].filter(node => node.getClientRects().length > 0);
@@ -134,14 +135,15 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
     }}>
       <header className={styles.heading}><h2 id={titleId}>Compartilhar cenário por período</h2><button ref={close} type="button" className="icon-button" aria-label="Fechar compartilhamento de períodos" onClick={onClose}><X size={22} aria-hidden="true" /></button></header>
       <div className={styles.content}>
+        <ShareFlow/>
         <div className={styles.context}><strong>{model.scopeLabel}</strong><span>{model.metric === 'AR' ? 'Arrecadação' : 'Venda Nova'} · {model.year}</span></div>
-        <p className={styles.cutoffs}>{periodShareCutoff(model)} · Estado Parcial, Fechado ou sem informação identificado em cada período.</p>
+        <p className={styles.cutoffs}>{periodShareCutoff(model)}</p>
         <label className={styles.field}>Períodos para compartilhar<select aria-label="Períodos para compartilhar" value={period} onChange={event => { setPeriod(event.target.value as PeriodShareSelection); setPartIndex(0); }}>{Object.entries(selections).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <p className={styles.helper}>Mesmas unidades do recorte atual · {report?.orderLabel}. Todos os períodos selecionados acompanham a saída, inclusive os que estiverem fora da área visível.</p>
-        <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa separada do realizado, com as premissas da análise.</small></span></label>
+
+        <label className={styles.projectionOption}><input type="checkbox" aria-label="Incluir projeção de produção" checked={showProjection} onChange={event => { setShowProjection(event.target.checked); setPartIndex(0); }} /><span>Incluir projeção de produção<small>Estimativa de fechamento</small></span></label>
         {!report ? <p className={styles.error} role="alert">{built.error}</p> : <>
-          <fieldset className={styles.channels}><legend>Canal de compartilhamento</legend><label className={channel === 'email' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'email'} onChange={() => { setChannel('email'); invalidate(); }} /><Mail size={18} aria-hidden="true" />E-mail</label><label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'image'} onChange={() => { setChannel('image'); invalidate(); }} /><ImageIcon size={18} aria-hidden="true" />WhatsApp e imagem</label></fieldset>
-          {channel === 'email' ? <section className={styles.channelPanel} aria-label="Compartilhar cenário por e-mail">
+          <fieldset className={styles.channels}><legend>Canal de compartilhamento</legend><label className={channel === 'email' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'email'} onChange={() => { setChannel('email'); invalidate(); }} /><Mail size={18} aria-hidden="true" />E-mail</label><label className={channel === 'image' ? styles.activeChannel : ''}><input type="radio" name={channelsId} checked={channel === 'image'} onChange={() => { setChannel('image'); invalidate(); }} /><ImageIcon size={18} aria-hidden="true" />WhatsApp</label></fieldset>
+          {channel === 'email' ? <section className={`${styles.channelPanel} ${styles.emailWorkspace}`} aria-label="Compartilhar cenário por e-mail">
             {contacts.some(contact => contact.emails.length) && <fieldset className={styles.unitSelector}><legend>Responsáveis da unidade</legend><div className={styles.unitOptions}>{contacts.filter(contact => contact.emails.length).map(contact => <label key={contact.id}><input type="checkbox" checked={contactIds.includes(contact.id)} onChange={event => setContactIds(ids => event.target.checked ? [...ids, contact.id] : ids.filter(id => id !== contact.id))} /><span><strong>{contact.name}</strong><small>{contact.emails.join('; ')}</small></span></label>)}</div></fieldset>}
             {contactError && <p className={styles.warning} role="status">{contactError}</p>}
             <div className={styles.emailFields}><label className={styles.field}>Destinatários do e-mail<textarea value={addresses} maxLength={10000} rows={2} onChange={event => setAddresses(event.target.value)} placeholder="nome@cooperativa.com.br; outro@cooperativa.com.br" /></label><label className={styles.field}>Conta do Outlook<select aria-label="Conta do Outlook" value={personal ? 'personal' : 'work'} onChange={event => setPersonal(event.target.value === 'personal')}><option value="work">Microsoft 365 / Corporativa</option><option value="personal">Outlook.com / Pessoal</option></select></label></div>
@@ -149,24 +151,27 @@ export default function PeriodScenarioShare({ model, initialPeriod = 'all', orde
             {(recipients.error || outlook.error) && <p className={styles.error} role="alert">{recipients.error || outlook.error}</p>}
             <OutlookHandoff html={report.html} text={report.text} url={outlook.value?.url || null} clipboardVersion={clipboardVersion} disabled={busy || !!recipients.error || !!outlook.error} />
             <div className={styles.actions}><button type="button" className="button secondary" disabled={!!recipients.error} onClick={downloadEmail}><Download size={17} aria-hidden="true" />Baixar e-mail (.eml)</button></div>
-            <EmailPreview html={report.html} />
-          </section> : <section className={styles.channelPanel} aria-label="Compartilhar cenário por WhatsApp">
-            <div className={styles.pageNavigation}><div><h3>Imagem do cenário</h3><p aria-live="polite">Imagem única · {report.count} períodos{['all', 'month'].includes(period) ? ' · janeiro a dezembro' : ''}</p></div>{report.parts.length > 1 && <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page === report.parts.length - 1} onClick={() => setPartIndex(page + 1)}>Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>}</div>
-            <div className={styles.actions}><button type="button" className="button primary" aria-label="Copiar imagem desta parte" disabled={busy} onClick={() => void imageAction(true)}><Copy size={17} aria-hidden="true" />Copiar imagem</button><button type="button" className="button secondary" aria-label="Baixar imagem desta parte" disabled={busy} onClick={() => void imageAction(false)}><Download size={17} aria-hidden="true" />Baixar PNG</button></div>
+            <div className={styles.emailPreview}><h3>Prévia do e-mail</h3><EmailPreview html={report.html} /></div>
+          </section> : <section className={`${styles.channelPanel} ${styles.periodWorkspace}`} aria-label="Compartilhar cenário por WhatsApp">
+            <div className={styles.pageNavigation}><div><h3>Prévia do cenário</h3><p aria-live="polite">Imagem única · {report.count} períodos{['all', 'month'].includes(period) ? ' · janeiro a dezembro' : ''}</p></div>{report.parts.length > 1 && <div className={styles.actions}><button type="button" className="button secondary" aria-label="Parte anterior" disabled={page === 0} onClick={() => setPartIndex(page - 1)}><ChevronLeft size={18} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" aria-label="Próxima parte" disabled={page === report.parts.length - 1} onClick={() => setPartIndex(page + 1)}>Próxima<ChevronRight size={18} aria-hidden="true" /></button></div>}</div>
+            <PeriodImagePreview key={`${period}:${page}:${report.html}`} getImage={getImage} index={page + 1} total={report.parts.length} />
+            <div className={styles.periodOptions}><h3>Mensagem e envio</h3>
+            <div className={styles.actions}><button type="button" className="button secondary" aria-label="Copiar imagem desta parte" disabled={busy} onClick={() => void imageAction(true)}><Copy size={17} aria-hidden="true" />Copiar imagem</button><button type="button" className="button secondary" aria-label="Baixar imagem desta parte" disabled={busy} onClick={() => void imageAction(false)}><Download size={17} aria-hidden="true" />Baixar PNG</button></div>
             <p className={styles.helper}>Cole ou anexe a imagem.{report.parts.length > 1 ? ` Envie as ${report.parts.length} partes para incluir todos os períodos.` : ''}</p>
-            <label className={styles.field}>Texto do WhatsApp<select aria-label="Texto do WhatsApp" value={textMode} onChange={event => setTextMode(event.target.value as 'caption' | 'report')}><option value="caption">Mensagem curta para acompanhar a imagem</option><option value="report">Relatório completo</option></select></label>
+            <label className={styles.field}>Texto do WhatsApp<select aria-label="Texto do WhatsApp" value={textMode} onChange={event => setTextMode(event.target.value as 'caption' | 'report')}><option value="caption">Mensagem curta</option><option value="report">Relatório completo</option></select></label>
             {contacts.some(contact => contact.whatsapp) && <label className={styles.field}>Responsável para o WhatsApp<select aria-label="Responsável para o WhatsApp" value={contacts.find(contact => contact.whatsapp === phone)?.id || ''} onChange={event => setPhone(contacts.find(contact => contact.id === event.target.value)?.whatsapp || '')}><option value="">Informar manualmente / escolher no WhatsApp</option>{contacts.filter(contact => contact.whatsapp).map(contact => <option key={contact.id} value={contact.id}>{contact.name} · {contact.whatsapp}</option>)}</select></label>}
             <label className={styles.field}>WhatsApp do destinatário (opcional)<input type="tel" maxLength={40} value={phone} onChange={event => setPhone(event.target.value)} placeholder="DDD + número, ou +DDI" /></label>
             {whatsapp.error && <p className={styles.error} role="alert">{whatsapp.error}</p>}
             {whatsapp.value?.requiresPaste && <p className={styles.warning}>Mensagem longa: copie o texto completo, abra o WhatsApp e cole na conversa.</p>}
             <div className={styles.actions}><button type="button" className="button secondary" disabled={busy} onClick={() => void copyText()}><Copy size={17} aria-hidden="true" />Copiar texto do WhatsApp</button>{whatsapp.value && (!whatsapp.value.requiresPaste || copied === snapshot || manual === snapshot) ? <a className="button primary" href={whatsapp.value.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} aria-hidden="true" />{whatsapp.value.requiresPaste ? 'Abrir WhatsApp e colar texto' : 'Abrir WhatsApp'}</a> : <button type="button" className="button primary" disabled>Abrir WhatsApp</button>}</div>
-            <details className={styles.textPreview}><summary>Ver texto do WhatsApp</summary><pre aria-label="Texto do WhatsApp">{text}</pre></details>
-            <PeriodImagePreview key={`${period}:${page}:${report.html}`} getImage={getImage} index={page + 1} total={report.parts.length} />
+            <details className={styles.textPreview} open><summary>Mensagem</summary><pre aria-label="Texto do WhatsApp">{text}</pre></details>
+
+            </div>
           </section>}
         </>}
         {busy && <p className={styles.feedback} role="status">Preparando compartilhamento…</p>}
         {notice && <p className={notice.error ? styles.error : styles.feedback} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
-        <p className={styles.helper}>Revise o destinatário no aplicativo. Nada é enviado automaticamente.</p>
+        <div className={styles.sendFooter}><button type="button" className="button secondary" onClick={onClose}>Fechar</button><span className={styles.helper}>Revise no aplicativo antes de enviar.</span></div>
       </div>
     </section>
   </div>;

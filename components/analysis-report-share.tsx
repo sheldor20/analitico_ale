@@ -1,4 +1,5 @@
 'use client';
+import ShareFlow from './ui/share-flow';
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, FileCode2, X } from 'lucide-react';
@@ -149,7 +150,7 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
     finally { if (alive.current) setBusy(false); }
   }
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className={styles.dialog} role="dialog" aria-modal="true" aria-label="Compartilhar cenário" aria-describedby={titleId} onKeyDown={event => {
+    <section className={styles.dialog} data-share-dialog role="dialog" aria-modal="true" aria-label="Compartilhar cenário" aria-describedby={titleId} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
       if (event.key !== 'Tab') return;
       const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],textarea,summary')].filter(node => node.getClientRects().length);
@@ -158,8 +159,9 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
     }}>
       <header className={styles.heading}><div><p>Compartilhar cenário</p><h2 id={titleId}>{title}</h2></div><button ref={closeButton} type="button" className="icon-button" aria-label="Fechar compartilhamento do cenário" onClick={onClose}><X size={22} aria-hidden="true" /></button></header>
       <div className={styles.content}>
+        <ShareFlow formatOnly/>
         <div className={styles.context}>{context.map((value, index) => <span key={index}>{value}</span>)}</div>
-        <p className={styles.helper}>{rows.length} registros · A prévia e os arquivos incluem todos os registros deste cenário.</p>
+        <span className={styles.helper}>{rows.length} registros</span>
         <div className={styles.actions}>
           <button type="button" className="button primary" disabled={busy || !columns.length} onClick={() => void downloadImage()}><Download size={17} aria-hidden="true" />{busy ? 'Gerando imagem…' : 'Baixar imagem'}</button>
           <button type="button" className="button secondary" onClick={() => void copyText()}><Copy size={17} aria-hidden="true" />Copiar texto</button>
@@ -168,9 +170,10 @@ export default function AnalysisReportShare({ title, context, columns, rows, not
         {parts > 1 && <div className={styles.parts}><span>Imagem {currentPage + 1} de {parts} · até {PAGE_SIZE} registros por imagem</span><div className={styles.actions}><button type="button" className="button secondary" disabled={currentPage === 0 || busy} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={17} aria-hidden="true" />Anterior</button><button type="button" className="button secondary" disabled={currentPage === parts - 1 || busy} onClick={() => setPage(currentPage + 1)}>Próxima<ChevronRight size={17} aria-hidden="true" /></button></div></div>}
         {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
         {manual && <label className={styles.manual}>Texto completo<textarea readOnly value={text} rows={8} onFocus={event => event.currentTarget.select()} /></label>}
-        <details className={styles.image}><summary>Prévia da imagem · {currentPage + 1} de {parts}</summary>{preview.url ? <img src={preview.url} alt={`${title} · imagem ${currentPage + 1} de ${parts}`} /> : <p role={preview.error ? 'alert' : 'status'}>{preview.error || 'Preparando imagem…'}</p>}</details>
-        <section aria-label="Prévia completa do cenário"><h3>Prévia completa</h3><div className={styles.table}><table><thead><tr>{columns.map((column, index) => <th scope="col" key={index}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((_, columnIndex) => columnIndex === 0 ? <th scope="row" key={columnIndex}>{row[columnIndex] || '—'}</th> : <td key={columnIndex}>{row[columnIndex] || '—'}</td>)}</tr>)}</tbody></table></div></section>
-        {!!notes.length && <div className={styles.notes}>{notes.map((note, index) => <p key={index}>{note}</p>)}</div>}
+        <details className={styles.image} open><summary>Prévia da imagem · {currentPage + 1} de {parts}</summary>{preview.url ? <img src={preview.url} alt={`${title} · imagem ${currentPage + 1} de ${parts}`} /> : <p role={preview.error ? 'alert' : 'status'}>{preview.error || 'Preparando imagem…'}</p>}</details>
+        <section aria-label="Prévia completa do cenário"><details><summary>Consultar tabela completa</summary><div className={styles.table}><table><thead><tr>{columns.map((column, index) => <th scope="col" key={index}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((_, columnIndex) => columnIndex === 0 ? <th scope="row" key={columnIndex}>{row[columnIndex] || '—'}</th> : <td key={columnIndex}>{row[columnIndex] || '—'}</td>)}</tr>)}</tbody></table></div></details></section>
+        {!!notes.length && <details className={styles.notes}><summary>Notas do cenário</summary>{notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
+        <div className="share-close-footer"><button type="button" className="button secondary" onClick={onClose}>Fechar</button></div>
       </div>
     </section>
   </div>;

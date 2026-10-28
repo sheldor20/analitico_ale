@@ -48,14 +48,14 @@ export default function PortfolioCommunication({ dataset, candidates, initialKey
     return () => { cancelled = true; data.subscription.unsubscribe(); };
   }, []);
   return <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="portfolio-title" className={styles.dialog} onKeyDown={(event) => {
+    <section ref={dialog} data-share-dialog role="dialog" aria-modal="true" aria-labelledby="portfolio-title" className={styles.dialog} onKeyDown={(event) => {
       if (event.key === "Escape") { event.stopPropagation(); onClose(); }
       if (event.key !== "Tab") return;
       const nodes = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,iframe')].filter((node) => node.offsetParent !== null);
       if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1)?.focus(); }
       else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
     }}>
-      <div className={styles.heading}><div><span className="section-label">COMUNICAÇÃO DA CARTEIRA</span><h2 id="portfolio-title">Comunicar resultado</h2><p>Escolha os destinatários, revise o painel e prepare o envio.</p></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
+      <div className={styles.heading}><div><h2 id="portfolio-title">Comunicar resultado</h2></div><button ref={closeButton} type="button" className="icon-button" onClick={onClose} aria-label="Fechar comunicação"><X size={22} /></button></div>
       <div className={styles.filters}>
         <label>Unidade selecionada<select value={selected?.id ?? ""} onChange={(event) => setEntityId(event.target.value)}>{entities.map((entry) => <option key={entry.id} value={entry.id}>{KIND_LABELS[entry.kind]} {entry.kind === "pa" ? `${entry.cooperative} / ${entry.pa}` : entry.kind === "cooperative" ? entry.cooperative : entry.central} · {entry.name}</option>)}</select></label>
         <PeriodSelector label="Período da mensagem" period={selectedPeriod} month={selectedMonth} year={dataset.year}
@@ -164,7 +164,7 @@ function Composer({ dataset, entity, owner, metric, month, period, uplift, initi
   const noPanel = !hasEmailPanel && <div role="alert" className={styles.warning}>Seu modelo de e-mail contém somente texto, sem o painel de indicadores. <button type="button" className="button secondary" onClick={restoreEmailPanel}>Restaurar painel automático</button></div>;
   return <div className={styles.composer}>
     <nav className={styles.steps} aria-label="Etapas da comunicação">
-      {['Destinatários', 'Revisar painel', 'Preparar envio'].map((label, index) => <button key={label} type="button" aria-current={step === index + 1 ? 'step' : undefined} onClick={() => navigate(index + 1)}><span>{index + 1}</span>{label}</button>)}
+      {['Destinatários', 'Revisar cenário', 'Compartilhar'].map((label, index) => <button key={label} type="button" aria-current={step === index + 1 ? 'step' : undefined} onClick={() => navigate(index + 1)}><span>{index + 1}</span>{label}</button>)}
     </nav>
     <section hidden={step !== 1} className={styles.stepContent} aria-label="Configurar mensagem">
       <h3 tabIndex={-1} ref={step === 1 ? stepTitle : null}>Quem vai receber?</h3>

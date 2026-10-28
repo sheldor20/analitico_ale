@@ -194,3 +194,33 @@ for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
   expect(pageErrors).toEqual([]);
  });
 }
+
+for (const width of [1440,390]) {
+ test(`scenario sharing layout ${width}`,async({page},info)=>{
+  await page.setViewportSize({width,height:1000});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await setup(page,v=>v,{compactPortal:true});
+  for(const tabName of ['Cooperativas','PAs']) {
+   await page.getByRole('tab',{name:tabName,exact:true}).click();
+   await page.getByRole('button',{name:'Compartilhar resultado das unidades',exact:true}).click();
+   const dialog=page.getByRole('dialog');
+   await expect(dialog.getByRole('list',{name:'Fluxo do compartilhamento'})).toBeVisible();
+   await expect(dialog.getByRole('heading',{name:'Mensagem e envio',exact:true})).toBeVisible();
+   await expect(dialog.getByRole('img',{name:/Cenário/}).first()).toBeVisible();
+   await dialog.getByLabel('Incluir projeção de produção',{exact:true}).check();
+   await dialog.getByRole('radio',{name:'E-mail',exact:true}).check();
+   await expect(dialog.getByText('Destinatários do e-mail',{exact:true})).toBeVisible();
+   await dialog.getByRole('radio',{name:'Painel resumido',exact:true}).check();
+   await expect(dialog.getByRole('heading',{name:'Painel resumido',exact:true})).toBeVisible();
+   await dialog.getByRole('radio',{name:'WhatsApp',exact:true}).check();
+   const download=page.waitForEvent('download');
+   await dialog.getByRole('button',{name:'Baixar imagem desta parte',exact:true}).click();
+   expect((await download).suggestedFilename()).toMatch(/\.png$/);
+   await page.screenshot({path:info.outputPath(`sharing-${tabName}-${width}.png`),fullPage:true});
+   expect(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth+2)).toBe(false);
+   await dialog.getByRole('button',{name:'Fechar',exact:true}).click();
+   await expect(dialog).toBeHidden();
+  }
+  expect(errors).toEqual([]);
+ });
+}
