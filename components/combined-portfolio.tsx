@@ -13,6 +13,7 @@ import { AnalysisSimulation, OverviewUnits, type AnalysisTab } from './analysis-
 import { type ManagementPriorityAction } from './management-priorities';
 import { PaTable, YearComparison, type ScenarioFilters } from './scenario-panels';
 import AttainmentLegend from './ui/attainment-legend';
+import SecondaryInfo from './ui/secondary-info';
 import PeriodPerformance from './period-performance';
 import UnitScenarioMatrix from './unit-scenario-matrix';
 import styles from './combined-portfolio.module.css';
@@ -111,7 +112,7 @@ export default function CombinedPortfolio({ dataset, filters, models: suppliedMo
                 <td role="cell" className={styles.actionCell} data-label="Ações"><div className={styles.rowActions}><button type="button" className="button quiet" onClick={() => onSelect(row)}>{model.level === 'pa' ? 'Analisar PA' : model.level === 'central' ? 'Analisar central' : 'Analisar cooperativa'}</button>{model.level === 'central' ? <button type="button" className="button quiet" onClick={() => onDrill(row)}>Ver cooperativas</button> : model.level === 'cooperative' ? <button type="button" className="button quiet" aria-expanded={expanded} onClick={togglePas}>{expanded ? 'Fechar PAs' : 'Ver PAs'}</button> : onHistory && <button type="button" className="button quiet" onClick={() => onHistory(row)}>Ver histórico</button>}</div></td>
               </tr>{model.level === 'cooperative' && expanded && <tr className={styles.expandedRow}><td colSpan={7}>{expandedContent(row)}</td></tr>}</Fragment>;
             })}</tbody>
-          </table></div>}<div className={styles.legend}><AttainmentLegend /></div>
+          </table></div>}<SecondaryInfo title="Faixas de atingimento"><AttainmentLegend /></SecondaryInfo>
         </> : <p className={styles.empty}>Nenhuma unidade de {model.label} no recorte atual. Ajuste os filtros para continuar.</p>)}</div>
         <div hidden={mode !== 'periods'}>{visited('periods') && <PeriodPerformance dataset={dataset} filters={model.filters} unitIds={model.unitIds} ownerId={ownerId} sectionId={`resultados-por-periodo-${model.metric.toLowerCase()}`} standalone initialExpanded expandRequest={expandRequest || undefined} shareRequest={mode === 'periods' && model.metric === firstPopulated ? shareRequest : undefined} />}</div>
         <div hidden={mode !== 'comparison'}>{visited('comparison') && <YearComparison dataset={dataset} filters={scopeFilters} owner={ownerId ?? null} years={years} sessionDatasets={sessionDatasets} standalone initialExpanded onShare={onComparisonShare ? (comparison, previousYear) => onComparisonShare(comparison, previousYear, model) : undefined} />}</div>

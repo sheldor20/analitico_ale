@@ -1,4 +1,5 @@
 "use client";
+import SecondaryInfo from './ui/secondary-info';
 import dynamic from 'next/dynamic';
 import { goalVariance } from '@/lib/goal-variance.mjs';
 import { readWorkbookFile, XLSX_FILE_LIMIT_MB } from "@/lib/xlsx-safety.mjs";
@@ -473,6 +474,8 @@ export default function Dashboard() {
   }
   function changeAnalysisTab(next:AnalysisTab,restore=true) {
     document.querySelectorAll<HTMLDetailsElement>('.year-management[open]').forEach(element=>{element.open=false;});
+    if(next==='pas')setSource('cadence');
+    if(next==='overview'||next==='units')setSource('base');
     if(next==='pas'||analysisTab==='pas'){setPa('all');setGroup('all');setSearch('');setStatusFilter('all');setPriorityFocus(null);}
     tabPositions.current[analysisTab]=window.scrollY;
     setAnalysisTab(next);setVisitedTabs(items=>items.includes(next)?items:[...items,next]);
@@ -1187,12 +1190,12 @@ export default function Dashboard() {
                 ...(coop!=='all'?[{label:cooperatives.find(([id])=>id===coop)?.[1]??`Cooperativa ${coop.split(':')[1]}`,onClick:()=>returnToAncestor('cooperative')}]:[]),
                 ...(pa!=='all'?[{label:paOptions.find(([id])=>id===pa)?.[1]??`PA ${pa.split(':').at(-1)}`}]:[]),
               ]}/><AnalysisTabs active={analysisTab} onChange={changeAnalysisTab}/></>}
-              <FilterPanel compact={view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
+              <FilterPanel compact={view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab)} primary={view!=='audit'?<>
                 {dataset&&<label>Ano<select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy||registrySaving} onChange={event=>openWorkspace(Number(event.target.value))}>{[...new Set([dataset.year,...workspaces.map(item=>item.year),...sessionYears.current.keys()])].sort((a,b)=>b-a).map(year=><option key={year} value={year}>{year}</option>)}</select></label>}
                 <label>Carteira<select aria-label="Carteira" value={selectedMetric} disabled={effectiveSource==='cadence'} onChange={event=>setMetric(event.target.value)}><option value="VN">Venda Nova</option><option value="AR">Arrecadação</option>{view==='overview'&&<option value="both">Venda Nova + Arrecadação</option>}</select></label>
                 <label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option value={id} key={id}>{id} · {name.replace('Sicoob Central ','')}</option>)}</select></label>
-                {view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab)&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
-                <PeriodSelector showCoverage={!(view==='overview'&&['overview','units','pas','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
+                {view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab)&&<label>Cooperativa<select aria-label="Cooperativa" value={coop} disabled={central==='all'} onChange={event=>{setCoop(event.target.value);setPa('all');setExpandedCoops([]);setPriorityFocus(null);}}><option value="all">{central==='all'?'Selecione uma central':'Todas as cooperativas'}</option>{cooperatives.map(([id,name])=><option key={id} value={id}>{name.replace('SICOOB ','')}</option>)}</select></label>}
+                <PeriodSelector showCoverage={!(view==='overview'&&['overview','units','pas','periods','comparison','simulation'].includes(analysisTab))} period={period} month={month} year={dataset?.year??config.year} onPeriodChange={setPeriod} onMonthChange={setMonth}/>
               </>:undefined} description={view==='audit'?scopeLabel:[metricName(selectedMetric),scopeLabel,periodDescription,cutoff?`Corte ${shortDate(cutoff)}`:'Sem corte',...new Set(displayed.map(row=>row.phase)),statusFilter!=='all'?({attention:'Precisam de atenção',track:'Em rota / meta atingida',missing:'Dados ou metas pendentes'} as Record<string,string>)[statusFilter]:'',search?`Busca: ${search}`:''].filter(Boolean).join(' · ')} onReset={resetFilters} active={pa!=='all'||central!=='all'||coop!=='all'||group!=='all'||Boolean(search)||statusFilter!=='all'||uplift>0}>
                 {view!=='audit'&&<label>Fonte<select value={effectiveSource} onChange={event=>{setSource(event.target.value as 'base'|'cadence');setPa('all');setGroup('all');if(view==='cadence')setView('overview');}}><option value="base">Cooperativas</option><option value="cadence">Cadência PA</option></select></label>}
                 {view==='audit'&&<label>Central<select aria-label="Central" value={central} onChange={event=>{setCentral(event.target.value);setCoop('all');}}><option value="all">Todas as centrais</option>{centralOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}
@@ -1396,7 +1399,7 @@ export default function Dashboard() {
                               {(unitLayout==='period'||view!=='overview'||analysisTab==='pas')&&<label className="indicator-toggle"><input type="checkbox" aria-label="Mais indicadores" checked={showMoreIndicators} onChange={e => setShowMoreIndicators(e.target.checked)} />Indicadores</label>}
                             </div>
 
-                            <details className="export-selection"><summary><span aria-live="polite">{selectedKeys.length ? `${selectedKeys.length} selecionadas` : 'Selecionar para exportar'}</span><ChevronDown size={15} aria-hidden="true"/></summary>
+                            <details className="export-selection" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><span aria-live="polite">{selectedKeys.length ? `${selectedKeys.length} selecionadas` : 'Selecionar para exportar'}</span><ChevronDown size={15} aria-hidden="true"/></summary>
                         <div className="selection-toolbar export-selection-options">
                           <label className="unit-select-all"><input className="row-selector" type="checkbox" aria-label="Selecionar todas as unidades filtradas" checked={displayed.length > 0 && selectedKeys.length === displayed.length} ref={element => { if(element) element.indeterminate = selectedKeys.length > 0 && selectedKeys.length < displayed.length; }} onChange={event => setRowSelection({context:selectionContext, keys:event.target.checked ? displayed.map(row => row.key) : []})} />Selecionar todas</label>
                           <span>{selectedKeys.length ? `${selectedKeys.length} unidades selecionadas` : 'Selecione na tabela ou marque todas.'}</span>
@@ -1512,7 +1515,7 @@ export default function Dashboard() {
                           </table>
                         </div>}
                         {analysisTab==='pas'&&<nav className="selection-toolbar" aria-label="Paginação dos PAs"><span>{displayed.length ? paPage*50+1 : 0} a {Math.min((paPage+1)*50,displayed.length)} de {displayed.length} PAs</span><button type="button" className="button secondary" disabled={paPage===0} onClick={()=>setPaPagination({context:paPageContext,page:paPage-1})}>Anterior</button><span>Página {paPage+1} de {paPageCount}</span><button type="button" className="button secondary" disabled={paPage>=paPageCount-1} onClick={()=>setPaPagination({context:paPageContext,page:paPage+1})}>Próxima</button></nav>}
-                        <div className="overview-table-legend"><AttainmentLegend /></div>
+                        <SecondaryInfo title="Faixas de atingimento"><AttainmentLegend /></SecondaryInfo>
                         {!displayed.length && (
                           <p className="empty">Nenhum registro encontrado.</p>
                         )}

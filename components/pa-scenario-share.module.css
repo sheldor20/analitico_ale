@@ -114,3 +114,6 @@
   .summaryTable thead { display: table-header-group; }
   .summaryTable tr { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* Shared compact workspace design. */
+ .dialog{padding:18px;gap:12px;border-radius:12px}.heading h2{font-size:20px}.context{font-size:12px}.selectionSettings{gap:10px}.selectionToolbar{gap:8px;padding:10px 0}.helper{font-size:12px}.actions{gap:8px}.summaryCards{gap:10px}.pageNavigation{gap:10px}

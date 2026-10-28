@@ -48,3 +48,6 @@
 .agendaDisclosure > section { border: 0; margin: 0; }
 @media(max-width: 680px) { .grid { grid-template-columns: 1fr; } .fieldgroup { padding: 15px; } .tabs { gap: 2px; } .tabs button { padding: 10px; flex: 1 1 40%; } .day { min-height: 56px; } }
 @media(max-width: 420px) { .agendaDisclosure > summary { padding: 14px; flex-wrap: wrap; gap: 8px; } .agendaDisclosure > summary span { flex: 1 0 100%; margin-left: 27px; } }
+
+/* Shared compact workspace design. */
+ .section{gap:12px}.heading{gap:10px}.heading h3{font-size:18px}.tabs{gap:4px}.tabs button{font-size:13px;padding:8px 12px;min-height:36px}.fieldgroup{padding:14px;gap:12px;border-radius:10px}.grid{gap:12px}.fieldgroup label,.grid label{font-size:12px;gap:5px}.fieldgroup input,.fieldgroup select,.grid input,.grid select{min-height:36px;padding:7px 10px;font-size:14px}.actions{gap:8px}.appointment{padding:12px;gap:8px}.agendaDisclosure{margin-bottom:14px}.agendaDisclosure>summary{min-height:42px;padding:10px 14px}.muted{font-size:12px}@media(max-width:720px){.fieldgroup input,.fieldgroup select,.grid input,.grid select{font-size:16px;min-height:40px}}

@@ -1,4 +1,5 @@
 "use client";
+import SecondaryInfo from './ui/secondary-info';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PortfolioCommunication from "@/components/portfolio-communication";
@@ -228,7 +229,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
       {calendarExpanded && <ConsolidatedAgenda key={`consolidated:${dataset.year}:${userId}`} entities={entities} year={dataset.year} userId={userId} refreshKey={agendaRevision} onOpenEntity={openEntityAgenda} disabled={locked} creationDisabled={relationshipDirty || entityForm !== null} onDirtyChange={setConsolidatedDirty} onSavingChange={setConsolidatedSaving} onAppointmentsChange={refreshFromConsolidated} />}
     </details>
     <div className="panel-heading">
-      <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs. Abra a ficha de uma unidade para acompanhar sua carteira.</p></div>
+      <div><h2>Fichas, agenda e metas · {dataset.year}</h2><p>{centrals.length} centrais · {cooperatives.length} cooperativas · {entities.filter((entity) => entity.kind === "pa").length} PAs.</p></div>
       <div className="registry-actions"><button type="button" className="button secondary" disabled={locked || !workspaceRevision} onClick={() => { if (!leaveRelationshipForm()) return; setEntityForm(null); setActiveTab('contacts'); setContactRevision(value => value + 1); setCalendarExpanded(false); setShowContactImport(true); }}>Importar contatos</button><button type="button" className="button primary" onClick={startCreate} disabled={locked}><Plus size={18} /> Nova unidade</button></div>
     </div>
     {!workspaceRevision && <p className="helper">Salve a base do ano antes de importar contatos.</p>}
@@ -274,7 +275,7 @@ export default function RegistryManager({ dataset, userId, onChange, busy = fals
           </div> : <>
             <div className={profileStyles.tabs} aria-label="Seções da ficha">{([{ id: "profile", label: "Ficha da carteira" }, { id: "contacts", label: "Contatos" }, { id: "agenda", label: "Agenda" }, { id: "targets", label: "Metas e produção" }] as const).map((tab) => <button type="button" key={tab.id} aria-pressed={activeTab === tab.id} disabled={locked} onClick={() => { if (tab.id !== activeTab && leaveRelationshipForm()) setActiveTab(tab.id); }}>{tab.label}</button>)}</div>
             {activeTab === "profile" && <div className={profileStyles.section}>
-              {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3><p className={profileStyles.muted}>Abra uma ficha para ver contatos, carteira e agenda.</p></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
+              {hierarchy.children.length > 0 && <section className={profileStyles.section} aria-label="Unidades vinculadas"><div><h3>{selected.kind === "central" ? "Cooperativas desta central" : "PAs desta cooperativa"}</h3></div><div className={profileStyles.children}>{hierarchy.children.map((child) => <button className={profileStyles.child} type="button" key={child.id} disabled={locked} aria-label={`Abrir ficha de ${child.name}`} onClick={() => selectEntity(child)}><small>{kindLabel[child.kind]} {child.kind === "pa" ? child.pa : child.cooperative}</small><strong>{child.name}</strong><small>Abrir ficha →</small></button>)}</div></section>}
               <EntityProfile key={`profile:${selected.id}:${dataset.year}:${userId}`} entity={selected} year={dataset.year} userId={userId} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />
             </div>}
             {activeTab === "contacts" && <ResponsibleManager key={`contacts:${selected.id}:${dataset.year}:${userId}:${contactRevision}`} entity={selected} year={dataset.year} disabled={locked || consolidatedDirty} onDirtyChange={setRelationshipDirty} />}
@@ -358,7 +359,7 @@ function PlanEditor({ dataset, entity, metric, row, busy, centralChildren, onDir
         <label>Meta anual de {dataset.year} (R$)<input inputMode="decimal" value={annual} placeholder="Ex.: 12.000,00" onChange={(event) => { setAnnual(event.target.value); setDirty(true); setError(""); }} /><button type="button" className="button secondary" onClick={distributeAnnual}>Distribuir nos 12 meses</button></label>
         <label>Produção atualizada até<input type="date" required min={`${dataset.year}-01-01`} max={`${dataset.year}-12-31`} value={cutoff} onChange={(event) => { setCutoff(event.target.value); setDirty(true); }} /><span className="helper">O mês desta data determina até onde há produção apurada.</span></label>
       </div>
-      <p className="helper">Informe o total de cada mês. Campo vazio significa dado não informado; zero significa resultado apurado sem produção. Ajustes negativos de realizado são aceitos.</p>
+      <SecondaryInfo title="Orientações de preenchimento"><p>Informe o total de cada mês. Campo vazio significa dado não informado; zero significa resultado apurado sem produção. Ajustes negativos de realizado são aceitos.</p><p>Avance a data de posição antes de lançar a produção de meses posteriores. Os períodos são recalculados ao salvar.</p></SecondaryInfo>
       <div className="registry-month-grid" aria-label="Metas e produção por mês">
         <div className="registry-month-heading"><span>Mês / {dataset.year}</span><span>Meta (R$)</span><span>Realizado (R$)</span></div>
         {MONTHS.map((month: string, index: number) => <div className="registry-month-row" key={month}>
@@ -366,7 +367,7 @@ function PlanEditor({ dataset, entity, metric, row, busy, centralChildren, onDir
         </div>)}
         <div className="registry-month-row registry-month-total"><strong>Total lançado</strong><strong>{money(monthlyTotal)}</strong><strong>{money(actualTotal)}</strong></div>
       </div>
-      <p className="helper">Avance a data de posição antes de lançar a produção de meses posteriores. Mensal, trimestral, semestral, anual e acumulado são recalculados ao salvar.</p>
+
       {error && <div className="message error registry-error" role="alert"><Info size={17} /><span>{error}</span></div>}
       <div className="registry-actions"><span className="helper" role="status">{dirty ? "Alterações ainda não salvas" : row ? "Valores atuais do cadastro" : "Pronto para cadastrar os valores"}</span><button type="submit" className="button primary">{busy ? <LoaderCircle size={18} className="spin" /> : <Save size={18} />} Salvar metas e produção</button></div>
     </fieldset>

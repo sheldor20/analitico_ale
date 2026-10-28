@@ -30,3 +30,6 @@
 .emailPanel textarea { width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; line-height: 1.5; background: white; color: var(--ink); }
 .emailPanel button, .emailPanel a { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 @media(max-width:700px) { .emailPanel input, .emailPanel select, .emailPanel textarea { font-size: 16px; } }
+
+/* Shared compact workspace design. */
+ .section{gap:14px}.heading{align-items:center;gap:12px}.heading h2{font-size:20px;margin:0 0 4px}.heading p{font-size:12px}.section label{font-size:12px;gap:5px}.section select{min-height:36px;font-size:14px;padding:7px 10px;border-radius:7px}.summary{padding:12px 14px;gap:12px;border-radius:10px}.filters{gap:10px;align-items:end}.grid{gap:12px}.card{padding:14px;border-radius:10px}.card h3{font-size:17px}.path,.cutoff{font-size:12px}.actions{gap:8px}.exportToolbar{padding:8px 0;font-size:12px}@media(max-width:720px){.section select{font-size:16px;min-height:40px}}

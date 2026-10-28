@@ -1,4 +1,5 @@
 'use client';
+import SecondaryInfo from './ui/secondary-info';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChartNoAxesColumnIncreasing, Hourglass, Share2, Target, TrendingUp } from 'lucide-react';
@@ -166,7 +167,7 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
             <header className={styles.groupHeading}><h3>{selectedGroup.title}<span className={styles.count}>{selectedGroup.rows.length} {selectedGroup.rows.length === 1 ? 'período' : 'períodos'}{granularity === 'month' ? ' · janeiro a dezembro' : ''}</span></h3></header>
             {presentation === 'table' ? <PeriodTable rows={sortPerformancePeriods(selectedGroup.rows, order)} title={selectedGroup.title} period={granularity} indicator={indicator} /> : <PeriodChart rows={selectedGroup.rows} indicator={indicator} title={selectedGroup.title} />}
           </section>}
-          <div className={styles.legend}><AttainmentLegend /><span className={styles.balanceLegend}><strong>+</strong> Superação <span>·</span> <strong>−</strong> GAP</span></div>
+          <SecondaryInfo title="Faixas e sinais"><div className={styles.legend}><AttainmentLegend /><span className={styles.balanceLegend}><strong>+</strong> Superação <span>·</span> <strong>−</strong> GAP</span></div></SecondaryInfo>
         </> : GROUP_ORDER.map(period => {
           const group = model.groups.find(item => item.period === period);
           if (!group) return null;
@@ -175,7 +176,7 @@ export default function PeriodPerformance({ dataset, filters, unitIds, expandReq
             <header className={styles.groupHeading}><h3>{group.period === 'annual' ? 'Resumo anual' : group.title}{group.period === 'annual' && rows[0] ? <Phase row={rows[0]} /> : <span className={styles.count}>{group.rows.length} {group.rows.length === 1 ? 'período' : 'períodos'}</span>}</h3><PanelToggle expanded={isOpen} controls={groupId} label={group.title.toLocaleLowerCase('pt-BR')} onToggle={() => setGroups(value => ({ ...value, [group.period]: !value[group.period] }))} /></header>
             <div id={groupId} hidden={!isOpen}>
               {group.period === 'annual' ? rows.map(row => <AnnualSummary key={row.id} row={row} />) : group.period === 'month' ? <>
-                <div className={styles.legend}><AttainmentLegend /><span className={styles.balanceLegend}><strong>+</strong> Superação <span>·</span> <strong>−</strong> GAP</span></div>
+                <SecondaryInfo title="Faixas e sinais"><div className={styles.legend}><AttainmentLegend /><span className={styles.balanceLegend}><strong>+</strong> Superação <span>·</span> <strong>−</strong> GAP</span></div></SecondaryInfo>
                 <div className={styles.tableScroll}><table aria-label={group.title}>
                   <thead><tr><th scope="col">Mês</th><th scope="col">Meta</th><th scope="col">Realizado</th><th scope="col">Atingimento</th><th scope="col">GAP / Superação</th><th scope="col">Projeção</th></tr></thead>
                   <tbody>{rows.map(row => <tr key={row.id} data-period={row.period} data-month={row.month} data-phase={row.phase}>

@@ -12,3 +12,6 @@
 .fields{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:12px;min-width:0}.fields input{width:100%;min-width:0;font-size:16px}.footer{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:14px;font-size:.86rem}.footer>.actions{justify-content:flex-end}
 @media(max-width:680px){.backdrop{padding:12px}.dialog{padding:16px;gap:14px}.header h2{font-size:1.18rem}.fields{grid-template-columns:1fr}.row{padding:12px}.rowHeading{flex-wrap:wrap}.footer>.actions{display:grid;grid-template-columns:1fr}.footer button{width:100%;justify-content:center}.actions>button{max-width:100%}}
 @media(max-width:380px){.backdrop{padding:6px}.dialog{padding:12px}.header h2{font-size:1.08rem}}
+
+/* Shared compact workspace design. */
+ .dialog{padding:18px;gap:12px;border-radius:12px}.header h2{font-size:20px}.fields{gap:10px}.row{padding:12px;gap:10px}.rowHeading{gap:8px}.footer{gap:8px}.summary{padding-top:10px}.actions{gap:8px}

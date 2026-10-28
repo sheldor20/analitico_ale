@@ -1,4 +1,5 @@
 "use client";
+import SecondaryInfo from './ui/secondary-info';
 import { useId } from 'react';
 import { MONTHS, money, percent } from '@/lib/analytics.mjs';
 import { chartDomain, comparisonDashboard, signedBar } from '@/lib/comparison-dashboard.mjs';
@@ -41,7 +42,7 @@ export default function ComparisonDashboard({ comparison, currentYear, previousY
       </figure>
       <MonthlyComparison months={model.months} currentYear={currentYear} previousYear={previousYear} />
     </div>
-    <p className="helper">{model.compositionChanged ? 'A variação inclui diferenças no cadastro. Use “Somente unidades presentes nos dois anos” para comparar a mesma seleção. ' : ''}Ausência de informação não é zero. Percentual de variação exige produção anterior positiva.</p>
+    <SecondaryInfo title="Critérios de comparação" open={model.compositionChanged}><p className="helper">{model.compositionChanged ? 'A variação inclui diferenças no cadastro. Use “Somente unidades presentes nos dois anos” para comparar a mesma seleção. ' : ''}Ausência de informação não é zero. Percentual de variação exige produção anterior positiva.</p></SecondaryInfo>
   </div>;
 }
 function MonthlyComparison({ months, currentYear, previousYear }: { months: { month: number; current: number | null; previous: number | null }[]; currentYear: number; previousYear: number }) {
