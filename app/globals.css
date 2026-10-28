@@ -3284,3 +3284,10 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .portal .filter-panel-compact .filter-summary{justify-content:flex-end;padding:4px 14px 8px;border-top:0;background:transparent;min-height:0}
 .portal .filter-panel-compact .filter-toggle{min-height:28px}
 @media(max-width:720px){.portal .filter-panel-compact .filter-summary{align-items:flex-end;padding-inline:12px}.portal .filter-panel-compact .filter-panel-heading{width:auto}}
+
+/* Both production inputs lead to the same annual update and save flow. */
+.import-methods{display:flex;gap:4px;padding:4px;background:var(--surface-alt,#f4f8f8);border:1px solid var(--line);border-radius:8px;margin:16px 0}
+.import-methods button{flex:1;border:0;background:transparent;color:var(--ink);border-radius:5px;min-height:36px;padding:8px 12px;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.import-methods button.active{background:var(--sicoob-dark);color:#fff}
+.import-methods button:focus-visible{outline:2px solid var(--sicoob-turquoise);outline-offset:2px}
+.import-methods button:disabled{opacity:.6;cursor:wait}

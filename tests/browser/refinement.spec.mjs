@@ -45,7 +45,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
     if (url.pathname === '/auth/v1/logout') return answer({});
     if (url.pathname === '/rest/v1/commercial_workspaces') {
       if (relationshipSeed.workspaceMissing && request.method() === 'GET' && url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push('Workspace: incorrect read owner');
-      if (relationshipSeed.workspaceMissing && ['POST', 'PATCH'].includes(request.method())) {
+      if ((relationshipSeed.workspaceMissing || relationshipSeed.trackWorkspaceWrites) && ['POST', 'PATCH'].includes(request.method())) {
         const payload = request.postDataJSON();workspaceWrites.push({method:request.method(),payload,filters:Object.fromEntries(url.searchParams)});
         if (request.method() === 'POST') {
           if (payload.owner_id !== owner || payload.revision !== 1) errors.push('Workspace: incorrect initial owner or revision');
@@ -325,4 +325,52 @@ for(const width of [1440,390]) test(`action plan compact filters ${width}`,async
  await panel.getByRole('button',{name:/Mais filtros/}).click();
  await expect(panel.getByRole('combobox',{name:'Fonte',exact:true})).toBeHidden();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
+});
+
+const pastedProduction = [
+ ['GRUPO','Nº CENTRAL','CENTRAL','Nº COOP','NOME COOP','Nº PA','CPA','NOME DO PA','MÊS','ANO','REAL JAN','ATINGIU?','REAL FEV','AGO','SET','META PERÍODO','REALIZADO'],
+ ['P1','1002','Central Exemplo','3017','Cooperativa Exemplo','0','3017-0','Nome recebido','999,00','11.988,00','1.111,11','SIM','-','','12,50','999.999,00','999.999,00'],
+ ['P2','1002','Central Exemplo','3017','Cooperativa Exemplo','7','3017-7','PA novo de teste','600,00','7.200,00','25,00','NÃO','-','','30,00','',''],
+].map(row=>row.join('\t')).join('\n');
+for(const width of [1440,390]) test(`pasted PA production preview and persisted update ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ const state=await setup(page,v=>v,{compactPortal:true,trackWorkspaceWrites:true});
+ const original=structuredClone(state.workspaceRows[0].dataset);
+ await page.getByRole('button',{name:'Importar base',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Importar base',exact:true});
+ await expect(dialog.getByRole('button',{name:'Colar dados',exact:true})).toHaveAttribute('aria-pressed','true');
+ const input=dialog.getByRole('textbox',{name:'Dados da Cadência PA',exact:true});
+ await input.fill(pastedProduction);
+ await dialog.getByLabel('Data de corte da produção colada',{exact:true}).fill('2026-09-10');
+ await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+ await expect(dialog.getByRole('button',{name:'Atualizar produção',exact:true})).toBeEnabled();
+ expect(state.workspaceWrites).toHaveLength(0);
+ await page.screenshot({path:info.outputPath(`paste-preview-${width}.png`),fullPage:true});
+ expect(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth+2)).toBe(false);
+ await input.fill(pastedProduction.replace('1.111,11','INVÁLIDO'));
+ await expect(dialog.getByRole('button',{name:'Atualizar produção',exact:true})).toHaveCount(0);
+ await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+ await expect(dialog.getByRole('alert')).toBeVisible();
+ expect(state.workspaceWrites).toHaveLength(0);
+ await input.fill(pastedProduction);
+ await dialog.getByRole('button',{name:'Conferir prévia',exact:true}).click();
+ await dialog.getByRole('button',{name:'Atualizar produção',exact:true}).click();
+ await expect(dialog).toBeHidden();
+ await expect.poll(()=>state.workspaceWrites.length).toBe(1);
+ const saved=state.workspaceRows[0].dataset;
+ const key='cadence:1002:3017:0:VN';
+ const before=original.rows.find(r=>r.key===key),after=saved.rows.find(r=>r.key===key);
+ expect(after.actuals[0]).toBe(1111.11);expect(after.actuals[1]).toBe(0);
+ expect(after.actuals[7]).toBe(before.actuals[7]);expect(after.actuals[8]).toBe(12.5);
+ expect(after.targets).toEqual(before.targets);expect(after.annualTarget).toBe(before.annualTarget);
+ expect(after.name).toBe(before.name);
+ for(const row of original.rows.filter(r=>r.key!==key)) expect(saved.rows.find(r=>r.key===row.key)).toEqual(row);
+ expect(saved.rows.find(r=>r.key==='cadence:1002:3017:7:VN').actuals[8]).toBe(30);
+ expect(saved.rows).toHaveLength(original.rows.length+1);
+ expect(state.workspaceWrites[0]).toMatchObject({method:'PATCH',payload:{revision:2},filters:{owner_id:`eq.${owner}`,revision:'eq.1'}});
+ await page.reload();
+ await expect(page.getByRole('heading',{level:1,name:'Análises',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Resultado do período',exact:true})).toBeVisible();
+ expect(state.errors).toEqual([]);
+ expect(state.writes).toEqual([]);expect(state.relationshipWrites).toEqual([]);
 });

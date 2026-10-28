@@ -12,6 +12,7 @@ export function registerUploadLimitTests({test,expect,setup,owner}) {
     const buffer=Buffer.from(await sizedXlsx(workbook,40*1024*1024));
     expect(buffer.byteLength).toBe(41943040);
     const {errors,writes,workspaceWrites,workspaceRows,relationshipWrites}=await setup(page,()=>createEmptyDataset(2026),{workspaceMissing:true});
+    await page.getByRole('button',{name:'Enviar arquivo',exact:true}).click();
     await expect(page.getByText('0/2 fontes selecionadas · até 40 MB por arquivo',{exact:true})).toBeVisible();
     await page.getByLabel('Cadência PA · posição em',{exact:true}).fill('2026-08-31');
     await page.getByLabel('Selecionar Cadência comercial PA',{exact:true}).setInputFiles({name:'cadencia-limite-40mb.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer});

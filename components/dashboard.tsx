@@ -86,6 +86,7 @@ import Kpi from './ui/metric-card';
 import FilterPanel from './ui/filter-panel';
 import { effortLabel, filterDashboardRows, visibleLeafRows } from '@/lib/dashboard-view.mjs';
 import { clearLocalAuth } from '@/lib/session-cleanup';
+const ProductionPaste = dynamic(() => import('./production-paste'), { loading: () => <p role="status">Carregando atualização por colagem…</p> });
 const CnvActions = dynamic(() => import('./cnv-actions'), { loading: () => <p role="status">Carregando ações CNV…</p> });
 type Analysis = ReturnType<typeof analyze> & { contribution?: number | null; recentGrowth?: number | null; recentLabel?: string };
 type FilterSnapshot = { tab: AnalysisTab; unitLayout:UnitLayout; scrollY:number; selection:{context:string;keys:string[]}; expandedCoops:string[]; view: View; source: 'base' | 'cadence'; metric: string; central: string; coop: string; pa: string; group: string; level: string; search: string; status: string; sortBy: string; month: number; period: string; uplift: number; expandedPaKey: string; priorityFocus: {context:string;keys:string[];label:string} | null };
@@ -141,6 +142,7 @@ export default function Dashboard() {
   const [registrySaving, setRegistrySaving] = useState(false);
   const [agendaRequest, setAgendaRequest] = useState<{ owner: string; year: number; entityId: string; date: string; request: number } | null>(null);
   const [importMode, setImportMode] = useState("production");
+  const [importMethod, setImportMethod] = useState<"paste" | "file">("paste");
   const [sortBy, setSortBy] = useState("attainment-desc");
   const [requestedYear, setRequestedYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -586,14 +588,16 @@ export default function Dashboard() {
       setNotice(user ? "Cadastro salvo. Metas, acumulados e indicadores recalculados." : "Cadastro atualizado nesta sessão. Entre e salve para retomar depois.");
     } finally { setBusy(""); }
   }
-  async function importFiles() {
-    if (registrySaving) return;
+  async function importFiles(pasted?: { text: string; config: ImportConfig }) {
+    if (registrySaving || busy) return;
+    const importConfig = pasted?.config ?? config;
+    const mode = pasted ? "production" : importMode;
     if (view === "agenda" && registryDirty && !window.confirm("A importação encerrará o compromisso não salvo na agenda. Deseja continuar?")) return;
     setError("");
     setNotice("");
     const selectedFiles = (Object.entries(files) as [keyof SourceFiles, File | null][])
       .filter((item): item is [keyof SourceFiles, File] => Boolean(item[1]));
-    if (!selectedFiles.length) {
+    if (!pasted && !selectedFiles.length) {
       setError(
         "Selecione a base de cooperativas, a cadência PA ou os dois arquivos.",
       );
@@ -605,20 +609,24 @@ export default function Dashboard() {
         "@/lib/importer.mjs"
       );
       if (dataset && !historical) sessionYears.current.set(dataset.year, dataset);
-      let current = !historical && dataset?.year === config.year ? dataset : sessionYears.current.get(config.year) ?? null;
-      let revision = !historical && dataset?.year === config.year ? workspaceRevision : null;
+      let current = !historical && dataset?.year === importConfig.year ? dataset : sessionYears.current.get(importConfig.year) ?? null;
+      let revision = !historical && dataset?.year === importConfig.year ? workspaceRevision : null;
       if (user && (!current || revision === null)) {
-        const saved = await loadWorkspace(user.id, config.year);
+        const saved = await loadWorkspace(user.id, importConfig.year);
         if (saved) { current = initializeRegistry(saved.dataset); revision = saved.revision; }
       }
       const allowedCentrals = current?.registry?.entities.filter((entity) => entity.kind === "central").map((entity) => entity.central) ?? [];
       const parts = [];
-      for (const [expectedSource, file] of selectedFiles) {
+      if (pasted) {
+        const { parseCadencePaste } = await import("@/lib/production-paste.mjs");
+        parts.push(parseCadencePaste(pasted.text, { ...importConfig, allowedCentrals }));
+      }
+      for (const [expectedSource, file] of pasted ? [] : selectedFiles) {
         const parsed = await parseWorkbook(
           await readWorkbookFile(file),
           file.name,
-          { ...config, allowedCentrals,
-            ...(importMode === "fixed" ? { vnCutoff: `${config.year}-01-01`, arCutoff: `${config.year}-01-01`, cadenceCutoff: `${config.year}-01-01` } : {}) },
+          { ...importConfig, allowedCentrals,
+            ...(mode === "fixed" ? { vnCutoff: `${importConfig.year}-01-01`, arCutoff: `${importConfig.year}-01-01`, cadenceCutoff: `${importConfig.year}-01-01` } : {}) },
         );
         if (parsed.source !== expectedSource)
           throw new Error(
@@ -628,9 +636,9 @@ export default function Dashboard() {
           );
         parts.push(parsed);
       }
-      let incoming = combineImports(parts, config) as Dataset;
-      if (importMode === "fixed") incoming = { ...incoming, rows: incoming.rows.map((r) => ({ ...r, actuals: Array(12).fill(null) })) };
-      const data = mergeProduction(current, incoming, { goalsOnly: importMode === "fixed" });
+      let incoming = combineImports(parts, importConfig) as Dataset;
+      if (mode === "fixed") incoming = { ...incoming, rows: incoming.rows.map((r) => ({ ...r, actuals: Array(12).fill(null) })) };
+      const data = mergeProduction(current, incoming, { goalsOnly: mode === "fixed" });
       if (user) {
         const saved = await saveWorkspace(user.id, data, revision);
         if (activeOwner.current !== user.id) return;
@@ -655,6 +663,7 @@ export default function Dashboard() {
         `${incoming.rows.length} registros recebidos · ${data.rows.length} no cadastro anual. Metas fixas e meses ausentes preservados. ${user ? "Atualização salva automaticamente." : "Entre para salvar e retomar depois."}`,
       );
     } catch (e) {
+      if (pasted) throw e;
       setError(
         e instanceof Error
           ? e.message
@@ -898,9 +907,9 @@ export default function Dashboard() {
   </>;
   const importPanel = (
     <>
-      <h2>Importar planilhas</h2>
+      <h2>{importMode === "production" ? "Atualizar produção" : "Importar planilhas"}</h2>
       <p className="muted">
-        Escolha o objetivo do envio e as planilhas.
+        Cole os dados da planilha ou envie um arquivo.
       </p>
       <label className="import-mode">Objetivo deste envio
         <select value={importMode} onChange={(e) => { setImportMode(e.target.value); if (e.target.value === "history") { const year = (dataset?.year ?? new Date().getFullYear()) - 1; setConfig({ ...config, year, vnCutoff: `${year}-12-31`, arCutoff: `${year}-12-31`, cadenceCutoff: `${year}-12-31`, paTargetMode: "source" }); } }}>
@@ -909,6 +918,8 @@ export default function Dashboard() {
           <option value="history">Importar outro ano</option>
         </select>
       </label>
+      {importMode === "production" && <div className="import-methods" role="group" aria-label="Forma de atualização"><button type="button" className={importMethod === "paste" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "paste"} onClick={() => {setImportMethod("paste");setError("");}}>Colar dados</button><button type="button" className={importMethod === "file" ? "active" : ""} disabled={!!busy} aria-pressed={importMethod === "file"} onClick={() => {setImportMethod("file");setError("");}}>Enviar arquivo</button></div>}
+      {importMode === "production" && importMethod === "paste" ? <ProductionPaste config={dataset?.config ?? config} existingRows={dataset?.rows ?? []} allowedCentrals={dataset?.registry?.entities.filter(entity => entity.kind === "central").map(entity => entity.central) ?? []} disabled={!!busy || registrySaving} onApply={async (text, pasteConfig) => {await importFiles({text, config: pasteConfig});}} /> : <>
       {importMode === "history" && <p className="helper">As metas, a produção e as unidades serão guardadas somente no ano informado. Confirme os cortes; não use 31/12 se a base ainda for parcial. Novas cooperativas e PAs não serão incluídos retroativamente em outros anos.</p>}
       <label className="import-mode">Metas PA deste ano<select value={config.paTargetMode ?? (config.year < 2026 ? "source" : "group")} onChange={event => setConfig({ ...config, paTargetMode: event.target.value as "source" | "group" })}><option value="source">Metas da planilha</option><option value="group">Regra fixa P1–P5 (2026)</option></select></label>
       <div className="source-upload-grid">
@@ -995,7 +1006,7 @@ export default function Dashboard() {
       </p>
       <button
         className="button primary wide"
-        onClick={importFiles}
+        onClick={() => {void importFiles();}}
         disabled={!!busy || !selectedFileCount}
       >
         {busy ? (
@@ -1005,6 +1016,7 @@ export default function Dashboard() {
         )}
         {importMode === "fixed" ? "Cadastrar base fixa" : importMode === "history" ? "Importar ano histórico" : "Atualizar produção"}
       </button>
+      </>}
     </>
   );
   if (leaving) return <main className="auth-check" role="status">Encerrando sessão…</main>;
@@ -1552,7 +1564,7 @@ export default function Dashboard() {
         </main>
       </div>
       {showImport && (
-        <Modal title="Importar base" onClose={() => setShowImport(false)}>
+        <Modal title="Importar base" wide={importMode === "production" && importMethod === "paste"} onClose={() => setShowImport(false)}>
           <div className="import-panel">{importPanel}</div>
           {error && (
             <p role="alert" className="inline-error">
