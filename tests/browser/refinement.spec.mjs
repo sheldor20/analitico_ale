@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { portfolioFixture } from '../portfolio-fixture.mjs';
+import { upsertEntity, upsertPlanRow } from '../../lib/registry.mjs';
 const owner = '00000000-0000-0000-0000-000000000001';
 const created = '2026-09-10T12:00:00Z';
 const user = { id: owner, aud: 'authenticated', role: 'authenticated', email: 'browser-test@example.com', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: created };
@@ -19,7 +21,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
   const workspaceRows = relationshipSeed.workspaceMissing ? [] : [{ id: '00000000-0000-0000-0000-000000000010', owner_id: owner, year: 2026, revision: 1, updated_at: created, dataset }];
   const profileRows = structuredClone(relationshipSeed.profiles || []);
   const appointmentRows = structuredClone(relationshipSeed.appointments || []);
-  const goalStateRows = structuredClone(relationshipSeed.goalStates || []);
+  const goalStateRows = structuredClone(relationshipSeed.goalStates || []).map(row=>({period:'month',...row}));
   const relationshipTables = {
     commercial_entity_profiles: profileRows,
     commercial_entity_appointments: appointmentRows,
@@ -77,7 +79,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
       const matches = (entry) => [...url.searchParams].every(([column, filter]) => filter.startsWith('eq.') ? String(entry[column]) === filter.slice(3) : filter.startsWith('gt.') ? String(entry[column]) > filter.slice(3) : true);
       const response = (rows) => answer((request.headers().accept || '').includes('vnd.pgrst.object') ? rows[0] || null : rows);
       if (method !== 'POST') {
-        const required = method === 'HEAD' ? ['owner_id', 'workspace_year', 'central'] : isWorkspaceAgenda ? ['owner_id', 'workspace_year'] : isState ? (method === 'GET' ? ['owner_id', 'workspace_year', 'month'] : [...identityColumns, 'month', 'metric']) : identityColumns;
+        const required = method === 'HEAD' ? ['owner_id', 'workspace_year', 'central'] : isWorkspaceAgenda ? ['owner_id', 'workspace_year'] : isState ? (method === 'GET' ? ['owner_id', 'workspace_year', 'period', 'month'] : [...identityColumns, 'period', 'month', 'metric']) : identityColumns;
         for (const column of required) if (!url.searchParams.get(column)?.startsWith('eq.')) errors.push(`${relationshipTable}: missing ${column} scope`);
         if (url.searchParams.get('owner_id') !== `eq.${owner}`) errors.push(`${relationshipTable}: incorrect owner scope`);
       }
@@ -96,7 +98,7 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
       relationshipWrites.push({ table: relationshipTable, method, payload });
       if (method === 'POST') {
         if (payload.owner_id !== owner) errors.push(`${relationshipTable}: incorrect write owner`);
-        const unique = isState ? [...identityColumns, 'month', 'metric'] : identityColumns;
+        const unique = isState ? [...identityColumns, 'period', 'month', 'metric'] : identityColumns;
         const previous = relationshipTable === 'commercial_entity_appointments' ? undefined : relationshipRows.find(entry => unique.every(column => entry[column] === payload[column]));
         const saved = { id: `00000000-0000-0000-0000-${String(nextRelationshipId++).padStart(12, '0')}`, created_at: created, updated_at: created, ...(isState ? { read_at: null, notified_at: null } : {}), ...previous, ...payload };
         if (previous) relationshipRows.splice(relationshipRows.indexOf(previous), 1, saved); else relationshipRows.push(saved);
@@ -437,4 +439,66 @@ for(const width of [1440,390]) test(`base production paste with two portfolios $
   expect(state.workspaceRows[0].dataset.rows).toEqual(saved.rows);
  }
  expect(state.errors).toEqual([]);expect(state.writes).toEqual([]);expect(state.relationshipWrites).toEqual([]);
+});
+
+function goalPeriodFixture(dataset){
+ dataset.rows=dataset.rows.map(row=>({...row,actuals:Array(12).fill(row.source==='cadence'&&row.cooperative==='3017'?900:row.actuals[0]),cutoff:'2026-12-31'}));
+ dataset=upsertEntity(dataset,{kind:'pa',central:'2007',cooperative:'3017',pa:'0',name:'PA Nordeste zero',group:'P1'});
+ return upsertPlanRow(dataset,{entityId:'pa:2007:3017:0',metric:'VN',targets:Array(12).fill(450),annualTarget:5400,actuals:Array(12).fill(450),cutoff:'2026-12-31'});
+}
+for(const width of [1440,390]) test(`goal periods, cascading PA filters and isolated acknowledgement ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async()=>{throw new DOMException('Use download for this test','NotAllowedError');}}}));
+ const state=await setup(page,goalPeriodFixture,{compactPortal:true});
+ await page.getByRole('navigation',{name:'Navegação principal',exact:true}).getByRole('button',{name:'Metas atingidas',exact:true}).click();
+ const alerts=page.getByRole('region',{name:'Metas atingidas por período',exact:true});
+ const filters=alerts.getByRole('region',{name:'Filtros das metas atingidas',exact:true});
+ const period=filters.getByRole('combobox',{name:'Período',exact:true});
+ const central=filters.getByRole('combobox',{name:'Central',exact:true});
+ const coop=filters.getByRole('combobox',{name:'Cooperativa',exact:true});
+ const pa=filters.getByRole('combobox',{name:'PA',exact:true});
+ await expect(coop).toBeDisabled();await expect(pa).toBeDisabled();
+ await central.selectOption('1002');await coop.selectOption('cooperative:1002:3017');await pa.selectOption('pa:1002:3017:0');
+ await expect(alerts.getByRole('article')).toHaveCount(1);
+ await expect(alerts.getByRole('article').getByRole('heading',{name:'PA Alfa zero',exact:true})).toBeVisible();
+ await alerts.getByRole('button',{name:'Marcar como lida',exact:true}).click();
+ await expect(alerts.getByText('Lida',{exact:true})).toBeVisible();
+ for(const [value,label] of [['quarter','4º trimestre'],['semester','2º semestre'],['annual','Anual'],['ytd','Acumulado']]){
+  await period.selectOption(value);
+  await expect(alerts.getByRole('article')).toHaveCount(1);
+  await expect(alerts.getByRole('article')).toContainText(label);
+  await expect(alerts.getByRole('button',{name:'Marcar como lida',exact:true})).toBeVisible();
+  await alerts.getByRole('button',{name:'Preparar Outlook',exact:true}).click();
+  const email=alerts.getByRole('region',{name:'E-mail de PA Alfa zero',exact:true});
+  await expect(email).toContainText(label);
+  await expect(email).not.toContainText('Meta mensal atingida');
+  await email.getByRole('button',{name:'Fechar preparação do Outlook',exact:true}).click();
+  if(value==='annual'){
+   const file=page.waitForEvent('download');
+   await alerts.getByRole('article').getByRole('button',{name:'Copiar painel como imagem',exact:true}).click();
+   const downloaded=await file;
+   expect(downloaded.suggestedFilename()).toContain('-annual-');
+   expect([...(await readFile(await downloaded.path())).subarray(0,8)]).toEqual([137,80,78,71,13,10,26,10]);
+  }
+ }
+ await period.selectOption('annual');
+ await alerts.getByRole('button',{name:'Marcar como lida',exact:true}).click();
+ await expect(alerts.getByText('Lida',{exact:true})).toBeVisible();
+ const stored=state.goalStateRows.filter(row=>row.entity_id==='pa:1002:3017:0');
+ expect(stored.map(row=>row.period).sort()).toEqual(['annual','month']);
+ expect(new Set(stored.map(row=>row.alert_key)).size).toBe(2);
+ await period.selectOption('quarter');await expect(alerts.getByRole('button',{name:'Marcar como lida',exact:true})).toBeVisible();
+ await period.selectOption('month');await expect(alerts.getByText('Lida',{exact:true})).toBeVisible();
+ if(width===1440){
+  const a=await period.boundingBox(),b=await filters.getByRole('combobox',{name:'Mês de referência',exact:true}).boundingBox();
+  expect(Math.abs(a.y-b.y)).toBeLessThan(3);expect(b.x).toBeGreaterThan(a.x);
+ }
+ await central.selectOption('2007');await expect(coop).toHaveValue('all');await expect(pa).toHaveValue('all');await expect(pa).toBeDisabled();
+ await coop.selectOption('cooperative:2007:3017');await pa.selectOption('pa:2007:3017:0');
+ await expect(alerts.getByRole('article')).toHaveCount(1);await expect(alerts.getByRole('article')).toContainText('PA Nordeste zero');
+ await expect(alerts.getByRole('article')).not.toContainText('PA Alfa zero');
+ await page.screenshot({path:info.outputPath(`goal-alerts-${width}.png`),fullPage:true});
+ await alerts.getByRole('button',{name:'Limpar filtros',exact:true}).click();await expect(central).toHaveValue('all');await expect(coop).toBeDisabled();await expect(pa).toBeDisabled();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
+ expect(state.goalStateRows.every(row=>row.owner_id===owner)).toBe(true);expect(state.errors).toEqual([]);
 });

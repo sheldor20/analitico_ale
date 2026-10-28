@@ -45,7 +45,7 @@ export default function GoalAlertOutlook({ alert, userId, clipboardVersion, noti
     const content = buildEmailFile({ recipients, ...message });
     const fileUrl = URL.createObjectURL(new Blob([content], { type: 'message/rfc822' }));
     const link = document.createElement('a'); link.href = fileUrl;
-    link.download = `meta-${alert.entity.id.replace(/[^a-zA-Z0-9_-]/g, '-')}-${alert.metric}-${alert.year}-${alert.month + 1}.eml`;
+    link.download = `meta-${alert.entity.id.replace(/[^a-zA-Z0-9_-]/g, '-')}-${alert.metric}-${alert.year}-${alert.period ?? 'month'}-${alert.month + 1}.eml`;
     link.click(); setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
     setFeedback('E-mail baixado com o painel completo. Abra no Outlook e revise os destinatários antes de enviar.');
   }

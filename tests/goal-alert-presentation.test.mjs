@@ -195,3 +195,27 @@ test('recognition exports repeat neither the source date nor the same identity f
   const positions = different.blocks.filter(block => block.type === 'text' && block.tone === 'muted');
   assert.deepEqual(positions.map(block => block.text), ['Dados até 20/08/2026.', 'Dados até 19/08/2026.']);
 });
+
+test('period recognitions keep the same context in individual messages, email and dashboard images', async()=>{
+ const {buildPeriodGoalAlerts}=await import('../lib/goal-alerts.mjs');
+ const {periodTitle}=await import('../lib/periods.mjs');
+ const dataset=portfolioFixture();
+ dataset.rows=dataset.rows.map(row=>({...row,actuals:Array(12).fill(row.actuals[0]),cutoff:'2026-12-31'}));
+ for(const [period,month] of [['quarter',2],['semester',5],['annual',11],['ytd',7]]){
+  const alerts=buildPeriodGoalAlerts(dataset,{period,month});
+  const alert=alerts.find(row=>row.entity.id==='cooperative:1002:3025');
+  assert.ok(alert,period);
+  const output=buildGoalAlertPresentation(alert);
+  const title=periodTitle(period,month,2026);
+  assert.equal(output.dashboard.period,period);
+  for(const value of [output.text,output.html,texts(output.dashboard)]) assert.ok(value.includes(title),`${period}: ${title}`);
+  assert.match(output.text,/Meta do período/);
+  assert.doesNotMatch(output.text,/Meta do mês|Meta mensal/);
+  const bulk=buildGoalAlertsDashboard([alert],{year:2026,month,period});
+  assert.equal(bulk.period,period);assert.equal(bulk.periodLabel,title);
+  assert.ok(texts(bulk).includes(title));
+  assert.throws(()=>buildGoalAlertsDashboard([alert],{year:2026,month,period:'month'}),/outro período/);
+ }
+ const quarter=buildPeriodGoalAlerts(dataset,{period:'quarter',month:2})[0];
+ assert.throws(()=>buildGoalAlertPresentation({...quarter,period:'annual'}),/período válido/);
+});

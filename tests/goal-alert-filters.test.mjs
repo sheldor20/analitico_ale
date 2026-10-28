@@ -37,5 +37,25 @@ test('historical datasets without registry still expose their exact hierarchy an
   const options = goalAlertFilterOptions(dataset);
   assert.deepEqual(options.cooperatives.map((item) => item.value), ['cooperative:1002:3017', 'cooperative:1002:3025', 'cooperative:2007:3017']);
   assert.equal(options.centrals.length, 2);
-  assert.deepEqual(goalAlertFilterOptions({ rows: [] }), { centrals: [], cooperatives: [] });
+  assert.deepEqual(goalAlertFilterOptions({ rows: [] }), { centrals: [], cooperatives: [], pas: [] });
+});
+
+
+test('PA cascade options and filters use complete parent identities including PA zero',()=>{
+ const dataset=portfolioFixture();
+ dataset.registry.entities.push({id:'pa:2007:3017:0',kind:'pa',central:'2007',cooperative:'3017',pa:'0',name:'PA da outra central',group:'P1'});
+ const options=goalAlertFilterOptions(dataset);
+ assert.deepEqual(options.pas.map(item=>item.value),['pa:1002:3017:0','pa:1002:3025:0','pa:2007:3017:0']);
+ assert.equal(options.pas[0].pa,'0');assert.equal(options.pas[0].name,'PA Alfa zero');
+ const alerts=options.pas.map(option=>({entity:{id:option.value,kind:'pa',central:option.central,cooperative:option.cooperative,pa:option.pa,name:option.name}}));
+ alerts.push({entity:{id:'central:1002',kind:'central',central:'1002'}},{entity:{id:'cooperative:1002:3017',kind:'cooperative',central:'1002',cooperative:'3017'}});
+ assert.deepEqual(filterGoalAlerts(alerts,{pa:'pa:1002:3017:0'}).map(alert=>alert.entity.id),['pa:1002:3017:0']);
+ assert.equal(filterGoalAlerts(alerts,{central:'2007',pa:'pa:1002:3017:0'}).length,0);
+ assert.equal(filterGoalAlerts(alerts,{cooperative:'cooperative:1002:3025',pa:'pa:1002:3017:0'}).length,0);
+ assert.equal(filterGoalAlerts(alerts,{kind:'cooperative',pa:'pa:1002:3017:0'}).length,0);
+ assert.deepEqual(filterGoalAlerts(alerts,{cooperative:'cooperative:1002:3017'}).map(alert=>alert.entity.id).sort(),['cooperative:1002:3017','pa:1002:3017:0']);
+ assert.equal(filterGoalAlerts(alerts,{central:'1002'}).length,4);
+ delete dataset.registry;
+ const fallback=goalAlertFilterOptions(dataset);
+ assert.deepEqual(fallback.pas.map(item=>item.value),['pa:1002:3017:0','pa:1002:3025:0']);
 });

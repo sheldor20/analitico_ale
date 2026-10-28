@@ -3204,7 +3204,7 @@ td.numeric[data-attainment] { color: var(--attainment-color); background: var(--
 .portal .workspace-content .panel{scroll-margin-top:18px}
 .portal .workspace-content :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--sicoob-turquoise);outline-offset:2px}
 @media(max-width:720px){
- .portal .workspace-content{padding:14px 12px}
+ .portal .workspace-content{padding:14px 12px calc(100px + env(safe-area-inset-bottom, 0px))}
  .portal .page-heading{align-items:flex-start;flex-wrap:wrap}
  .portal .page-heading h1{font-size:23px}
  .portal .page-heading-actions{flex-wrap:wrap;gap:8px}
