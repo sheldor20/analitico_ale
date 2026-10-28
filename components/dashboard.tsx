@@ -1,5 +1,6 @@
 "use client";
 import SecondaryInfo from './ui/secondary-info';
+import ShareFlow from './ui/share-flow';
 import dynamic from 'next/dynamic';
 import { goalVariance } from '@/lib/goal-variance.mjs';
 import { readWorkbookFile, XLSX_FILE_LIMIT_MB } from "@/lib/xlsx-safety.mjs";
@@ -1559,9 +1560,12 @@ export default function Dashboard() {
           )}
         </Modal>
       )}
-      {showCommunicationStart && dataset && currentCount > 0 && <Modal title="Compartilhar cenário" onClose={() => setShowCommunicationStart(false)}>
+      {showCommunicationStart && dataset && currentCount > 0 && <Modal title="Compartilhar cenário" className="share-start-dialog" onClose={() => setShowCommunicationStart(false)}>
+        <header className="share-start-header"><h2>Compartilhar cenário</h2><ShareFlow /></header>
+        <div className="share-start-body">
         <label className="share-scenario-choice">Cenário do compartilhamento<select value={shareScenario} onChange={event=>setShareScenario(event.target.value)}><option value="summary">Resumo do cenário atual</option><option value="matrix">Mês · trimestre · ano</option><option value="cooperative">Cooperativas</option><option value="pa">PAs · Venda Nova</option><option value="periods">Períodos</option><option value="comparison">Comparativo entre anos</option><option value="simulation">Simulação</option></select></label>
-        {shareScenario==='matrix'?<><p>{scopeLabel} · mesmas unidades no mês, trimestre e ano.</p><button className="button primary" onClick={()=>shareMatrix()}>Abrir prévia da matriz</button></>:shareScenario==='periods'?<><p>{scopeLabel} · {metricName(selectedMetric)} · {periodDescription}</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('periods');setPeriodShareRequest(value=>value+1);}}>Abrir prévia dos períodos</button></>:shareScenario==='comparison'?<><p>Compare anos e recortes equivalentes antes de gerar a prévia.</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('comparison');setNotice('Selecione os anos e use Compartilhar cenário no comparativo validado.');}}>Abrir comparativo</button></>:shareScenario==='simulation'?<><p>{scopeLabel} · {periodDescription} · aumento de ritmo +{simulationUplift}%</p><button className="button primary" onClick={()=>shareSimulation()}>Abrir prévia da simulação</button></>:<CommunicationStart key={shareScenario} level={shareScenario==='summary'?actualLevel:shareScenario==='pa'?'pa':'cooperative'} scope={scopeLabel} period={`${metricName(shareScenario==='pa'?'VN':selectedMetric)} · ${periodDescription}`} onContinue={startCommunication}/>}
+        {shareScenario==='matrix'?<><p>{scopeLabel} · mesmas unidades no mês, trimestre e ano.</p><button className="button primary" onClick={()=>shareMatrix()}>Abrir prévia da matriz</button></>:shareScenario==='periods'?<><p>{scopeLabel} · {metricName(selectedMetric)} · {periodDescription}</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('periods');setPeriodShareRequest(value=>value+1);}}>Abrir prévia dos períodos</button></>:shareScenario==='comparison'?<><p>Compare anos e recortes equivalentes antes de gerar a prévia.</p><button className="button primary" onClick={()=>{setShowCommunicationStart(false);changeAnalysisTab('comparison');setNotice('Selecione os anos e use Compartilhar cenário no comparativo validado.');}}>Abrir comparativo</button></>:shareScenario==='simulation'?<><p>{scopeLabel} · {periodDescription} · aumento de ritmo +{simulationUplift}%</p><button className="button primary" onClick={()=>shareSimulation()}>Abrir prévia da simulação</button></>:<CommunicationStart key={shareScenario} level={shareScenario==='summary'?actualLevel:shareScenario==='pa'?'pa':'cooperative'} scope={scopeLabel} onCancel={() => setShowCommunicationStart(false)} period={`${metricName(shareScenario==='pa'?'VN':selectedMetric)} · ${periodDescription}`} onContinue={startCommunication}/>}
+        </div>
       </Modal>}
       {reportShare&&<AnalysisReportShare {...reportShare} onClose={()=>setReportShare(null)}/>}
       {showExport && dataset && <Modal title="Exportar dados" onClose={() => setShowExport(false)}>
@@ -1823,11 +1827,13 @@ function Modal({
   title,
   onClose,
   wide = false,
+  className = "",
 }: {
   children: React.ReactNode;
   title: string;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   useEffect(() => {
     const active = document.activeElement as HTMLElement;
@@ -1848,7 +1854,7 @@ function Modal({
       }}
     >
       <section
-        className={`modal ${wide ? "modal-wide" : ""}`}
+        className={`modal ${wide ? "modal-wide" : ""} ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

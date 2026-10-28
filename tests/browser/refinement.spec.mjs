@@ -254,3 +254,23 @@ test('sidebar search, collapsed navigation and mobile fallback',async({page},inf
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
  expect(errors).toEqual([]);
 });
+
+for(const width of [1440,390]) test(`global sharing entry ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});
+ await setup(page,v=>v,{compactPortal:true});
+ await page.getByRole('button',{name:'Compartilhar cenário',exact:true}).first().click();
+ const start=page.getByRole('dialog',{name:'Compartilhar cenário',exact:true});
+ await expect(start.getByRole('list',{name:'Fluxo do compartilhamento'})).toBeVisible();
+ await start.getByRole('radio',{name:'WhatsApp',exact:true}).check();
+ await start.getByLabel('Incluir projeção de produção',{exact:true}).check();
+ expect(await start.evaluate(el=>el.scrollWidth>el.clientWidth+2)).toBe(false);
+ await page.screenshot({path:info.outputPath(`share-entry-${width}.png`),fullPage:true});
+ await start.getByRole('button',{name:'Ver prévia',exact:true}).click();
+ const preview=page.getByRole('dialog');
+ await expect(preview.getByRole('heading',{name:'Mensagem e envio',exact:true})).toBeVisible();
+ await expect(preview.getByLabel('Incluir projeção de produção',{exact:true})).toBeChecked();
+ await preview.getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Compartilhar cenário',exact:true}).first().click();
+ await start.getByRole('button',{name:'Cancelar',exact:true}).click();
+ await expect(start).toBeHidden();
+});
