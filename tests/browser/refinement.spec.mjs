@@ -392,6 +392,30 @@ const basePasteMarkdown=[
  '| '+basePasteHeaders.map(()=>'---').join(' | ')+' |',
  ...basePasteRows.map(row=>'| '+row.map(value=>value.replaceAll(' ','&#x20;')).join(' | ')+' |'),
 ].join('\n');
+
+test('Venda Nova paste displays the accumulated difference before updating', async ({ page }) => {
+ const key = 'base:1002:3017::VN';
+ const state = await setup(page, dataset => ({ ...dataset, rows: dataset.rows.map(row => row.key === key ? { ...row, cutoff: '2026-01-30' } : row) }), { compactPortal: true, trackWorkspaceWrites: true });
+ await page.getByRole('button', { name: 'Importar base', exact: true }).click();
+ const dialog = page.getByRole('dialog', { name: 'Importar base', exact: true });
+ await dialog.getByLabel('Fonte dos dados').selectOption('base');
+ await dialog.getByLabel('Data de corte de Venda Nova').fill('2026-01-31');
+ const header = ['Nº CENTRAL','Nº COOP','SIGLA COOPERATIVA','G. COOP','META','META_ANUAL','REAL_JAN','REAL_ACUM'].join('\t');
+ const row = ['1002','3017','Cooperativa recebida','S1','VENDA NOVA','12.000,00','1.234,56'].join('\t');
+ const input = dialog.getByLabel('Dados das centrais e cooperativas');
+ await input.fill(`${header}\n${row}\t1.300,00`);
+ await dialog.getByRole('button', { name: 'Conferir prévia', exact: true }).click();
+ const notice = dialog.locator('details').filter({ hasText: 'Diferenças no acumulado de Venda Nova' });
+ await expect(notice).toContainText('1002 / 3017');
+ await expect(notice).toContainText(/Planilha R\$\s*1\.300,00 · Após atualizar R\$\s*1\.234,56/);
+ expect(state.workspaceWrites).toHaveLength(0);
+ await input.fill(`${header}\n${row}\t1.234,56`);
+ await dialog.getByRole('button', { name: 'Conferir prévia', exact: true }).click();
+ await expect(dialog.getByRole('button', { name: 'Atualizar produção', exact: true })).toBeEnabled();
+ await expect(notice).toHaveCount(0);
+ expect(state.errors).toEqual([]);
+});
+
 for(const width of [1440,390]) test(`base production paste with two portfolios ${width}`,async({page},info)=>{
  await page.setViewportSize({width,height:1000});
  const state=await setup(page,v=>v,{compactPortal:true,trackWorkspaceWrites:true});

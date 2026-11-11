@@ -151,6 +151,8 @@ Cabeçalhos são normalizados por espaços, pontuação e acentos. Colunas mensa
 
 Os totais auxiliares `META_PER`, `REAL_PER`, trimestrais e percentuais prontos não são usados no cálculo. A base fornecida comparava, em suas colunas de período, metas e realizados com meses diferentes. Na cadência, os valores de `MÊS` e `ANO` são preservados para auditoria, mas não substituem a regra fixa do grupo. Valores originais do arquivo continuam intactos.
 
+Na colagem de Venda Nova, a prévia confere o `REAL_ACUM` da planilha contra o total que ficará no cadastro, incluindo ajustes manuais protegidos. A conferência aparece quando janeiro até o corte está completo e os meses posteriores estão vazios ou zerados. Os indicadores seguem calculados pelos valores mensais.
+
 ### Metas fixas da cadência PA
 
 | Grupo | Meta mensal | Meta trimestral | Meta semestral | Meta anual |
