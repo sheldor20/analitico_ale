@@ -194,6 +194,54 @@ async function setup(page, transform = value => value, relationshipSeed = {}) {
 const composer = (page) => page.getByRole('dialog', { name: 'Comunicar resultado' });
 async function selectAugust(dialog) { await dialog.getByLabel('Período da mensagem').selectOption('month'); await dialog.getByLabel('Mês de referência').selectOption('7'); }
 
+test('proposal dashboard filters cooperative balances and saves a cutoff before annual forecasting', async ({ page }) => {
+  const { errors } = await setup(page);
+  let position = { year: 2026, position_date: null, accumulated_since_january: false, revision: 1, amounts: {
+    3017: { accepted: 0, cancelled: 10000, inReview: 5000, pending: 2500, rejected: 7500 },
+    3025: { accepted: 100, cancelled: 20000, inReview: 10000, pending: 1500, rejected: 1000 },
+  } };
+  await page.route('**/rest/v1/commercial_proposal_positions?*', async route => {
+    const request = route.request();
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, PATCH, OPTIONS' };
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const scope = new URL(request.url()).searchParams;
+    expect(scope.get('owner_id')).toBe(`eq.${owner}`);
+    expect(scope.get('year')).toBe('eq.2026');
+    if (request.method() === 'PATCH') {
+      expect(scope.get('revision')).toBe(`eq.${position.revision}`);
+      position = { ...position, ...request.postDataJSON(), revision: position.revision + 1 };
+    }
+    return route.fulfill({ status: 200, headers, json: (request.headers().accept || '').includes('vnd.pgrst.object') ? position : [position] });
+  });
+
+  await page.getByRole('button', { name: 'Projeções de propostas' }).click();
+  const cards = page.getByRole('region', { name: 'Posição informada' });
+  const cancelled = cards.getByRole('article', { name: 'Canceladas' });
+  await expect(cancelled).toContainText(/R\$\s*300,00/);
+  await expect(cancelled).toContainText('Sem projeção');
+  await page.getByRole('region', { name: 'Filtros de propostas' }).getByLabel('Cooperativa').selectOption('3017');
+  await expect(cancelled).toContainText(/R\$\s*100,00/);
+  const table = page.getByRole('table');
+  await expect(table.getByRole('rowheader', { name: /3025/ })).toHaveCount(0);
+  await page.getByLabel('Resolução em análise (%)').fill('50');
+  await expect(cards.getByRole('article', { name: 'Em análise' })).toContainText(/Projeção 31\/12.*25,00/);
+
+  await page.getByRole('button', { name: 'Atualizar base', exact: true }).click();
+  await page.getByLabel('Data-base', { exact: true }).fill('2026-06-30');
+  await page.getByLabel('Canceladas e recusadas acumuladas desde 1º de janeiro').check();
+  await page.getByRole('button', { name: 'Salvar base', exact: true }).click();
+  await expect(page.getByText('Base de propostas salva.')).toBeVisible();
+  await expect(cancelled).toContainText(/Projeção 31\/12.*201,66/);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Projeções de propostas', level: 1 })).toBeVisible();
+  await expect(cards.getByText('Data-base 30/06/2026')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(cancelled).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(errors).toEqual([]);
+});
+
 test('desktop: contact isolation, dashboard, Outlook, WhatsApp, file and saved draft', async ({ page }, testInfo) => {
   const { errors, writes } = await setup(page);
   await openIndividualCommunication(page);

@@ -1,0 +1,129 @@
+.layout {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.toolbar,
+.position,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.position p,
+.preview dt {
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.position strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.filters,
+.editorFields,
+.rates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.layout label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.filters { flex: 1 1 328px; }
+.filters label:first-child { min-width: 94px; }
+.filters label:last-child { min-width: min(220px, 100%); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.editor,
+.scenario,
+.state,
+.breakdown {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.editorFields { align-items: center; }
+.editorFields > label:first-child { min-width: 145px; }
+.editorFields .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.check input[type='checkbox'] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--green);
+}
+
+.editor textarea { resize: vertical; }
+.actions { justify-content: flex-end; }
+.state button { justify-self: start; }
+
+.preview {
+  background: var(--green-light);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.preview dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 8px 0;
+}
+
+.preview dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tableScroll { border-radius: 8px; }
+.table { font-variant-numeric: tabular-nums; }
+.table tbody th { background: var(--surface); }
+.table tfoot :is(th, td) { background: var(--green-light); font-weight: 700; }
+.table small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: .78rem;
+}
+
+@media (max-width: 1100px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .toolbar { align-items: stretch; }
+  .filters { display: grid; grid-template-columns: 104px minmax(0, 1fr); width: 100%; flex: auto; }
+  .filters label:first-child, .filters label:last-child { min-width: 0; }
+  .cards { gap: 8px; }
+  .cards > :global(.kpi) { padding: 10px; }
+  .rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .layout :is(select, textarea, input:not([type='checkbox'])) { font-size: 16px; }
+}

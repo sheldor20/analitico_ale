@@ -97,6 +97,7 @@ import WorkspaceVersions from './workspace-versions';
 import { clearLocalAuth } from '@/lib/session-cleanup';
 const ProductionPaste = dynamic(() => import('./production-paste'), { loading: () => <p role="status">Carregando atualização por colagem…</p> });
 const CnvActions = dynamic(() => import('./cnv-actions'), { loading: () => <p role="status">Carregando ações CNV…</p> });
+const ProposalStatusPanel = dynamic(() => import('./proposal-status-panel'), { loading: () => <p role="status">Carregando painel de propostas…</p> });
 type Analysis = ReturnType<typeof analyze> & { contribution?: number | null; recentGrowth?: number | null; recentLabel?: string };
 type FilterSnapshot = { tab: AnalysisTab; unitLayout:UnitLayout; scrollY:number; selection:{context:string;keys:string[]}; expandedCoops:string[]; view: View; source: 'base' | 'cadence'; metric: string; central: string; coop: string; pa: string; group: string; level: string; search: string; status: string; sortBy: string; month: number; period: string; uplift: number; expandedPaKey: string; priorityFocus: {context:string;keys:string[];label:string} | null };
 type SourceFiles = { base: File | null; cadence: File | null };
@@ -133,6 +134,7 @@ export default function Dashboard() {
   const [unitLayout,setUnitLayout] = useState<UnitLayout>('period');
   const [visitedTabs,setVisitedTabs] = useState<AnalysisTab[]>(['overview','units']);
   const tabPositions=useRef<Partial<Record<AnalysisTab,number>>>({});
+  const cooperativeRefinements = useRef<{ scope: string; search: string; status: string } | null>(null);
   const [periodShareRequest,setPeriodShareRequest]=useState(0);
   const [shareScenario,setShareScenario]=useState('summary');
   const [reportShare,setReportShare]=useState<{title:string;context:string[];columns:string[];rows:string[][];notes:string[]}|null>(null);
@@ -229,6 +231,8 @@ export default function Dashboard() {
   const effectiveMetric = selectedMetric === "AR" ? "AR" : "VN";
   const periodDescription = periodTitle(period, month, dataset?.year ?? config.year);
   const paPanelKey = `${dataset?.year}:${coop}`;
+  const usesProductionWorkspace = view !== 'cnv' && view !== 'proposals';
+  const proposalYear = dataset?.year ?? config.year;
   useEffect(() => { setDrillHistory([]); setExpandedCoops([]); setPriorityFocus(null); setRowSelection({context:'',keys:[]}); setShowExport(false); setShowCommunicationStart(false); }, [user?.id, dataset?.year]);
   useEffect(() => {
     if (!supabase) return;
@@ -292,7 +296,7 @@ export default function Dashboard() {
     listWorkspaces(user.id).then(async (items) => {
       if (cancelled) return;
       setWorkspaces(items);
-      if (!items.length || dataset) return;
+      if (!items.length) return;
       const preferred=readNavigation(window.location.search).year;
       const saved = await loadWorkspace(user.id, items.some(item=>item.year===preferred)?preferred!:items[0].year);
       if (saved && !cancelled) {
@@ -468,7 +472,7 @@ export default function Dashboard() {
   function canLeaveRegistry() {
     if (registrySaving) return false;
     if(actionDirty && !window.confirm("Há uma ação com alterações não salvas. Deseja sair sem salvar?"))return false;
-    if ((registryDirty||calendarDirty) && !window.confirm(view === "cnv" ? "Há uma ação não salva. Deseja sair sem salvar?" : view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
+    if ((registryDirty||calendarDirty) && !window.confirm(view === "cnv" ? "Há uma ação não salva. Deseja sair sem salvar?" : view === "agenda" ? "Há um compromisso não salvo na agenda. Deseja sair sem salvar?" : view === 'proposals' ? 'Há alterações não salvas na base de propostas. Deseja sair sem salvar?' : "Há alterações não salvas no cadastro. Deseja sair sem salvar?")) return false;
     setRegistryDirty(false); setCalendarDirty(false); setActionDirty(false); return true;
   }
   function navigate(next: View) {
@@ -528,7 +532,18 @@ export default function Dashboard() {
   }
   function changeAnalysisTab(next:AnalysisTab,restore=true) {
     document.querySelectorAll<HTMLDetailsElement>('.year-management[open]').forEach(element=>{element.open=false;});
-    if(next==='overview'&&analysisTab!=='overview'){setSearch('');setStatusFilter('all');}
+    const scope = `${user?.id}:${dataset?.year}:${central}:${coop}:${selectedMetric}`;
+    if (next === 'overview' && analysisTab !== 'overview') {
+      cooperativeRefinements.current = analysisTab === 'units' && restore ? { scope, search, status: statusFilter } : null;
+      setSearch(''); setStatusFilter('all');
+    }
+    if (next === 'units' && analysisTab === 'overview') {
+      const previous = cooperativeRefinements.current;
+      cooperativeRefinements.current = null;
+      if (restore && previous?.scope === scope && !search && statusFilter === 'all') {
+        setSearch(previous.search); setStatusFilter(previous.status);
+      }
+    }
     if(next==='pas')setSource('cadence');
     if(next==='overview'||next==='units'){setSource('base');setLevel(next==='overview'?'central':'cooperative');setGroup('all');}
     if(next==='pas'||analysisTab==='pas'){setPa('all');setGroup('all');setSearch('');setStatusFilter('all');setPriorityFocus(null);}
@@ -728,6 +743,7 @@ export default function Dashboard() {
   async function logout() {
     if(actionDirty&&!window.confirm("Há uma ação não salva. Deseja sair sem salvar?"))return;
     if (view === "agenda" && registryDirty && !window.confirm("Há um compromisso não salvo na agenda. Deseja sair sem salvar?")) return;
+    if (view === 'proposals' && (registrySaving || registryDirty && !window.confirm('Há alterações não salvas na base de propostas. Deseja sair sem salvar?'))) return;
     setActionDirty(false); setCalendarDirty(false);
     setLeaving(true);
     setSharing(null);
@@ -1094,7 +1110,7 @@ export default function Dashboard() {
           <span className="brand-caption">GESTÃO COMERCIAL</span>
         </a>
         <button type="button" className="sidebar-toggle" aria-label={menuCollapsed ? "Expandir menu" : "Recolher menu"} aria-expanded={!menuCollapsed} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}</button>
-        <PortalNavigation collapsed={menuCollapsed} view={view==='overview'&&analysisTab==='pas'?'cadence':view} disabled={!!busy || registrySaving} issueCount={actionableIssueCount(dataset?.issues ?? [])} onNavigate={navigate} />
+        <PortalNavigation collapsed={menuCollapsed} view={view==='overview'&&analysisTab==='pas'?'cadence':view} disabled={!user || !!busy || registrySaving} issueCount={actionableIssueCount(dataset?.issues ?? [])} onNavigate={navigate} />
         <div className="sidebar-foot">
           <button type="button" className="sidebar-collapse" aria-label={menuCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"} onClick={()=>setMenuCollapsed(value=>!value)}>{menuCollapsed ? <ChevronRight size={17}/> : <><ChevronLeft size={17}/><span>Recolher menu</span></>}</button>
           <div className="session-state">
@@ -1115,7 +1131,7 @@ export default function Dashboard() {
             Gestão comercial
           </div>
           <div className="top-actions"><details className="account-menu"><summary aria-label="Conta ativa" title={user?.email}>{user?.email?.slice(0,2).toUpperCase()||"Conta"}</summary><div><strong>{user?.email}</strong><span>Cadastro {dataset?.year??config.year}</span><small>As atualizações ficam vinculadas a esta conta.</small></div></details>
-            {dataset && view !== "cnv" && (
+            {dataset && usesProductionWorkspace && (
               <button
                 className="button quiet"
                 disabled={!!busy || !!datasetId}
@@ -1131,14 +1147,14 @@ export default function Dashboard() {
             )}
             <button
               className="button quiet"
-              disabled={!!busy}
+              disabled={!!busy || view === 'proposals' && registrySaving}
               aria-label="Sair"
               onClick={logout}
             >
               <LogOut size={17} />
               <span>Sair</span>
             </button>
-{view !== "cnv" && <button
+{usesProductionWorkspace && <button
               className="button primary"
               disabled={!!busy || registrySaving}
               onClick={() => setShowImport(true)}
@@ -1152,7 +1168,7 @@ export default function Dashboard() {
           <div className="page-heading">
             <div>
               <h1 ref={headingRef} tabIndex={-1}>{VIEW_TITLES[view]}</h1>
-              {!dataset && view !== "cnv" && <p>Escolha uma base para começar.</p>}
+              {!dataset && usesProductionWorkspace && <p>Escolha uma base para começar.</p>}
             </div>
             {dataset && ["overview", "cadence", "actions"].includes(view) && (
               <div className="page-heading-actions">
@@ -1202,8 +1218,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {historical && dataset && view !== "cnv" && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
-          {dataset && !historical && !["overview","cadence","actions","cnv"].includes(view) && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
+          {historical && dataset && usesProductionWorkspace && <div className="message"><History size={18}/><span>Você está consultando uma versão histórica.</span><button className="button secondary" disabled={!!busy} onClick={() => openWorkspace(dataset.year)}>Retomar cadastro atual</button></div>}
+          {dataset && !historical && usesProductionWorkspace && !["overview","cadence","actions"].includes(view) && <div className="workspace-toolbar" aria-label="Contexto do cadastro">
             <label>Ano <select aria-label="Ano do cadastro" value={dataset.year} disabled={!!busy || registrySaving} onChange={(e) => openWorkspace(Number(e.target.value))}>
               {[...new Set([dataset.year, ...workspaces.map((w)=>w.year), ...sessionYears.current.keys()])].sort((a,b)=>b-a).map((y)=><option key={y} value={y}>{y}</option>)}
             </select></label>
@@ -1213,7 +1229,11 @@ export default function Dashboard() {
 </div></details>
             <span className="muted">{user && workspaceRevision ? "Cadastro salvo" : "Dados nesta sessão"}</span>
           </div>}
-          {view === "cnv" ? (
+          {view === 'proposals' ? (
+            user ? <ProposalStatusPanel key={`${user.id}:${proposalYear}`} owner={user.id} year={proposalYear}
+              years={[...new Set([proposalYear, Number(todayInBrazil().slice(0, 4)), ...workspaces.map(item => item.year), ...sessionYears.current.keys()])].sort((a, b) => b - a)}
+              entities={dataset?.registry?.entities ?? []} disabled={!!busy} onYearChange={openWorkspace} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} /> : <p role="status">Carregando sua conta…</p>
+          ) : view === "cnv" ? (
             user ? <CnvActions key={user.id} ownerId={user.id} onDirtyChange={setRegistryDirty} onSavingChange={setRegistrySaving} /> : <p role="status">Carregando sua conta…</p>
           ) : view === "alerts" && dataset && user ? (
             <GoalAlerts key={`${user.id}:${dataset.year}:${historical}`} dataset={dataset} userId={user.id} />
