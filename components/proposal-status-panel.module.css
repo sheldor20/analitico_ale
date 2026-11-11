@@ -43,6 +43,7 @@
   color: var(--muted);
 }
 
+.filters { flex: 1 1 328px; }
 .filters label:first-child { min-width: 94px; }
 .filters label:last-child { min-width: min(220px, 100%); }
 
@@ -119,7 +120,7 @@
 
 @media (max-width: 520px) {
   .toolbar { align-items: stretch; }
-  .filters { display: grid; grid-template-columns: 88px minmax(0, 1fr); width: 100%; }
+  .filters { display: grid; grid-template-columns: 104px minmax(0, 1fr); width: 100%; flex: auto; }
   .filters label:first-child, .filters label:last-child { min-width: 0; }
   .cards { gap: 8px; }
   .cards > :global(.kpi) { padding: 10px; }

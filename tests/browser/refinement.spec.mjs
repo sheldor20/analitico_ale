@@ -242,7 +242,8 @@ test('sidebar search, collapsed navigation and mobile fallback',async({page},inf
  await search.fill('nenhum-destino');
  await expect(nav.getByRole('status')).toHaveText('Nenhum item encontrado.');
  await search.press('Escape');
- await expect(nav.locator('.nav-item')).toHaveCount(9);
+ await expect(nav.locator('.nav-item')).toHaveCount(10);
+ await expect(nav.getByRole('button',{name:'Projeções de propostas',exact:true})).toBeVisible();
  const expandedLeft=await page.locator('.main-shell').evaluate(el=>el.getBoundingClientRect().left);
  await page.getByRole('button',{name:'Recolher menu',exact:true}).click();
  await expect(page.locator('.portal')).toHaveClass(/menu-collapsed/);
@@ -254,7 +255,7 @@ test('sidebar search, collapsed navigation and mobile fallback',async({page},inf
  await page.getByRole('button',{name:'Expandir menu',exact:true}).click();
  await search.fill('metas');
  await page.setViewportSize({width:390,height:844});
- await expect(nav.locator('.nav-item')).toHaveCount(9);
+ await expect(nav.locator('.nav-item')).toHaveCount(10);
  await expect(page.getByRole('button',{name:'Recolher menu',exact:true})).toBeHidden();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false);
  expect(errors).toEqual([]);

@@ -58,8 +58,15 @@ export default function ProposalStatusPanel({ owner, year, years, entities, disa
   const operation = useRef(false);
   const mounted = useRef(false);
   const selected = position && Object.hasOwn(position.amounts, cooperative) ? cooperative : 'all';
-  const coops = useMemo(() => new Map(entities.filter(entity => entity.kind === 'cooperative').map(entity => [entity.cooperative, entity.name])), [entities]);
-  const nameFor = (code: string) => coops.get(code)?.replace(/^SICOOB\s+/i, '');
+  const names = useMemo(() => {
+    const byCode = new Map<string, string | undefined>();
+    for (const entity of entities) {
+      if (entity.kind !== 'cooperative' || !entity.cooperative) continue;
+      byCode.set(entity.cooperative, byCode.has(entity.cooperative) ? undefined : entity.name.replace(/^SICOOB\s+/i, ''));
+    }
+    return byCode;
+  }, [entities]);
+  const nameFor = (code: string) => names.get(code);
   const model = useMemo(() => position ? buildProposalProjection(position, selected, resolution) : null, [position, selected, resolution]);
   const dirty = editor !== null && Boolean(editor.text.trim() || editor.date !== (position?.positionDate ?? '') || editor.accumulated !== (position?.accumulatedSinceJanuary ?? false));
   const preview = useMemo(() => {
@@ -133,7 +140,7 @@ export default function ProposalStatusPanel({ owner, year, years, entities, disa
           {years.map(option => <option key={option} value={option}>{option}</option>)}
         </select></label>
         <label>Cooperativa<select value={selected} disabled={!position || loadState !== 'ready'} onChange={event => setCooperative(event.target.value)}>
-          <option value="all">Todas as cooperativas</option>
+          <option value="all">Todas</option>
           {Object.keys(position?.amounts ?? {}).map(code => <option key={code} value={code}>{code}{nameFor(code) && ` · ${nameFor(code)}`}</option>)}
         </select></label>
       </div>
