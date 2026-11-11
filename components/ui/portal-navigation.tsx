@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, Megaphone, ShieldCheck, Search, X } from 'lucide-react';
-export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda' | 'cnv';
+import { BellRing, Building2, CalendarDays, ClipboardList, History, LayoutDashboard, ListChecks, Megaphone, ShieldCheck, Search, X } from 'lucide-react';
+export type PortalView = 'overview' | 'cadence' | 'actions' | 'audit' | 'imports' | 'registry' | 'alerts' | 'agenda' | 'cnv' | 'proposals';
 export const VIEW_TITLES: Record<PortalView, string> = {
   overview: 'Análises', cadence: 'Cadência dos PAs', actions: 'Plano de ação',
-  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda', cnv: 'Ações CNV',
+  audit: 'Conferência da base', imports: 'Importações', registry: 'Cadastro e metas', alerts: 'Metas atingidas', agenda: 'Agenda', cnv: 'Ações CNV', proposals: 'Projeções de propostas',
 };
 export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   overview: 'Metas e produção da carteira.',
@@ -16,10 +16,11 @@ export const VIEW_DESCRIPTIONS: Record<PortalView, string> = {
   alerts: 'Reconheça os resultados por período.',
   agenda: 'Programação das centrais, cooperativas e PAs.',
   cnv: 'Regulamentos, produtos, metas e comunicação das ações.',
+  proposals: 'Canceladas, em análise, pendentes e recusadas por cooperativa.',
 };
 const groups = [
   { label: 'Acompanhamento', items: [
-    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList }, { id: 'cnv', icon: Megaphone },
+    { id: 'overview', icon: LayoutDashboard }, { id: 'cadence', icon: Building2 }, { id: 'actions', icon: ClipboardList }, { id: 'cnv', icon: Megaphone }, { id: 'proposals', icon: ListChecks },
   ] },
   { label: 'Relacionamento', items: [
     { id: 'agenda', icon: CalendarDays }, { id: 'alerts', icon: BellRing },

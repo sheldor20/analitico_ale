@@ -233,3 +233,9 @@ As ações são independentes do cadastro anual de produção e pertencem à con
 ### Metas atingidas por período
 
 Em Metas atingidas, selecione Mensal, Trimestral, Semestral, Anual ou Acumulado no ano. A referência permanece ao lado do período. Os filtros seguem Central → Cooperativa → PA e usam os códigos completos de cada unidade. Os resultados são recalculados dos realizados e das metas oficiais; meses sem informação e metas divergentes não produzem reconhecimentos artificiais. Leitura e comunicação são registradas separadamente para cada período, preservando os registros mensais anteriores. Imagens e mensagens acompanham o período selecionado.
+
+### Projeções de propostas
+
+Abra **Acompanhamento → Projeções de propostas** para consultar a posição consolidada ou por cooperativa. Em **Atualizar base**, cole a tabela com o cabeçalho e confira os totais antes de salvar. A tabela colada substitui a base inteira daquele ano. Para atualizar só a data-base e a indicação de acumulado, deixe o campo de colagem vazio.
+
+Canceladas e recusadas são projetadas até 31/12 pelo ritmo médio em dias corridos quando a posição tem data-base e cobre o ano desde 1º de janeiro. Para em análise e pendentes, os percentuais informados simulam quanto do saldo atual estará resolvido até 31/12. Os totais de projeção somam os valores arredondados por cooperativa. A base é privada por conta e ano, independente de metas e produção.
