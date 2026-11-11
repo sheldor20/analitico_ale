@@ -4,6 +4,7 @@ import { parseCadencePaste, parseBasePaste, parseProductionPaste } from '../lib/
 import { combineImports } from '../lib/importer.mjs';
 import { aggregate } from '../lib/analytics.mjs';
 import { initializeRegistry, mergeProduction, upsertEntity, upsertPlanRow, getPlanRow } from '../lib/registry.mjs';
+import { vnAccumulatedDifferences } from '../lib/production-changes.mjs';
 
 const config={year:2026,cadenceCutoff:'2026-10-28',vnCutoff:'2026-10-28',arCutoff:'2026-10-28'};
 const headers=['GRUPO','Nº CENTRAL','CENTRAL','Nº COOP','NOME COOP','Nº PA','CPA','NOME DO PA','MÊS','ANO',' REAL JAN ','ATINGIU?','REAL FEV','ATINGIU?','REAL MAR','ATINGIU?','ABR','ATINGIU?','MAI','ATINGIU?','JUN','ATINGIU?','JUL','ATINGIU?','AGO','ATINGIU?','SET','ATINGIU?','OUT','ATINGIU?','META PERÍODO','REALIZADO','SUPEROU?','ATINGIU','PROPORÇÃO'];
@@ -164,6 +165,34 @@ test('each base portfolio applies its own valid cutoff and rejects missing or ob
  assert.equal(parsed.ignoredActualCount,5);
  assert.throws(()=>parseBasePaste(baseText(),{...config,arCutoff:''}),/data de corte/);
  assert.throws(()=>parseBasePaste(baseText(),{...config,vnCutoff:'2025-10-28'}),/data de corte/);
+});
+
+test('Venda Nova clipboard compares the spreadsheet accumulated amount against the effective monthly write', () => {
+ const scope = { ...config, vnCutoff: '2026-02-15' };
+ const amounts = Object.fromEntries(monthNames.map((_, month) => [month, '-']));
+ const monthly = { ...amounts, 0: '700,12', 1: '100,23' };
+ const accumulated = baseHeaders.indexOf('REAL_ACUM');
+ const sourceRow = (monthValues, total, metric = 'VENDA NOVA') => {
+  const cells = baseRow(metric, { amounts: monthValues });
+  cells[accumulated] = total;
+  return cells;
+ };
+ const read = (monthValues, total, metric) => parseBasePaste(markdown([sourceRow(monthValues, total, metric)]), scope);
+ const aligned = read(monthly, '800,35');
+ const key = aligned.rows[0].key;
+ assert.deepEqual(aligned.vnAccumulated, { [key]: 800.35 });
+ assert.deepEqual(vnAccumulatedDifferences([], aligned.rows, aligned.vnAccumulated), []);
+
+ const difference = read(monthly, '850,35');
+ assert.deepEqual(vnAccumulatedDifferences([], difference.rows, difference.vnAccumulated).map(({ reported, actual }) => [reported, actual]), [[850.35, 800.35]]);
+ const saved = { ...aligned.rows[0], actuals: [800.12, ...aligned.rows[0].actuals.slice(1)], manualActualMonths: [0] };
+ assert.equal(vnAccumulatedDifferences([saved], aligned.rows, aligned.vnAccumulated)[0].actual, 900.35);
+ assert.deepEqual(vnAccumulatedDifferences([{ ...saved, cutoff: '2026-02-14' }], aligned.rows, aligned.vnAccumulated), []);
+
+ assert.deepEqual(read({ ...monthly, 1: '' }, '800,35').vnAccumulated, {});
+ assert.deepEqual(read({ ...monthly, 2: '1,00' }, '801,35').vnAccumulated, {});
+ assert.deepEqual(read(monthly, '800,35', 'ARRECADAÇÃO').vnAccumulated, {});
+ assert.deepEqual(read(monthly, '#N/D').vnAccumulated, {});
 });
 
 test('base production merge preserves official targets/names, blank months, PAs and other portfolios',()=>{
